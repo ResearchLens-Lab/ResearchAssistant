@@ -1,0 +1,44 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the primary contribution and architecture of the Transformer model in Attention Is All You Need?",
+    "paper_id": "paper_attention_2017",
+    "expected_section": "Introduction",
+    "expected_keywords": ["transformer", "attention", "recurrence", "convolution"],
+    "expected_answer_points": [
+      "Replaces recurrent and convolutional layers with self-attention",
+      "Enables greater parallelization and reduced training times"
+    ]
+  },
+  {
+    "id": "q2",
+    "question": "How does the multi-head attention mechanism compute scaled dot-product attention?",
+    "paper_id": "paper_attention_2017",
+    "expected_section": "Methodology",
+    "expected_keywords": ["scaled dot-product", "queries", "keys", "values", "dimension", "softmax"],
+    "expected_answer_points": [
+      "Multi-head attention projects queries, keys, and values linearly h times",
+      "Computes softmax over query and key dot products scaled by sqrt(d_k)"
+    ]
+  },
+  {
+    "id": "q3",
+    "question": "What dataset was used to evaluate English-to-German translation in the experiments?",
+    "paper_id": "paper_attention_2017",
+    "expected_section": "Experiments",
+    "expected_keywords": ["wmt 2014", "english-to-german", "bleu"],
+    "expected_answer_points": [
+      "WMT 2014 English-to-German dataset containing 4.5 million sentence pairs"
+    ]
+  },
+  {
+    "id": "q4",
+    "question": "What are the computational constraints and limitations of standard dense self-attention?",
+    "paper_id": "paper_attention_2017",
+    "expected_section": "Discussion",
+    "expected_keywords": ["quadratic", "memory", "sequence length", "complexity"],
+    "expected_answer_points": [
+      "Quadratic time and memory complexity O(n^2) with respect to sequence length"
+    ]
+  }
+]

@@ -1,0 +1,24 @@
+GraphLens: Graph Neural Networks for Structural Research Intelligence
+
+Abstract
+Understanding scientific literature requires modeling dense citation networks, concept taxonomies, and co-authorship graphs. We propose GraphLens, a graph neural network framework for structural research paper modeling.
+
+--- Page 1 ---
+
+1. Introduction
+Traditional vector space models represent documents in isolation. However, scientific literature forms an interconnected web of citations and co-authorship graphs. GraphLens integrates textual semantics with explicit graph relational topology to enable multi-hop citation reasoning.
+
+--- Page 2 ---
+
+2. Methodology
+We construct a heterogeneous graph where nodes represent papers, authors, and concepts. Node representations are updated via relational graph convolution layers with multi-hop message passing. Edge weights are dynamically computed via structural attention mechanisms.
+
+--- Page 3 ---
+
+3. Experiments & Results
+We evaluate on the Cora and PubMed citation network benchmarks. GraphLens achieves 89.2% classification accuracy and 0.84 mean reciprocal rank on citation link prediction, surpassing standard Graph Convolutional Networks (GCN) and Graph Attention Networks (GAT).
+
+--- Page 4 ---
+
+4. Conclusion & Future Work
+GraphLens provides a solid foundation for citation network analysis and research trend exploration, providing complementary structural intelligence to pure text RAG pipelines.
