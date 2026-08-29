@@ -1,0 +1,5 @@
+# ResearchAssistant Monorepo Docker Compose
+# Includes ChromaDB vector store service for local development
+
+include:
+  - infrastructure/docker-compose.chroma.yml
