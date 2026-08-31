@@ -1,0 +1,94 @@
+from fastapi import APIRouter, Depends, status
+
+from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
+from backend.app.schemas.common import Page
+from backend.app.schemas.document import DocumentResponse
+from backend.app.schemas.paper import (
+    PaperCompareRequest,
+    PaperCompareResponse,
+    PaperCreate,
+    PaperResponse,
+    PaperSummaryResponse,
+    PaperUpdate,
+)
+from backend.app.services.document_service import DocumentService
+from backend.app.services.paper_service import PaperService
+from backend.app.utils.pagination import PageParams
+
+router = APIRouter(prefix="/papers", tags=["papers"])
+
+
+@router.post(
+    "",
+    response_model=PaperResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a paper",
+)
+async def create_paper(payload: PaperCreate, current_user: CurrentUser, db: DBSession):
+    return await PaperService(db).create(current_user, payload)
+
+
+@router.get("", response_model=Page[PaperResponse], summary="List own papers")
+async def list_papers(
+    current_user: CurrentUser, db: DBSession, params: PageParams = Depends()
+):
+    return await PaperService(db).list(current_user, params)
+
+
+@router.post(
+    "/compare",
+    response_model=PaperCompareResponse,
+    summary="Compare papers via the RAG boundary",
+)
+async def compare_papers(
+    payload: PaperCompareRequest,
+    current_user: CurrentUser,
+    db: DBSession,
+    rag: RAGGatewayDep,
+):
+    return await PaperService(db, rag).compare(current_user, payload)
+
+
+@router.get("/{paper_id}", response_model=PaperResponse, summary="Get a paper")
+async def get_paper(paper_id: str, current_user: CurrentUser, db: DBSession):
+    return await PaperService(db).get_owned(current_user, paper_id)
+
+
+@router.patch("/{paper_id}", response_model=PaperResponse, summary="Update a paper")
+async def update_paper(
+    paper_id: str, payload: PaperUpdate, current_user: CurrentUser, db: DBSession
+):
+    return await PaperService(db).update(current_user, paper_id, payload)
+
+
+@router.delete(
+    "/{paper_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a paper (documents and indexed vectors included)",
+)
+async def delete_paper(
+    paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    await PaperService(db, rag).delete(current_user, paper_id)
+
+
+@router.post(
+    "/{paper_id}/summary",
+    response_model=PaperSummaryResponse,
+    summary="Grounded summary via the RAG boundary",
+)
+async def summarize_paper(
+    paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    return await PaperService(db, rag).summarize(current_user, paper_id)
+
+
+@router.get(
+    "/{paper_id}/documents",
+    response_model=list[DocumentResponse],
+    summary="List documents uploaded for a paper",
+)
+async def list_paper_documents(
+    paper_id: str, current_user: CurrentUser, db: DBSession
+):
+    return await DocumentService(db).list_for_paper(current_user, paper_id)

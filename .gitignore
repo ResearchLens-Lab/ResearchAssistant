@@ -34,6 +34,9 @@ ENV/
 .env
 *.env.local
 
+# Uploaded documents (backend file storage)
+storage/
+
 # Pytest / Test Artifacts
 .pytest_cache/
 .coverage
