@@ -1,0 +1,45 @@
+# Backend API + PostgreSQL for local development.
+# Included from the repository root docker-compose.yml — run `docker compose up`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: researchassistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d researchassistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/researchassistant
+      JWT_SECRET_KEY: local-dev-only-change-me-0123456789abcdef
+      CORS_ORIGINS: http://localhost:3000
+      UPLOAD_DIR: /srv/storage/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - upload_data:/srv/storage/uploads
+      - chroma_data:/srv/.chroma
+    command: >
+      sh -c "alembic -c backend/alembic.ini upgrade head &&
+             uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  postgres_data:
+  upload_data:
+  chroma_data:

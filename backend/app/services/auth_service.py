@@ -1,0 +1,107 @@
+import logging
+from datetime import datetime, timezone
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.core.config import get_settings
+from backend.app.core.exceptions import (
+    EmailAlreadyRegisteredError,
+    ForbiddenError,
+    UnauthorizedError,
+)
+from backend.app.core.security import (
+    REFRESH_TOKEN_TYPE,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
+from backend.app.models.user import User
+from backend.app.repositories.refresh_token_repository import RefreshTokenRepository
+from backend.app.repositories.user_repository import UserRepository
+from backend.app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+
+logger = logging.getLogger("backend.auth")
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+class AuthService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.users = UserRepository(db)
+        self.refresh_tokens = RefreshTokenRepository(db)
+
+    async def register(self, payload: RegisterRequest) -> User:
+        email = payload.email.lower()
+        if await self.users.get_by_email(email):
+            raise EmailAlreadyRegisteredError()
+        user = await self.users.create(
+            email=email,
+            hashed_password=hash_password(payload.password),
+            full_name=payload.full_name,
+        )
+        await self.db.commit()
+        logger.info("user registered user_id=%s", user.id)
+        return user
+
+    async def login(self, payload: LoginRequest) -> TokenResponse:
+        user = await self.users.get_by_email(payload.email.lower())
+        if not user or not verify_password(payload.password, user.hashed_password):
+            raise UnauthorizedError("Invalid email or password.")
+        if not user.is_active:
+            raise ForbiddenError("User account is inactive.")
+        tokens = await self._issue_tokens(user.id)
+        await self.db.commit()
+        logger.info("user authenticated user_id=%s", user.id)
+        return tokens
+
+    async def refresh(self, refresh_token: str) -> TokenResponse:
+        payload = decode_token(refresh_token, expected_type=REFRESH_TOKEN_TYPE)
+        jti = payload.get("jti")
+        user_id = payload["sub"]
+        row = await self.refresh_tokens.get(jti) if jti else None
+        if row is None or row.user_id != user_id:
+            raise UnauthorizedError("Invalid refresh token.")
+        if row.revoked:
+            # Reuse of a rotated token suggests theft: revoke the whole family.
+            await self.refresh_tokens.revoke_all_for_user(user_id)
+            await self.db.commit()
+            logger.warning("refresh token reuse detected user_id=%s", user_id)
+            raise UnauthorizedError("Refresh token has been revoked.")
+        if _as_naive_utc(row.expires_at) < datetime.utcnow():
+            raise UnauthorizedError("Refresh token has expired.")
+        user = await self.users.get_by_id(user_id)
+        if user is None or not user.is_active:
+            raise UnauthorizedError("User is not active.")
+        await self.refresh_tokens.revoke(row)  # rotation
+        tokens = await self._issue_tokens(user_id)
+        await self.db.commit()
+        return tokens
+
+    async def logout(self, refresh_token: str) -> None:
+        try:
+            payload = decode_token(refresh_token, expected_type=REFRESH_TOKEN_TYPE)
+        except UnauthorizedError:
+            return  # already invalid/expired; logout is idempotent
+        jti = payload.get("jti")
+        row = await self.refresh_tokens.get(jti) if jti else None
+        if row and not row.revoked:
+            await self.refresh_tokens.revoke(row)
+            await self.db.commit()
+
+    async def _issue_tokens(self, user_id: str) -> TokenResponse:
+        access = create_access_token(user_id)
+        refresh, jti, expires_at = create_refresh_token(user_id)
+        await self.refresh_tokens.create(jti=jti, user_id=user_id, expires_at=expires_at)
+        settings = get_settings()
+        return TokenResponse(
+            access_token=access,
+            refresh_token=refresh,
+            expires_in=settings.access_token_expire_minutes * 60,
+        )
