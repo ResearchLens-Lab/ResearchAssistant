@@ -1,0 +1,6 @@
+import React from "react";
+import { AppShell } from "@/components/layout/AppShell";
+
+export default function WorkbenchLayout({ children }) {
+  return <AppShell>{children}</AppShell>;
+}
