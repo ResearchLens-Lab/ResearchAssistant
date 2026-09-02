@@ -46,11 +46,15 @@ export function useChat(conversationId = null) {
   });
 
   return {
-    conversations: conversationsQuery.data?.items || [],
+    conversations: Array.isArray(conversationsQuery.data)
+      ? conversationsQuery.data
+      : conversationsQuery.data?.items || [],
     isLoadingConversations: conversationsQuery.isLoading,
     conversation: conversationQuery.data,
     isLoadingConversation: conversationQuery.isLoading,
-    messages: messagesQuery.data?.items || [],
+    messages: Array.isArray(messagesQuery.data)
+      ? messagesQuery.data
+      : messagesQuery.data?.items || [],
     isLoadingMessages: messagesQuery.isLoading,
     sendMessage: sendMessageMutation.mutateAsync,
     isSendingMessage: sendMessageMutation.isPending,

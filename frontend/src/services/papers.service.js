@@ -22,7 +22,7 @@ export const papersService = {
 
   async update(id, payload) {
     return apiClient(`/papers/${id}`, {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   },

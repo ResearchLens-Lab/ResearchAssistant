@@ -17,6 +17,13 @@ export function PaperScopeRail() {
     selectPapers(papers.map((p) => p.id));
   };
 
+  // Auto-select if user has only 1 paper in library and nothing selected
+  React.useEffect(() => {
+    if (!isLoading && papers.length === 1 && selectedPaperIds.length === 0) {
+      selectPapers([papers[0].id]);
+    }
+  }, [papers, isLoading, selectedPaperIds.length, selectPapers]);
+
   return (
     <div className="flex h-full w-64 md:w-72 flex-col border-r border-zinc-200 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-950/50 shrink-0 select-none">
       {/* Header */}

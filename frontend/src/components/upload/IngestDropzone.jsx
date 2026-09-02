@@ -304,7 +304,7 @@ export function IngestDropzone() {
                 </Button>
 
                 <Button variant="workbench" size="sm" asChild className="gap-1">
-                  <Link href={`/chat`}>
+                  <Link href={`/chat?paper_id=${createdPaperId}`}>
                     <span>Ask AI in Chat</span>
                   </Link>
                 </Button>

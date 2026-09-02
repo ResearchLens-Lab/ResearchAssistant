@@ -3,7 +3,7 @@ services:
     image: chromadb/chroma:0.5.0
     container_name: researchlens-chromadb
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - chroma_data:/chroma/chroma
     environment:
