@@ -28,6 +28,13 @@ def _configure_logging() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     get_settings().upload_path.mkdir(parents=True, exist_ok=True)
+    try:
+        from backend.app.database.base import Base
+        from backend.app.database.session import get_engine
+        async with get_engine().begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:
+        logging.getLogger("backend").warning("Auto schema creation skipped/deferred: %s", exc)
     yield
 
 

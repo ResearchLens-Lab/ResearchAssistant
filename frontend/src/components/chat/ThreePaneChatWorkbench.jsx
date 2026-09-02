@@ -10,10 +10,13 @@ import { ChatInputBar } from "./ChatInputBar";
 import { SourceInspectorRail } from "@/components/citations/SourceInspectorRail";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, AlertCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export function ThreePaneChatWorkbench({ conversationId }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryPaperId = searchParams?.get("paper_id");
+
   const {
     messages,
     isLoadingMessages,
@@ -26,6 +29,13 @@ export function ThreePaneChatWorkbench({ conversationId }) {
   const { selectedPaperIds, selectPapers } = useChatScopeStore();
   const { setSources } = useCitationStore();
   const messagesEndRef = useRef(null);
+
+  // Sync query param paper_id if present
+  useEffect(() => {
+    if (queryPaperId && !selectedPaperIds.includes(queryPaperId)) {
+      selectPapers([queryPaperId]);
+    }
+  }, [queryPaperId, selectedPaperIds, selectPapers]);
 
   // Sync conversation paper_ids if available
   useEffect(() => {
