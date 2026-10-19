@@ -17,13 +17,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { batchIngestStatus, validateUploadFiles } from "@/lib/researchWorkspace.mjs";
 
 export function IngestDropzone() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
 
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const file = files[0] || null;
   const [title, setTitle] = useState("");
   const [authors, setAuthors] = useState("");
   const [year, setYear] = useState(new Date().getFullYear().toString());
@@ -35,21 +37,20 @@ export function IngestDropzone() {
   const [ingestStatus, setIngestStatus] = useState(null);
   const [createdPaperId, setCreatedPaperId] = useState(null);
   const [chunkCount, setChunkCount] = useState(null);
+  const [uploadResults, setUploadResults] = useState([]);
+  const [uploadFailures, setUploadFailures] = useState([]);
 
-  const handleFile = (selectedFile) => {
+  const handleFile = (selectedFiles) => {
     setErrorMessage(null);
-    if (!selectedFile.name.toLowerCase().endsWith(".pdf")) {
-      setErrorMessage("Only valid PDF files are supported.");
+    const incoming = Array.from(selectedFiles || []);
+    const validationError = validateUploadFiles(incoming);
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
-    if (selectedFile.size > 25 * 1024 * 1024) {
-      setErrorMessage("File exceeds the maximum allowed size of 25 MB.");
-      return;
-    }
-
-    setFile(selectedFile);
+    setFiles(incoming);
     if (!title) {
-      const cleanTitle = selectedFile.name.replace(/\.pdf$/i, "").replace(/[_-]/g, " ");
+      const cleanTitle = (incoming[0]?.name || "").replace(/\.[^.]+$/, "").replace(/[_-]/g, " ");
       setTitle(cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1));
     }
   };
@@ -58,18 +59,18 @@ export function IngestDropzone() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files?.length) handleFile(e.dataTransfer.files);
   };
 
   const ingestMutation = useMutation({
     mutationFn: async () => {
       if (!file || !title.trim()) {
-        throw new Error("Please provide a paper title and select a PDF file.");
+        throw new Error("Please provide a paper title and select at least one document.");
       }
 
       setIngestStatus("processing");
+      setUploadResults([]);
+      setUploadFailures([]);
 
       // 1. Create Paper record
       const authorsList = authors
@@ -77,7 +78,7 @@ export function IngestDropzone() {
         .map((a) => a.trim())
         .filter(Boolean);
 
-      const paper = await papersService.create({
+      const paper = createdPaperId ? await papersService.getById(createdPaperId) : await papersService.create({
         title: title.trim(),
         authors: authorsList.length > 0 ? authorsList : undefined,
         publication_year: year ? parseInt(year, 10) : undefined,
@@ -88,14 +89,20 @@ export function IngestDropzone() {
       setCreatedPaperId(paper.id);
 
       // 2. Upload Document & Ingest to RAG
-      const doc = await documentsService.upload(file, paper.id);
-      setChunkCount(doc.chunk_count || null);
-      setIngestStatus(doc.processing_status);
+      const batch = await documentsService.uploadBatch(files, paper.id);
+      const docs = batch.documents || [];
+      const failed = batch.failures || [];
+      setUploadResults(docs);
+      setUploadFailures(failed);
+      setChunkCount(docs.reduce((sum, doc) => sum + (doc.chunk_count || 0), 0) || null);
+      setIngestStatus(batchIngestStatus(docs, failed));
+      if (failed.length) setErrorMessage(`${failed.length} file(s) failed: ${failed.map((f) => f.filename).join(", ")}`);
 
-      return { paper, doc };
+      return { paper, docs, failures: failed };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["papers"] });
+      if (createdPaperId) queryClient.invalidateQueries({ queryKey: ["paperDocuments", createdPaperId] });
     },
     onError: (err) => {
       setIngestStatus("failed");
@@ -112,7 +119,7 @@ export function IngestDropzone() {
             Ingest Research Paper
           </h2>
           <p className="text-xs text-zinc-500">
-            Upload PDF papers. Academic sections, page ranges, and chunk embeddings will be automatically indexed.
+            Upload multiple supported documents into one paper. Each source keeps its own status and citations.
           </p>
         </div>
 
@@ -134,10 +141,11 @@ export function IngestDropzone() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf"
+            accept=".pdf,.docx,.txt,.md,.markdown,.csv,.xlsx,.pptx,.html,.htm,.json,.zip"
+            multiple
             className="hidden"
             onChange={(e) => {
-              if (e.target.files?.[0]) handleFile(e.target.files[0]);
+              if (e.target.files?.length) handleFile(e.target.files);
             }}
           />
 
@@ -146,9 +154,7 @@ export function IngestDropzone() {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <FileText className="h-5 w-5" />
               </div>
-              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                {file.name}
-              </p>
+              <ul className="max-h-24 space-y-1 overflow-y-auto text-left text-xs font-medium text-zinc-900 dark:text-zinc-100">{files.map((f) => <li key={`${f.name}-${f.lastModified}`} className="max-w-md truncate" title={f.name}>{f.name}</li>)}</ul>
               <p className="text-[11px] font-mono text-zinc-500">
                 {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for section-aware ingestion
               </p>
@@ -158,10 +164,10 @@ export function IngestDropzone() {
                 className="mt-2 text-[11px] h-6"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setFile(null);
+                  setFiles([]);
                 }}
               >
-                Change PDF
+                Change files
               </Button>
             </div>
           ) : (
@@ -170,10 +176,10 @@ export function IngestDropzone() {
                 <UploadCloud className="h-5 w-5" />
               </div>
               <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                Drop PDF research papers here, or browse
+                Drop research documents here, or browse
               </p>
               <p className="text-[11px] text-zinc-400 font-mono">
-                Supports PDF up to 25 MB • Text layer validated
+                PDF, DOCX, TXT, Markdown, CSV, HTML, JSON, ZIP • Text layer validated
               </p>
             </div>
           )}
@@ -293,6 +299,19 @@ export function IngestDropzone() {
               fileSize={file?.size}
               error={errorMessage}
             />
+
+            {(uploadResults.length > 0 || uploadFailures.length > 0) && <section aria-label="Per-file processing results" className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <h3 className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-800">File processing results</h3>
+              <ul className="divide-y divide-slate-100">
+                {uploadResults.map((doc) => <li key={doc.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                  <FileText className="h-3.5 w-3.5 text-slate-400" /><span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
+                  <span className={`rounded px-1.5 py-0.5 font-medium capitalize ${doc.processing_status === "indexed" ? "bg-emerald-50 text-emerald-800" : doc.processing_status === "failed" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>{doc.processing_status}</span>
+                  {doc.chunk_count != null && <span className="text-[10px] text-slate-500">{doc.chunk_count} chunks</span>}
+                  {doc.processing_error && <p className="basis-full pl-5 text-[11px] text-rose-700">{doc.processing_error}</p>}
+                </li>)}
+                {uploadFailures.map((failure, index) => <li key={`${failure.filename}-${index}`} className="flex flex-wrap gap-2 px-3 py-2 text-xs text-rose-800"><AlertCircle className="h-3.5 w-3.5 shrink-0" /><span className="font-medium">{failure.filename}</span><span className="basis-full pl-5 text-[11px]">{failure.error}</span></li>)}
+              </ul>
+            </section>}
 
             {ingestStatus === "indexed" && createdPaperId && (
               <div className="flex items-center gap-3">

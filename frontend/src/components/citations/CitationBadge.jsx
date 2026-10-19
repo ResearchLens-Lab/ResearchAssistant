@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/hover-card";
 import { Badge } from "@/components/ui/badge";
 import { useCitationStore } from "@/store/citationStore";
+import { openAuthenticatedPdfSource } from "@/services/documents.service";
 
 export function CitationBadge({ sourceId, source }) {
   const { activeSourceId, openSource, sources } = useCitationStore();
@@ -18,6 +19,9 @@ export function CitationBadge({ sourceId, source }) {
     e.preventDefault();
     e.stopPropagation();
     openSource(sourceId);
+    if (matchedSource?.document_id && /\.pdf$/i.test(matchedSource.filename || "")) {
+      openAuthenticatedPdfSource(matchedSource).catch(() => {});
+    }
 
     const el = document.getElementById(`source-${sourceId}`);
     if (el) {

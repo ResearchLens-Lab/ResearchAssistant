@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 export const useCitationStore = create((set) => ({
   sources: [],
+  researchTrace: null,
   activeSourceId: null,
   activeTab: "sources", // 'sources' | 'library' | 'notes'
   isDrawerOpen: false,
@@ -11,6 +12,8 @@ export const useCitationStore = create((set) => ({
       sources: sources || [],
       activeSourceId: sources && sources.length > 0 ? sources[0].source_id : null,
     }),
+
+  setResearchTrace: (researchTrace) => set({ researchTrace: researchTrace || null }),
 
   setActiveSource: (sourceId) =>
     set({
@@ -34,6 +37,7 @@ export const useCitationStore = create((set) => ({
   clearSources: () =>
     set({
       sources: [],
+      researchTrace: null,
       activeSourceId: null,
       isDrawerOpen: false,
     }),

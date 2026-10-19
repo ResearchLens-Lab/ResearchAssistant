@@ -1,8 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatService } from "@/services/chat.service";
+import { useRef, useState } from "react";
+import { applyChatStreamEvent } from "@/lib/researchWorkspace.mjs";
 
 export function useChat(conversationId = null) {
   const queryClient = useQueryClient();
+  const [pendingMessages, setPendingMessages] = useState([]);
+  const [streamError, setStreamError] = useState(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef(null);
 
   const conversationsQuery = useQuery({
     queryKey: ["conversations"],
@@ -32,6 +38,7 @@ export function useChat(conversationId = null) {
   });
 
   const createConversationMutation = useMutation({
+    /** @param {{ title: string, paperIds: string[] }} variables */
     mutationFn: ({ title, paperIds }) => chatService.createConversation(title, paperIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -45,6 +52,52 @@ export function useChat(conversationId = null) {
     },
   });
 
+  const sendMessage = async (payload) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const assistantId = `pending-assistant-${Date.now()}`;
+    const temp = [
+      { id: `pending-user-${Date.now()}`, role: "user", content: payload.question, optimistic: true },
+      { id: assistantId, role: "assistant", content: "", pending: true, optimistic: true, progress: "Starting research…" },
+    ];
+    setPendingMessages(temp);
+    setStreamError(null);
+    setIsStreaming(true);
+    try {
+      const data = await chatService.streamQuestion(payload, (event) => {
+        const labels = {
+          planning_started: "Planning the research question…",
+          planning_completed: "Research plan ready",
+          retrieval_started: "Searching selected sources…",
+          additional_retrieval: "Looking for missing evidence…",
+          sources_found: `Found ${event.data?.count ?? 0} evidence passages`,
+          evidence_ready: "Evidence collected; preparing an answer…",
+          generation_started: "Drafting an evidence-based answer…",
+          verification_started: "Checking claims and citations…",
+          verification_completed: "Evidence check complete",
+        };
+        if (event.type === "token") {
+          setPendingMessages((current) => current.map((m) => m.id === assistantId ? applyChatStreamEvent(m, event) : m));
+        } else if (event.type === "completed") {
+          setPendingMessages((current) => current.map((m) => m.id === assistantId ? applyChatStreamEvent(m, event) : m));
+        } else if (labels[event.type]) setPendingMessages((current) => current.map((m) => m.id === assistantId ? { ...m, progress: labels[event.type] } : m));
+      }, controller.signal);
+      if (data.conversation_id) {
+        await queryClient.invalidateQueries({ queryKey: ["messages", data.conversation_id], refetchType: "active" });
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      }
+      return data;
+    } catch (error) {
+      if (error.name !== "AbortError") setStreamError(error);
+      throw error;
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      setPendingMessages([]);
+      setIsStreaming(false);
+    }
+  };
+
   return {
     conversations: Array.isArray(conversationsQuery.data)
       ? conversationsQuery.data
@@ -52,13 +105,14 @@ export function useChat(conversationId = null) {
     isLoadingConversations: conversationsQuery.isLoading,
     conversation: conversationQuery.data,
     isLoadingConversation: conversationQuery.isLoading,
-    messages: Array.isArray(messagesQuery.data)
+    messages: [...(Array.isArray(messagesQuery.data)
       ? messagesQuery.data
-      : messagesQuery.data?.items || [],
+      : messagesQuery.data?.items || []), ...pendingMessages],
     isLoadingMessages: messagesQuery.isLoading,
-    sendMessage: sendMessageMutation.mutateAsync,
-    isSendingMessage: sendMessageMutation.isPending,
-    sendError: sendMessageMutation.error,
+    sendMessage,
+    isSendingMessage: isStreaming || sendMessageMutation.isPending,
+    sendError: streamError || sendMessageMutation.error,
+    cancelMessage: () => abortRef.current?.abort(),
     createConversation: createConversationMutation.mutateAsync,
     isCreatingConversation: createConversationMutation.isPending,
     deleteConversation: deleteConversationMutation.mutateAsync,

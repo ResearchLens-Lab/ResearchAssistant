@@ -81,7 +81,7 @@ export function GroundedSummaryCard({
             No summary generated yet
           </p>
           <p className="text-[11px] text-zinc-400">
-            Click above to generate a structured synthesis with verified section citations.
+            Click above to generate a structured synthesis with citations linked to the source passages.
           </p>
         </div>
       ) : null}

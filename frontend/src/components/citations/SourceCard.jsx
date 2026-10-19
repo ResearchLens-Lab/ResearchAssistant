@@ -3,8 +3,10 @@ import { ScoreProgressBar } from "./ScoreProgressBar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/cn";
 
-export function SourceCard({ source, isActive = false, onSelect }) {
-  const pageDisplay =
+export function SourceCard({ source, isActive = false, onSelect, claimStatuses = [] }) {
+  const pageDisplay = source.locator && source.page_start == null
+      ? source.locator
+      :
     source.page !== undefined && source.page !== null
       ? `p. ${source.page}`
       : source.page_start && source.page_end
@@ -16,9 +18,13 @@ export function SourceCard({ source, isActive = false, onSelect }) {
   return (
     <div
       id={`source-${source.source_id}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isActive}
       onClick={onSelect}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect?.(); } }}
       className={cn(
-        "group relative rounded-lg border p-3 transition-all duration-200 cursor-pointer text-left",
+        "group relative block w-full rounded-lg border p-3 transition-all duration-200 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
         isActive
           ? "border-blue-500 bg-blue-50/25 ring-2 ring-blue-500/20 shadow-xs"
           : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-2xs dark:border-zinc-800 dark:bg-zinc-900"
@@ -36,7 +42,7 @@ export function SourceCard({ source, isActive = false, onSelect }) {
             </Badge>
           )}
           <span className="text-xs font-semibold text-zinc-900 truncate max-w-[180px] dark:text-zinc-100">
-            {source.title || `Paper ${source.paper_id?.slice(0, 8)}`}
+            {source.filename || source.title || `Paper ${source.paper_id?.slice(0, 8)}`}
           </span>
         </div>
         <span className="text-[11px] font-mono text-zinc-500 shrink-0">
@@ -50,6 +56,11 @@ export function SourceCard({ source, isActive = false, onSelect }) {
           <Badge variant="section" className="text-[9px] px-1.5 py-0">
             {source.section}
           </Badge>
+        </div>
+      )}
+      {claimStatuses.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1" aria-label="Claim support statuses">
+          {claimStatuses.map((status) => <Badge key={status} variant="outline" className="text-[9px] capitalize">{status.replaceAll("_", " ")}</Badge>)}
         </div>
       )}
 
