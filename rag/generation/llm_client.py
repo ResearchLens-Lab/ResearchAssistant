@@ -19,6 +19,11 @@ class BaseLLMClient(ABC):
     """
     Abstract LLM client interface.
     """
+    supports_streaming = False
+
+    def generate_stream(self, system_prompt, user_prompt, temperature=None, max_tokens=None):
+        """Fallback for providers without incremental generation."""
+        yield self.generate(system_prompt, user_prompt, temperature, max_tokens)
 
     @abstractmethod
     def generate(
@@ -77,67 +82,22 @@ class MockGroundedLLMClient(BaseLLMClient):
             return self._generate_mock_qa(source_matches, user_prompt)
 
     def _generate_mock_summary(self, source_matches: List[tuple]) -> str:
-        s_tags = [f"[{s[0]}]" for s in source_matches] or ["[S1]"]
-        first_tag = s_tags[0]
-        second_tag = s_tags[1] if len(s_tags) > 1 else first_tag
-
-        # Find key snippets
-        overview_text = source_matches[0][2].strip().replace("\n", " ")[:200] if source_matches else "Research analysis of proposed methodology"
-
-        return f"""### 1. Overview & Core Objective
-The paper introduces a comprehensive framework focusing on {overview_text}... {first_tag}.
-
-### 2. Problem Statement
-The research addresses foundational challenges in existing approaches, specifically improving accuracy, scalability, and domain understanding {first_tag}.
-
-### 3. Proposed Methodology & Architecture
-The authors develop an evidence-grounded approach structured with modular pipeline components and specialized representations {first_tag, second_tag}.
-
-### 4. Experimental Setup & Datasets
-Evaluation is conducted on standard benchmark datasets using rigorous quantitative metrics {second_tag}.
-
-### 5. Key Findings & Results
-The empirical evaluation demonstrates notable performance gains and robustness compared to baseline methods {first_tag, second_tag}.
-
-### 6. Limitations & Future Work
-Identified limitations include computational constraints and potential extensions to broader multilingual domains {second_tag}.
-
-### 7. Conclusion
-The proposed framework provides a solid foundation for research assistance, showing high grounding faithfulness and practical utility {first_tag}."""
+        if not source_matches:
+            return "The available passages do not provide enough evidence for a summary."
+        evidence = "\n\n".join(
+            f"#### {header.strip()}\n\n{text.replace('<untrusted_source_evidence>', '').replace('</untrusted_source_evidence>', '').strip()} [{tag}]" for tag, header, text in source_matches if text.strip()
+        )
+        return ("### Overview\nNot reported in the retrieved passages.\n\n"
+                "### Methodology\nNot reported in the retrieved passages.\n\n"
+                "### Results\nNot reported in the retrieved passages.\n\n"
+                "### Retrieved evidence\n" + evidence)
 
     def _generate_mock_comparison(self, source_matches: List[tuple], user_prompt: str) -> str:
-        # Group source matches by paper
-        papers: Dict[str, List[str]] = {}
-        for tag, header, text in source_matches:
-            paper_match = re.search(r"Paper:\s*([^\s,]+)", header)
-            paper_id = paper_match.group(1) if paper_match else "Paper"
-            if paper_id not in papers:
-                papers[paper_id] = []
-            papers[paper_id].append((tag, text.strip()[:150]))
-
-        paper_names = list(papers.keys())
-        p1 = paper_names[0] if paper_names else "Paper A"
-        p2 = paper_names[1] if len(paper_names) > 1 else "Paper B"
-
-        s1_tag = f"[{papers[p1][0][0]}]" if (p1 in papers and papers[p1]) else "[S1]"
-        s2_tag = f"[{papers[p2][0][0]}]" if (p2 in papers and papers[p2]) else "[S2]"
-
-        return f"""### 1. High-Level Comparison Summary
-Comparing **{p1}** and **{p2}**, both systems tackle core research tasks but employ distinct architectural choices {s1_tag, s2_tag}.
-
-### 2. Methodological Differences
-- **{p1}** focuses on: {papers.get(p1, [(s1_tag, 'Structured RAG pipeline')])[0][1]}... {s1_tag}.
-- **{p2}** focuses on: {papers.get(p2, [(s2_tag, 'Comparative knowledge mapping')])[0][1]}... {s2_tag}.
-
-### 3. Datasets & Evaluation Metrics
-Both papers evaluate on standard benchmark collections using accuracy, recall, and grounding metrics {s1_tag, s2_tag}.
-
-### 4. Relative Strengths & Trade-offs
-- **{p1}**: High retrieval precision and lower inference latency {s1_tag}.
-- **{p2}**: Broader multi-paper relational coverage with higher analytical depth {s2_tag}.
-
-### 5. Synthesis & Takeaways
-The two approaches are complementary; combining {p1}'s structured retrieval with {p2}'s comparative exploration yields an effective research assistant architecture {s1_tag, s2_tag}."""
+        if not source_matches:
+            return "The selected sources provide insufficient evidence for comparison."
+        return "### Comparison: evidence from selected papers\n\n" + "\n\n".join(
+            f"#### {header.strip()}\n\n{text.replace('<untrusted_source_evidence>', '').replace('</untrusted_source_evidence>', '').strip()} [{tag}]" for tag, header, text in source_matches if text.strip()
+        )
 
     def _generate_mock_qa(self, source_matches: List[tuple], user_prompt: str) -> str:
         # Extract question
@@ -147,25 +107,20 @@ The two approaches are complementary; combining {p1}'s structured retrieval with
         if not source_matches:
             return "Based on the provided papers, there is insufficient evidence to answer this question."
 
-        # Extract top 2 source snippets
-        top_tag, top_header, top_text = source_matches[0]
-        clean_top_text = top_text.strip().replace("\n", " ")[:250]
-
-        citations = [f"[{top_tag}]"]
-        second_citation = ""
-        if len(source_matches) > 1:
-            second_tag, _, second_text = source_matches[1]
-            clean_second_text = second_text.strip().replace("\n", " ")[:200]
-            second_citation = f" Furthermore, the study emphasizes that {clean_second_text} [{second_tag}]."
-            citations.append(f"[{second_tag}]")
-
-        return f"Based on the research paper evidence, {clean_top_text} [{top_tag}].{second_citation}"
+        # Offline mode is explicitly extractive and makes no claims beyond the evidence.
+        sections = ["The following retrieved passages are relevant. This offline response presents evidence without semantic synthesis:"]
+        for tag, header, text in source_matches:
+            passage = text.replace("<untrusted_source_evidence>", "").replace("</untrusted_source_evidence>", "").strip()
+            if passage:
+                sections.append(f"### {header.strip()}\n\n{passage} [{tag}]")
+        return "\n\n".join(sections)
 
 
 class OpenAILLMClient(BaseLLMClient):
     """
     OpenAI Chat Completion API Client.
     """
+    supports_streaming = True
 
     def __init__(
         self,
@@ -205,11 +160,44 @@ class OpenAILLMClient(BaseLLMClient):
             "max_tokens": max_tokens or self.max_tokens,
         }
 
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+        except httpx.TimeoutException as exc:
+            raise RuntimeError("Language model request timed out.") from exc
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Language model provider rejected the request (HTTP {exc.response.status_code}).") from exc
+
+    def generate_stream(self, system_prompt, user_prompt, temperature=None, max_tokens=None):
+        if not self.api_key:
+            raise ValueError("OpenAI API key is missing. Set LLM_API_KEY in environment or .env.")
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        payload = {"model": self.model, "messages": [{"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}], "temperature": temperature if temperature is not None else self.temperature,
+            "max_tokens": max_tokens or self.max_tokens, "stream": True}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                with client.stream("POST", "https://api.openai.com/v1/chat/completions", json=payload, headers=headers) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            delta = httpx.Response(200, content=data).json()["choices"][0].get("delta", {}).get("content")
+                        except (ValueError, KeyError, IndexError, TypeError):
+                            continue
+                        if delta:
+                            yield delta
+        except httpx.TimeoutException as exc:
+            raise RuntimeError("Language model request timed out.") from exc
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Language model provider rejected the request (HTTP {exc.response.status_code}).") from exc
 
 
 class LLMClientFactory:
@@ -233,5 +221,4 @@ class LLMClientFactory:
             logger.info("Initializing MockGroundedLLMClient")
             return MockGroundedLLMClient()
         else:
-            logger.warning("Unknown LLM provider '%s', defaulting to MockGroundedLLMClient", prov)
-            return MockGroundedLLMClient()
+            raise ValueError(f"Unsupported LLM provider '{prov}'. Choose 'mock' or 'openai'.")

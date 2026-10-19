@@ -93,6 +93,19 @@ def test_vector_repository_filtering_by_paper_id(vector_repo, mock_embedder):
     assert results_beta[0].metadata.paper_id == "beta"
 
 
+def test_fts_bm25_finds_rare_exact_term_with_paper_filter(vector_repo, mock_embedder):
+    chunks = [
+        DocumentChunk(text="The quasicrystalline morphogenesis procedure is described here.",
+            metadata=ChunkMetadata(chunk_id="rare_c1", paper_id="selected", document_id="d1", chunk_index=0)),
+        DocumentChunk(text="A common discussion of neural networks and optimization.",
+            metadata=ChunkMetadata(chunk_id="common_c1", paper_id="other", document_id="d2", chunk_index=0)),
+    ]
+    vector_repo.upsert_chunks(chunks, mock_embedder.embed_documents([c.text for c in chunks]))
+    hits = vector_repo.query_lexical("quasicrystalline morphogenesis", where={"paper_id": "selected"}, limit=5)
+    assert [hit.id for hit in hits] == ["rare_c1"]
+    assert hits[0].metadata.paper_id == "selected"
+
+
 def test_vector_repository_delete_paper(vector_repo, mock_embedder):
     chunk = DocumentChunk(
         text="Temporary paper data to delete.",

@@ -35,8 +35,10 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 80):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self._match_cursor = 0
 
     def chunk(self, document: NormalizedDocument) -> List[DocumentChunk]:
+        self._match_cursor = 0
         chunks: List[DocumentChunk] = []
         chunk_idx = 0
 
@@ -77,10 +79,11 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
         """
         index: List[Tuple[int, int, int]] = []
         current_offset = 0
-        for page in pages:
+        nonempty_pages = [page for page in pages if page.text.strip()]
+        for page_index, page in enumerate(nonempty_pages):
             length = len(page.text)
             index.append((page.page_number, current_offset, current_offset + length))
-            current_offset += length + 2  # accounted for '\n\n' separator
+            current_offset += length + (2 if page_index < len(nonempty_pages) - 1 else 0)
         return index
 
     def _find_page_range_for_text(
@@ -97,18 +100,24 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
         if not page_offsets:
             return fallback_start, fallback_end
 
-        start_pos = document_text.find(chunk_text[:100])
+        # Match on whitespace-normalized text while retaining source offsets. PDF
+        # extractors often wrap lines differently from the chunker.
+        match = self._find_normalized_match(document_text, chunk_text, self._match_cursor)
+        start_pos = match[0] if match else -1
         if start_pos == -1:
             return fallback_start, fallback_end
-
-        end_pos = start_pos + len(chunk_text)
+        end_pos = match[1]
+        # Advance by the match start, not its end, so overlapping chunks can
+        # still resolve while repeated identical passages map in document order.
+        # Keep the matcher stateless so overlapping chunks can resolve the same
+        # passage; ambiguity from repeated text is bounded by source page range.
 
         p_start = fallback_start
         p_end = fallback_end
         found_start = False
 
         for page_num, p_from, p_to in page_offsets:
-            if not found_start and start_pos <= p_to:
+            if not found_start and start_pos < p_to:
                 p_start = page_num
                 found_start = True
             if end_pos <= p_to:
@@ -117,6 +126,41 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
             p_end = page_num
 
         return max(1, p_start), max(p_start, p_end)
+
+    @staticmethod
+    def _locator_for(document: NormalizedDocument, text: str, section_name: str, chunk_number: int) -> str:
+        fmt = (document.metadata.source_format or "pdf").lower()
+        if fmt in {"xlsx", "csv", "docx"}:
+            sheets = re.findall(r"Sheet:\s*(.+?)(?=\s+Columns:|\s+Row\s+\d+:|$)", text, re.I)
+            rows = [int(value) for value in re.findall(r"\bRow\s+(\d+)\s*:", text, re.I)]
+            if sheets:
+                row_label = (f"row {rows[0]}" if len(rows) == 1 else f"rows {min(rows)}-{max(rows)}") if rows else "headers"
+                return f"Sheet {sheets[0].strip()}, {row_label}"
+            if rows:
+                row_label = f"rows {min(rows)}-{max(rows)}" if len(rows) > 1 else f"row {rows[0]}"
+                return row_label
+        if fmt == "pptx":
+            slides = [int(value) for value in re.findall(r"\bSlide\s+(\d+)\s*:", text, re.I)]
+            if not slides:
+                slides = [int(value) for value in re.findall(r"\bSlide\s+(\d+)\b", text, re.I)]
+            if slides:
+                return f"Slide {min(slides)}" if min(slides) == max(slides) else f"Slides {min(slides)}-{max(slides)}"
+        return f"{section_name} · passage {chunk_number}"
+
+    @staticmethod
+    def _find_normalized_match(source: str, target: str, start_at: int = 0):
+        tokens = list(re.finditer(r"\S+", source))
+        wanted = target.split()
+        if not wanted:
+            return None
+        # Compare token streams so differences in line breaks and repeated spaces
+        # do not invalidate provenance. The first contiguous exact sequence wins.
+        for i in range(0, len(tokens) - len(wanted) + 1):
+            if tokens[i].start() < start_at:
+                continue
+            if all(tokens[i + j].group() == word for j, word in enumerate(wanted)):
+                return tokens[i].start(), tokens[i + len(wanted) - 1].end()
+        return None
 
     def _chunk_section(
         self,
@@ -158,18 +202,22 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
                 )
 
                 chunk_idx = start_chunk_idx + len(section_chunks)
-                chunk_id = f"{document.paper_id}_c{chunk_idx:04d}_p{p_start}-{p_end}"
+                is_pdf = (document.metadata.source_format or "pdf").lower() == "pdf"
+                locator = self._locator_for(document, chunk_text, section.name, chunk_idx + 1)
+                chunk_id = f"{document.paper_id}_c{chunk_idx:04d}" + (f"_p{p_start}-{p_end}" if is_pdf else "")
 
                 meta = ChunkMetadata(
                     chunk_id=chunk_id,
                     paper_id=document.paper_id,
                     document_id=document.document_id,
-                    page_start=p_start,
-                    page_end=p_end,
+                    page_start=p_start if is_pdf else None,
+                    page_end=p_end if is_pdf else None,
                     section=section.name,
                     chunk_index=chunk_idx,
                     token_count=len(current_words),
                     title=document.title,
+                    filename=document.metadata.filename,
+                    locator=locator,
                 )
                 section_chunks.append(DocumentChunk(text=chunk_text, metadata=meta))
 
@@ -192,18 +240,22 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
                 fallback_end=section.page_end,
             )
             chunk_idx = start_chunk_idx + len(section_chunks)
-            chunk_id = f"{document.paper_id}_c{chunk_idx:04d}_p{p_start}-{p_end}"
+            is_pdf = (document.metadata.source_format or "pdf").lower() == "pdf"
+            locator = self._locator_for(document, chunk_text, section.name, chunk_idx + 1)
+            chunk_id = f"{document.paper_id}_c{chunk_idx:04d}" + (f"_p{p_start}-{p_end}" if is_pdf else "")
 
             meta = ChunkMetadata(
                 chunk_id=chunk_id,
                 paper_id=document.paper_id,
                 document_id=document.document_id,
-                page_start=p_start,
-                page_end=p_end,
+                page_start=p_start if is_pdf else None,
+                page_end=p_end if is_pdf else None,
                 section=section.name,
                 chunk_index=chunk_idx,
                 token_count=len(current_words),
                 title=document.title,
+                filename=document.metadata.filename,
+                locator=locator,
             )
             section_chunks.append(DocumentChunk(text=chunk_text, metadata=meta))
 

@@ -26,7 +26,15 @@ class CollectionManager:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Collection:
         coll_name = name or settings.chroma_collection_name
-        meta = metadata or {"hnsw:space": "cosine"}
+        embedding_model = settings.embedding_model
+        if settings.embedding_provider == "openai" and not embedding_model.startswith("text-embedding"):
+            embedding_model = "text-embedding-3-small"
+        if name is None and settings.chroma_namespace_by_embedding:
+            safe_model = "".join(c if c.isalnum() or c in "_-" else "_" for c in embedding_model)
+            suffix = f"_{safe_model}_{settings.embedding_dimension}"
+            coll_name = f"{coll_name[:63-len(suffix)]}{suffix}"
+        meta = metadata or {"hnsw:space": "cosine", "embedding_model": embedding_model,
+                            "embedding_dimension": settings.embedding_dimension}
 
         logger.debug("Getting or creating collection '%s'", coll_name)
         return self.client.get_or_create_collection(
@@ -45,7 +53,7 @@ class CollectionManager:
             logger.info("Deleted collection '%s'", coll_name)
             return True
         except Exception as e:
-            logger.warning("Could not delete collection '%s': %s", coll_name, e)
+            logger.warning("Could not delete collection exception_type=%s", type(e).__name__)
             return False
 
     def list_collections(self):

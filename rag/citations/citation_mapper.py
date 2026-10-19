@@ -15,15 +15,19 @@ class SourceCitation(BaseModel):
     paper_id: str
     document_id: str
     chunk_id: str
-    page_start: int
-    page_end: int
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
     section: str
     text: str
     score: float = 0.0
     title: Optional[str] = None
+    filename: Optional[str] = None
+    locator: Optional[str] = None
 
     @property
     def page_display(self) -> str:
+        if self.page_start is None:
+            return self.locator or "Source passage"
         if self.page_start == self.page_end:
             return f"Page {self.page_start}"
         return f"Pages {self.page_start}-{self.page_end}"
@@ -64,6 +68,8 @@ class CitationMapper:
                         text=source.text,
                         score=source.score,
                         title=source.title,
+                        filename=source.filename,
+                        locator=source.locator,
                     )
                 )
                 seen_chunk_ids.add(source.chunk_id)
@@ -84,6 +90,8 @@ class CitationMapper:
                             text=source.text,
                             score=source.score,
                             title=source.title,
+                            filename=source.filename,
+                            locator=source.locator,
                         )
                     )
                     seen_chunk_ids.add(source.chunk_id)

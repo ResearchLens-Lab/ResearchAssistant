@@ -31,6 +31,8 @@ class DocumentMetadata(BaseModel):
     year: Optional[int] = None
     doi: Optional[str] = None
     file_path: Optional[str] = None
+    filename: Optional[str] = None
+    source_format: Optional[str] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -159,8 +161,10 @@ class DocumentNormalizer:
                 # Check if this line matches a section header (usually short line < 60 chars)
                 matched_name = None
                 if len(stripped) < 60:
+                    if re.match(r"^#{1,6}\s+", stripped):
+                        matched_name = re.sub(r"^#{1,6}\s+", "", stripped).strip()[:59]
                     for pattern, name in self.section_patterns:
-                        if pattern.match(stripped):
+                        if matched_name is None and pattern.match(stripped):
                             matched_name = name
                             break
 

@@ -25,3 +25,5 @@ Academic prompt templates:
 
 ### 4. `generator.py`
 `GroundedGenerator`: Coordinates prompt rendering, LLM execution, and response parsing.
+
+Research answers use deterministic citation identity and selected-scope checks, then a bounded claim filter before serialization. The default lexical/numeric claim heuristic does not prove semantic entailment; an optional schema-checked LLM judge can be enabled with `CLAIM_VERIFICATION_USE_LLM=true`. The compatible JSON endpoint remains available, and `POST /api/v1/chat/stream` emits authenticated pipeline progress. Answer-token streaming is not implemented because configured providers expose no streaming interface. See [Phase 3 status](phase3-status.md).

@@ -125,14 +125,23 @@ class OpenAIEmbedder(BaseEmbedder):
             "input": input_texts,
             "model": self.model,
         }
+        if self.model in {"text-embedding-3-small", "text-embedding-3-large"}:
+            payload["dimensions"] = self.dimension
 
-        with httpx.Client(timeout=30.0) as client:
-            resp = client.post("https://api.openai.com/v1/embeddings", json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            # Sort embeddings by index to maintain ordering
-            sorted_data = sorted(data["data"], key=lambda x: x["index"])
-            return [item["embedding"] for item in sorted_data]
+        try:
+            with httpx.Client(timeout=settings.llm_timeout_seconds) as client:
+                resp = client.post("https://api.openai.com/v1/embeddings", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                sorted_data = sorted(data["data"], key=lambda x: x["index"])
+                vectors = [item["embedding"] for item in sorted_data]
+                if any(len(vector) != self.dimension for vector in vectors):
+                    raise RuntimeError(f"Embedding provider returned an unexpected vector dimension; expected {self.dimension}.")
+                return vectors
+        except httpx.TimeoutException as exc:
+            raise RuntimeError("Embedding provider request timed out.") from exc
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Embedding provider rejected the request (HTTP {exc.response.status_code}).") from exc
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         if not texts:

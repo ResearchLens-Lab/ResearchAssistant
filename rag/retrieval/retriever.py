@@ -38,8 +38,8 @@ class ResearchRetriever:
         Executes end-to-end retrieval for a QueryRequest.
         """
         logger.info(
-            "Retrieving sources for query='%s' (paper_ids=%s, top_k=%d)",
-            request.question[:50],
+            "Retrieving sources query_chars=%d (paper_ids=%s, top_k=%d)",
+            len(request.question),
             request.paper_ids,
             request.top_k,
         )
@@ -61,16 +61,27 @@ class ResearchRetriever:
             where=where_filter,
         )
 
-        if not vector_records:
-            logger.info("No vector records found matching query and filters.")
-            return []
-
         # 4. Rank & filter by score threshold
         ranked_records = ResultRanker.rank(
             records=vector_records,
             min_score=request.min_score,
             top_k=fetch_limit,
         )
+
+        # Fuse dense and lexical rankings. Lexical lookup runs only within an
+        # explicit paper scope, keeping the scan bounded to the user's selection.
+        lexical_records = self.vector_repo.query_lexical(request.question, where=where_filter, limit=1000)
+        if not ranked_records and not lexical_records:
+            logger.info("No dense or lexical records found matching query and filters.")
+            return []
+        if lexical_records:
+            fused = {}
+            records_by_id = {}
+            for ranked_list in (ranked_records, lexical_records):
+                for rank, rec in enumerate(ranked_list, start=1):
+                    fused[rec.id] = fused.get(rec.id, 0.0) + 1.0 / (60 + rank)
+                    records_by_id.setdefault(rec.id, rec)
+            ranked_records = [records_by_id[key] for key in sorted(fused, key=fused.get, reverse=True)[:fetch_limit]]
 
         # 5. Convert to RetrievedSource objects with deterministic S1, S2 IDs
         candidate_sources: List[RetrievedSource] = []
@@ -86,6 +97,8 @@ class ResearchRetriever:
                 text=rec.text,
                 score=round(rec.similarity_score or 0.0, 4),
                 title=rec.metadata.title,
+                filename=rec.metadata.filename,
+                locator=rec.metadata.locator,
             )
             candidate_sources.append(source)
 
@@ -95,6 +108,16 @@ class ResearchRetriever:
             sources=candidate_sources,
             top_k=request.top_k,
         )
+
+        # For comparison queries, preserve the best genuinely matching passage
+        # from each selected paper before filling remaining slots by relevance.
+        selected_ids = list(dict.fromkeys(request.paper_ids or []))
+        if len(selected_ids) > 1 and final_sources:
+            by_id = {source.paper_id: source for source in candidate_sources if source.paper_id in selected_ids}
+            balanced = [by_id[pid] for pid in selected_ids if pid in by_id]
+            chosen = {source.chunk_id for source in balanced}
+            balanced.extend(source for source in candidate_sources if source.chunk_id not in chosen)
+            final_sources = balanced[:request.top_k]
 
         # Re-index source_ids cleanly after final selection
         for idx, s in enumerate(final_sources, start=1):

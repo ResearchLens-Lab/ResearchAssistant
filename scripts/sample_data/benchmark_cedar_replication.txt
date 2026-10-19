@@ -1,0 +1,7 @@
+﻿Independent benchmark report
+
+Results
+On the shared SafetyBench test set, Model Cedar achieved an accuracy of 91 percent over 2,000 examples.
+
+Limitations
+The evaluation covers only English prompts.

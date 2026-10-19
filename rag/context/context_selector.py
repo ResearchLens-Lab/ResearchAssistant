@@ -17,13 +17,13 @@ class ContextSelector:
         Deduplicates chunks based on chunk_id or identical text prefix.
         """
         seen_ids: Set[str] = set()
-        seen_texts: Set[str] = set()
+        seen_texts: Set[tuple[str, str]] = set()
         deduped: List[RetrievedSource] = []
 
         for src in sources:
             if src.chunk_id in seen_ids:
                 continue
-            text_key = src.text.strip()[:150]
+            text_key = (src.document_id, " ".join(src.text.split()).casefold())
             if text_key in seen_texts:
                 continue
 

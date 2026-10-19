@@ -29,7 +29,7 @@ class RAGEvaluator:
     ):
         self.query_pipeline = query_pipeline or QueryPipeline()
         self.retriever = retriever or self.query_pipeline.retriever
-        self.retrieval_eval = RetrievalEvaluator(self.retriever)
+        self.retrieval_eval = RetrievalEvaluator(self.retriever, query_pipeline=self.query_pipeline)
         self.generation_eval = GenerationEvaluator(self.query_pipeline)
 
     def load_dataset(self, dataset_path: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -41,7 +41,7 @@ class RAGEvaluator:
         if not path.exists():
             raise FileNotFoundError(f"Dataset not found at: {path}")
 
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8-sig"))
 
     def run_evaluation(
         self,
@@ -72,6 +72,27 @@ class RAGEvaluator:
                 citation_correctness=gen_metrics["citation_correctness"],
                 retrieved_count=ret_metrics["retrieved_count"],
                 cited_count=gen_metrics["cited_count"],
+                source_coverage=ret_metrics.get("source_coverage", 0.0),
+                reciprocal_rank=ret_metrics.get("reciprocal_rank", 0.0),
+                unsupported_handling=gen_metrics.get("unsupported_handling", 0.0),
+                latency_seconds=gen_metrics.get("execution_time_seconds", 0.0),
+                category=item.get("category", {
+                    "direct_fact": "direct", "exact_equation": "terminology_equation", "conceptual": "conceptual",
+                    "multi_passage": "multi_chunk", "multi_document_compare": "cross_document",
+                    "method_results": "methodology_results", "insufficient": "unanswerable",
+                    "contradiction": "contradictory_sources", "follow_up": "follow_up",
+                    "adversarial_source": "prompt_injection_source",
+                }.get(q_id, "uncategorized")),
+                claim_support_rate=gen_metrics.get("claim_support_rate"),
+                invalid_citation_frequency=gen_metrics.get("invalid_citation_frequency"),
+                locator_validity=gen_metrics.get("locator_validity"),
+                expected_fact_coverage=gen_metrics.get("expected_fact_coverage"),
+                numerical_correctness=gen_metrics.get("numerical_correctness"),
+                contradiction_handling=gen_metrics.get("contradiction_handling"),
+                missing_evidence_detection=gen_metrics.get("missing_evidence_detection"),
+                retrieval_rounds=gen_metrics.get("retrieval_rounds", 0),
+                model_calls=gen_metrics.get("model_calls", 0),
+                stage_timings=gen_metrics.get("stage_timings", {}),
             )
             results.append(res)
 
@@ -83,7 +104,20 @@ class RAGEvaluator:
             mean_source_relevance=round(sum(r.source_relevance for r in results) / n, 4),
             mean_answer_grounding=round(sum(r.answer_grounding for r in results) / n, 4),
             mean_citation_correctness=round(sum(r.citation_correctness for r in results) / n, 4),
+            mean_source_coverage=round(sum(r.source_coverage for r in results if r.source_coverage is not None) / max(1, sum(r.source_coverage is not None for r in results)), 4),
+            mean_reciprocal_rank=round(sum(r.reciprocal_rank for r in results if r.reciprocal_rank is not None) / max(1, sum(r.reciprocal_rank is not None for r in results)), 4),
+            mean_unsupported_handling=round(sum(r.unsupported_handling for r in results if r.unsupported_handling is not None) / max(1, sum(r.unsupported_handling is not None for r in results)), 4),
+            mean_latency_seconds=round(sum(r.latency_seconds for r in results) / n, 4),
             item_results=results,
+            by_category={
+                category: {
+                    metric: round(sum(value for item in grouped if (value := getattr(item, metric)) is not None) / max(1, sum(getattr(item, metric) is not None for item in grouped)), 4)
+                    for metric in ("hit_at_k", "source_relevance", "answer_grounding", "citation_correctness",
+                                   "claim_support_rate", "locator_validity", "expected_fact_coverage", "numerical_correctness")
+                }
+                for category in sorted({result.category for result in results})
+                for grouped in [[r for r in results if r.category == category]]
+            },
         )
 
         logger.info(

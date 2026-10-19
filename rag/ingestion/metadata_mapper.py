@@ -4,6 +4,7 @@ Ensures critical identifiers (paper_id, document_id) are deterministic and prese
 """
 
 import uuid
+from pathlib import Path
 from typing import Dict, Any, Optional
 from rag.ingestion.document_normalizer import DocumentMetadata
 
@@ -51,5 +52,7 @@ class MetadataMapper:
             year=year,
             doi=doi,
             file_path=file_path or data.get("file_path"),
+            filename=data.get("filename") or (file_path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if file_path else None),
+            source_format=(Path(file_path).suffix.lower().lstrip(".") if file_path else data.get("source_format")),
             extra=extra,
         )

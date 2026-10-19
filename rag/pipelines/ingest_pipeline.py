@@ -73,7 +73,7 @@ class IngestionPipeline:
 
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error("Ingestion failed for file '%s': %s", file_path, e, exc_info=True)
+            logger.error("Ingestion failed exception_type=%s", type(e).__name__)
             doc_id = meta.get("document_id", "unknown_doc")
             pid = meta.get("paper_id", paper_id or "unknown_paper")
             return IngestResult(
@@ -107,7 +107,7 @@ class IngestionPipeline:
             return self._process_normalized_doc(normalized_doc, start_time)
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error("Ingestion failed for raw text: %s", e, exc_info=True)
+            logger.error("Text ingestion failed exception_type=%s", type(e).__name__)
             return IngestResult(
                 success=False,
                 status="failed",
