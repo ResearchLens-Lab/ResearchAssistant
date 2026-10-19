@@ -6,6 +6,7 @@ internal RAG details directly.
 """
 
 import logging
+from typing import Callable
 from typing import List, Optional, Dict, Any
 
 from rag.pipelines.ingest_pipeline import IngestionPipeline, IngestResult
@@ -82,6 +83,8 @@ class RAGClient:
         paper_ids: Optional[List[str]] = None,
         sections: Optional[List[str]] = None,
         top_k: Optional[int] = None,
+        conversation_context: Optional[str] = None,
+        progress_callback: Optional[Callable[[dict], None]] = None,
     ) -> Dict[str, Any]:
         """
         Answers a question grounded in target papers.
@@ -111,6 +114,8 @@ class RAGClient:
             paper_ids=paper_ids,
             filters=filters,
             top_k=top_k,
+            conversation_context=conversation_context,
+            progress_callback=progress_callback,
         )
         return result.to_api_dict()
 
@@ -161,10 +166,10 @@ class RAGClient:
                 "total_indexed_chunks": count,
                 "vectorstore": "chromadb",
             }
-        except Exception as e:
+        except Exception:
             return {
                 "status": "unhealthy",
-                "error": str(e),
+                "error": "RAG storage is unavailable.",
             }
 
 

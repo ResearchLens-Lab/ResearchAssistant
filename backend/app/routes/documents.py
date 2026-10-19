@@ -1,4 +1,7 @@
+import mimetypes
+from pathlib import Path
 from fastapi import APIRouter, File, Form, UploadFile, status
+from fastapi.responses import FileResponse
 
 from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
 from backend.app.schemas.document import DocumentResponse
@@ -28,6 +31,17 @@ async def upload_document(
     return await DocumentService(db, rag).upload(current_user, paper_id, file)
 
 
+@router.post("/upload/batch", status_code=status.HTTP_201_CREATED, summary="Upload multiple documents or a ZIP archive into one paper")
+async def upload_documents_batch(
+    current_user: CurrentUser,
+    db: DBSession,
+    rag: RAGGatewayDep,
+    files: list[UploadFile] = File(...),
+    paper_id: str = Form(...),
+):
+    return await DocumentService(db, rag).upload_batch(current_user, paper_id, files)
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
@@ -35,3 +49,14 @@ async def upload_document(
 )
 async def get_document(document_id: str, current_user: CurrentUser, db: DBSession):
     return await DocumentService(db).get_owned(current_user, document_id)
+
+
+@router.get("/{document_id}/file", summary="Download an owned source document")
+async def get_document_file(document_id: str, current_user: CurrentUser, db: DBSession):
+    document = await DocumentService(db).get_owned(current_user, document_id)
+    path = Path(document.storage_path).resolve()
+    if not path.is_file():
+        from backend.app.core.exceptions import DocumentNotFoundError
+        raise DocumentNotFoundError()
+    media_type = mimetypes.guess_type(document.filename)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type, filename=Path(document.filename).name)

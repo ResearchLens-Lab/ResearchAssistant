@@ -8,6 +8,7 @@ maps failures onto the API error contract. It never inspects RAG internals.
 
 import asyncio
 import logging
+from typing import Callable
 from typing import Any, Optional
 
 from backend.app.core.config import get_settings
@@ -41,7 +42,7 @@ class RAGGateway:
         try:
             client = self._get_client()
         except Exception as exc:
-            logger.error("RAG client unavailable: %s", exc)
+            logger.error("RAG client unavailable exception_type=%s", type(exc).__name__)
             raise RAGUnavailableError() from exc
         method = getattr(client, method_name)
         try:
@@ -56,7 +57,7 @@ class RAGGateway:
         except RAGUnavailableError:
             raise
         except Exception as exc:
-            logger.error("RAG query failed: '%s' raised %s", method_name, exc)
+            logger.error("RAG query failed method=%s exception_type=%s", method_name, type(exc).__name__)
             raise RAGUnavailableError() from exc
 
     async def ingest_document(
@@ -74,9 +75,13 @@ class RAGGateway:
         question: str,
         paper_ids: Optional[list[str]] = None,
         top_k: Optional[int] = None,
+        conversation_context: Optional[str] = None,
+        progress_callback: Optional[Callable[[dict], None]] = None,
     ) -> dict[str, Any]:
         return await self._call(
-            "ask_question", question=question, paper_ids=paper_ids, top_k=top_k
+            "ask_question", question=question, paper_ids=paper_ids, top_k=top_k,
+            **({"conversation_context": conversation_context} if conversation_context else {}),
+            **({"progress_callback": progress_callback} if progress_callback else {}),
         )
 
     async def summarize_paper(self, paper_id: str, top_k: int = 8) -> dict[str, Any]:

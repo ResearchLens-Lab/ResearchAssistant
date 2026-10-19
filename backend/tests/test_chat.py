@@ -1,3 +1,5 @@
+import json
+
 from .conftest import create_paper
 
 
@@ -84,6 +86,32 @@ async def test_chat_requires_auth(client):
         "/api/v1/chat", json={"question": "Hi?", "paper_ids": ["x"]}
     )
     assert resp.status_code == 401
+
+
+async def test_stream_requires_auth(client):
+    resp = await client.post("/api/v1/chat/stream", json={"question": "Hi?", "paper_ids": ["x"]})
+    assert resp.status_code == 401
+
+
+async def test_stream_emits_progress_and_persists_one_final_response(client, auth_headers):
+    paper = await create_paper(client, auth_headers)
+    response = await client.post("/api/v1/chat/stream", json={
+        "question": "What is the main contribution?", "paper_ids": [paper["id"]],
+    }, headers=auth_headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    kinds = [event["type"] for event in events]
+    assert kinds[0:2] == ["started", "planning_started"]
+    assert "retrieval_started" in kinds and "sources_found" in kinds
+    assert kinds[-1] == "completed"
+    assert all(event["event_id"] == events[0]["event_id"] for event in events)
+    final = events[-1]["data"]
+    assert final["answer"]
+    messages = (await client.get(f"/api/v1/conversations/{final['conversation_id']}/messages", headers=auth_headers)).json()
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[-1]["content"] == final["answer"]
+    assert messages[-1]["sources"][0]["source_id"] == "S1"
 
 
 async def test_chat_rag_unavailable(client, auth_headers, rag_gateway):

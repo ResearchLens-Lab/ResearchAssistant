@@ -87,9 +87,12 @@ class FakeRAGGateway:
             "error": None,
         }
 
-    async def ask_question(self, question, paper_ids=None, top_k=None):
+    async def ask_question(self, question, paper_ids=None, top_k=None, progress_callback=None):
         self.calls.append(("ask_question", tuple(paper_ids or [])))
         self._check_available()
+        if progress_callback:
+            progress_callback({"type": "retrieval_started", "round": 1})
+            progress_callback({"type": "sources_found", "count": 1, "round": 1})
         pids = list(paper_ids or [])
         return {
             "answer": self.answer,
@@ -111,6 +114,7 @@ class FakeRAGGateway:
             "answer": "Comparison result.",
             "sources": [self._source(pid) for pid in paper_ids],
             "paper_ids": list(paper_ids),
+            "metadata": {"research": {"sufficiency": {"status": "conflicting"}}},
         }
 
     async def delete_paper(self, paper_id):

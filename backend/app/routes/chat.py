@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 
 from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
 from backend.app.schemas.chat import (
@@ -30,6 +31,19 @@ async def chat(
     payload: ChatRequest, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
 ):
     return await ChatService(db, rag).send_message(current_user, payload)
+
+
+@router.post("/chat/stream", summary="Stream authenticated research progress and final response")
+async def chat_stream(
+    payload: ChatRequest, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    async def body():
+        async for frame in ChatService(db, rag).stream_message(current_user, payload):
+            yield frame
+
+    return StreamingResponse(body(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
+    })
 
 
 @router.post(

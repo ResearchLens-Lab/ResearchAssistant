@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,3 +56,4 @@ class PaperCompareResponse(BaseModel):
     paper_ids: list[str]
     answer: str
     sources: list[Source]
+    metadata: dict[str, Any] = Field(default_factory=dict)

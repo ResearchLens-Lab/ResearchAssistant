@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.citation import Source
 
@@ -18,6 +19,19 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[Source]
     paper_ids: list[str]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatStreamEvent(BaseModel):
+    event_id: str
+    type: Literal["started", "planning_started", "planning_completed", "retrieval_started", "sources_found", "additional_retrieval", "evidence_ready", "generation_started", "verification_started", "verification_completed", "token", "completed", "error"]
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_token_payload(self):
+        if self.type == "token" and (not isinstance(self.data.get("text"), str) or self.data.get("provisional") is not True):
+            raise ValueError("Token events must contain provisional text.")
+        return self
 
 
 class ConversationCreate(BaseModel):
@@ -43,4 +57,5 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     sources: Optional[list[Source]] = None
+    meta: Optional[dict[str, Any]] = None
     created_at: datetime

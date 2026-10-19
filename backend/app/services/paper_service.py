@@ -78,7 +78,7 @@ class PaperService:
             try:
                 Path(path).unlink(missing_ok=True)
             except OSError:
-                logger.warning("could not remove stored file path=%s", path)
+                logger.warning("could not remove stored paper file")
         if self.rag is not None:
             try:
                 await self.rag.delete_paper(paper_id)
@@ -110,4 +110,5 @@ class PaperService:
             "paper_ids": paper_ids,
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
+            "metadata": result.get("metadata", {}),
         }

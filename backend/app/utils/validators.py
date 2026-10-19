@@ -1,36 +1,32 @@
-"""Upload validation helpers."""
-
+"""Strict upload validation for supported document formats."""
+import os
 from typing import Optional
 
 from backend.app.core.exceptions import RequestValidationAppError
 
-PDF_MAGIC = b"%PDF-"
-ALLOWED_PDF_CONTENT_TYPES = {
-    "application/pdf",
-    "application/x-pdf",
-    "application/octet-stream",
-}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".csv", ".xlsx", ".pptx", ".html", ".htm", ".json"}
 
 
-def validate_pdf_upload(
-    filename: Optional[str],
-    content_type: Optional[str],
-    content: bytes,
-    max_size_bytes: int,
-) -> None:
-    """Validates an uploaded research-paper PDF; raises 400 VALIDATION_ERROR."""
-    if not filename or not filename.lower().endswith(".pdf"):
-        raise RequestValidationAppError("Only PDF files are supported.")
-    if content_type and content_type.lower() not in ALLOWED_PDF_CONTENT_TYPES:
-        raise RequestValidationAppError(
-            f"Unsupported content type '{content_type}'. Expected application/pdf."
-        )
-    if len(content) == 0:
+def validate_document_upload(filename: Optional[str], content_type: Optional[str], content: bytes, max_size_bytes: int) -> None:
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise RequestValidationAppError("Unsupported format. Upload PDF, DOCX, TXT, Markdown, CSV, XLSX, PPTX, HTML, or JSON.")
+    if not content:
         raise RequestValidationAppError("Uploaded file is empty.")
     if len(content) > max_size_bytes:
-        raise RequestValidationAppError(
-            f"File exceeds the maximum allowed size of {max_size_bytes // (1024 * 1024)} MB."
-        )
-    # Check the file signature rather than trusting the extension alone.
-    if not content.startswith(PDF_MAGIC):
+        raise RequestValidationAppError(f"File exceeds the maximum allowed size of {max_size_bytes // (1024 * 1024)} MB.")
+    if ext == ".pdf" and not content.startswith(b"%PDF-"):
         raise RequestValidationAppError("File does not appear to be a valid PDF.")
+    if ext == ".docx" and not content.startswith(b"PK"):
+        raise RequestValidationAppError("File does not appear to be a valid DOCX archive.")
+    if ext in {".xlsx", ".pptx"} and not content.startswith(b"PK"):
+        raise RequestValidationAppError(f"File does not appear to be a valid {ext[1:].upper()} archive.")
+    if ext in {".txt", ".md", ".markdown", ".csv", ".html", ".htm", ".json"}:
+        try:
+            content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise RequestValidationAppError("Text documents must be UTF-8 encoded.") from exc
+
+
+# Backwards compatible name for clients importing the former PDF validator.
+validate_pdf_upload = validate_document_upload

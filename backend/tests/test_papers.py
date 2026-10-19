@@ -135,6 +135,7 @@ async def test_compare_endpoint(client, auth_headers):
     assert body["paper_ids"] == [paper_a["id"], paper_b["id"]]
     assert body["answer"] == "Comparison result."
     assert len(body["sources"]) == 2
+    assert body["metadata"]["research"]["sufficiency"]["status"] == "conflicting"
 
 
 async def test_compare_requires_two_papers(client, auth_headers):

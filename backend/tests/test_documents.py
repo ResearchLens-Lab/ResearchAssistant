@@ -41,6 +41,15 @@ async def test_upload_unsupported_extension(client, auth_headers):
     assert resp.status_code == 400
 
 
+async def test_upload_accepts_spreadsheet_and_slide_archive_signatures(client, auth_headers):
+    paper = await create_paper(client, auth_headers)
+    for filename in ("data.xlsx", "slides.pptx"):
+        resp = await upload(client, auth_headers, paper["id"], filename=filename,
+                            content=b"PK\x03\x04fixture", content_type="application/octet-stream")
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["filename"] == filename
+
+
 async def test_upload_wrong_magic_bytes(client, auth_headers):
     paper = await create_paper(client, auth_headers)
     resp = await upload(client, auth_headers, paper["id"], content=b"plain text data")

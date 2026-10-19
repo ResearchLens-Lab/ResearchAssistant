@@ -19,3 +19,5 @@ class Source(BaseModel):
     text: Optional[str] = None
     score: Optional[float] = None
     title: Optional[str] = None
+    filename: Optional[str] = None
+    locator: Optional[str] = None
