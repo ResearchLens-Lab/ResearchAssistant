@@ -93,7 +93,7 @@ export default function ComparePapersPage() {
             papers={papers}
             documentsByPaper={documentsByPaper}
             checkedPaperIds={checkedPaperIds}
-            loadingPaperIds={selectedPaperIds.filter((id, index) => documentQueries[index]?.isLoading)}
+            loadingPaperIds={documentsQuery.isLoading ? selectedPaperIds : []}
             errorPaperIds={errorPaperIds}
             selectedIds={selectedIds}
             onToggle={handleToggle}
@@ -188,3 +188,5 @@ export default function ComparePapersPage() {
     </div>
   );
 }
+
+
