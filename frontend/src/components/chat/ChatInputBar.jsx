@@ -2,17 +2,17 @@
 
 import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowUp, Sparkles, Table as TableIcon, Hash } from "lucide-react";
+import { ArrowUp, GitCompareArrows, ListChecks, Table as TableIcon } from "lucide-react";
 import { useChatScopeStore } from "@/store/chatScopeStore";
 
-export function ChatInputBar({ onSendMessage, isLoading }) {
+export function ChatInputBar({ onSendMessage, onCancel, isLoading }) {
   const [input, setInput] = useState("");
   const textareaRef = useRef(null);
   const { selectedPaperIds } = useChatScopeStore();
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
       handleSubmit();
     }
   };
@@ -21,97 +21,51 @@ export function ChatInputBar({ onSendMessage, isLoading }) {
     const trimmed = input.trim();
     if (!trimmed || isLoading || selectedPaperIds.length === 0) return;
     setInput("");
-    await onSendMessage(trimmed);
+    try {
+      await onSendMessage(trimmed);
+    } catch {
+      setInput(trimmed);
+    }
   };
 
-  const addModifier = (modifier) => {
-    setInput((prev) => (prev ? `${prev} ${modifier}` : modifier));
+  const addPrompt = (prompt) => {
+    setInput((previous) => previous ? `${previous} ${prompt}` : prompt);
     textareaRef.current?.focus();
   };
 
+  const promptActions = [
+    { label: "Use a table", icon: TableIcon, prompt: "Present the relevant findings in a concise table with citations." },
+    { label: "Compare methods", icon: GitCompareArrows, prompt: "Compare the methods and experimental conditions reported in the selected sources." },
+    { label: "Extract fields", icon: ListChecks, prompt: "Extract methods, datasets, metrics, and reported limitations in a cited table." },
+  ];
+
   return (
-    <div className="border-t border-zinc-200 bg-white p-3 md:p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="border-t border-[var(--rl-border)] bg-white p-3 sm:p-4">
       <div className="mx-auto max-w-4xl space-y-2">
-        {/* Modifier Chips / Helper Bar */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => addModifier("#table output")}
-              className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-600 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              <TableIcon className="h-3 w-3" />
-              <span>table output</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => addModifier("#compare methodology")}
-              className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-600 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              <Hash className="h-3 w-3" />
-              <span>methodology</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => addModifier("#cite strict")}
-              className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-600 hover:bg-zinc-200 transition-colors dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>cite strict</span>
-            </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {promptActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" onClick={() => addPrompt(prompt)} disabled={selectedPaperIds.length === 0 || isLoading} className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--rl-tint)] px-3 text-xs font-medium text-[var(--rl-muted)] transition-colors hover:bg-[var(--rl-selected)] hover:text-[var(--rl-primary)] disabled:cursor-not-allowed disabled:opacity-50"><Icon className="h-3.5 w-3.5" aria-hidden="true" />{label}</button>)}
           </div>
-
-          <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-400">
-            <span>retrieval grounded</span>
-            <span>•</span>
-            <span>ChromaDB context</span>
-          </div>
+          <span className="hidden shrink-0 text-xs text-[var(--rl-muted)] sm:block">{selectedPaperIds.length} indexed project{selectedPaperIds.length === 1 ? "" : "s"} in scope</span>
         </div>
 
-        {/* Input Box Container */}
-        <div className="relative flex items-end rounded-xl border border-zinc-300 bg-zinc-50/50 p-2 focus-within:border-zinc-900 focus-within:bg-white focus-within:ring-1 focus-within:ring-zinc-900 shadow-2xs dark:border-zinc-700 dark:bg-zinc-950 dark:focus-within:border-zinc-200">
+        <div className="relative flex items-end rounded-2xl border border-[var(--rl-border)] bg-white p-2 shadow-sm focus-within:border-[var(--rl-sky)] focus-within:ring-2 focus-within:ring-sky-100">
           <textarea
             ref={textareaRef}
             rows={2}
+            aria-label="Research question"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading || selectedPaperIds.length === 0}
-            placeholder={
-              selectedPaperIds.length === 0
-                ? "Select at least one paper from the left scope to ask..."
-                : `Ask across the ${selectedPaperIds.length} selected paper(s)...`
-            }
-            className="flex-1 resize-none bg-transparent px-2 py-1 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:text-zinc-100"
+            placeholder={selectedPaperIds.length === 0 ? "Select indexed sources from the Sources panel to begin…" : `Ask across ${selectedPaperIds.length} selected project${selectedPaperIds.length === 1 ? "" : "s"}…`}
+            className="max-h-40 min-h-14 flex-1 resize-y bg-transparent px-3 py-2 text-sm leading-6 text-[var(--rl-ink)] placeholder:text-[var(--rl-muted)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           />
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSubmit}
-            disabled={
-              !input.trim() || isLoading || selectedPaperIds.length === 0
-            }
-            className="h-8 gap-1 rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 shrink-0 font-medium text-xs px-3 shadow-2xs"
-          >
-            {isLoading ? (
-              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : (
-              <>
-                <span>Ask</span>
-                <ArrowUp className="h-3.5 w-3.5" />
-              </>
-            )}
-          </Button>
+          {isLoading ? <Button type="button" size="sm" variant="outline" onClick={onCancel} className="h-10 shrink-0 px-4 text-sm">Stop research</Button> : <Button type="button" size="sm" variant="workbench" onClick={handleSubmit} disabled={!input.trim() || selectedPaperIds.length === 0} className="h-10 shrink-0 gap-1.5 px-4 text-sm"><span>Ask</span><ArrowUp className="h-4 w-4" aria-hidden="true" /></Button>}
         </div>
 
-        {selectedPaperIds.length === 0 && (
-          <p className="text-[11px] text-amber-600 font-mono">
-            ⚠️ Check at least 1 paper in the left panel to scope your research question.
-          </p>
-        )}
+        {selectedPaperIds.length === 0 && <p role="status" className="text-xs text-amber-800">Select at least one indexed project in Sources to scope your question.</p>}
+        {isLoading && <p role="status" className="text-xs text-[var(--rl-muted)]">Research is in progress. Your question remains visible above.</p>}
       </div>
     </div>
   );

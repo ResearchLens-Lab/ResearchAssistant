@@ -4,94 +4,196 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    /* ResearchLens Sky Scholar tokens */
+    --rl-canvas: #f4f8fc;
+    --rl-surface: #ffffff;
+    --rl-sky: #4a9fe3;
+    --rl-primary: #2678b8;
+    --rl-ink: #203449;
+    --rl-muted: #62758a;
+    --rl-border: #dce6ef;
+    --rl-selected: #e8f3fc;
+    --rl-tint: #f0f7fd;
+    --rl-evidence: #f7e7b6;
+    --rl-error: #b84444;
+    --rl-success: #277a66;
 
-    --sidebar-background: 0 0% 97%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 93%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 240 5.9% 90%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 210 55% 97%;
+    --foreground: 209 37% 21%;
+    --card: 0 0% 100%;
+    --card-foreground: 209 37% 21%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 209 37% 21%;
+    --primary: 205 66% 44%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 205 70% 95%;
+    --secondary-foreground: 209 37% 21%;
+    --muted: 207 38% 95%;
+    --muted-foreground: 210 17% 46%;
+    --accent: 205 70% 95%;
+    --accent-foreground: 209 37% 21%;
+    --destructive: 0 46% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 208 32% 90%;
+    --input: 208 32% 90%;
+    --ring: 205 66% 44%;
+    --radius: 0.75rem;
+
+    --sidebar-background: 210 55% 97%;
+    --sidebar-foreground: 209 37% 21%;
+    --sidebar-primary: 205 66% 44%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 205 70% 95%;
+    --sidebar-accent-foreground: 209 37% 21%;
+    --sidebar-border: 208 32% 90%;
+    --sidebar-ring: 205 66% 44%;
+
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 214 31% 11%;
+    --foreground: 210 40% 96%;
+    --card: 214 29% 14%;
+    --card-foreground: 210 40% 96%;
+    --popover: 214 29% 14%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 205 75% 62%;
+    --primary-foreground: 214 40% 12%;
+    --secondary: 214 25% 20%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 214 25% 20%;
+    --muted-foreground: 214 15% 68%;
+    --accent: 214 25% 20%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 52% 43%;
+    --destructive-foreground: 210 40% 96%;
+    --border: 214 22% 25%;
+    --input: 214 22% 25%;
+    --ring: 205 75% 62%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
+
+  html {
+    color-scheme: light;
+    scroll-behavior: smooth;
+  }
+
   body {
-    /* @apply bg-background text-foreground antialiased font-sans;
-    font-feature-settings: "rlig" 1, "calt" 1; */
     @apply bg-background text-foreground antialiased;
-  font-family: "Inter", sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
+    min-height: 100%;
+    font-family: var(--font-sans);
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--rl-sky);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    color: var(--rl-ink);
+    background: #cfe8fb;
   }
 }
 
-/* Custom Scrollbar for Dense Workbench */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8;
+  }
+
+  .page-heading {
+    @apply text-2xl font-semibold text-[color:var(--rl-ink)] sm:text-3xl;
+  }
+
+  .page-description {
+    @apply mt-1 max-w-3xl text-sm leading-6 text-[color:var(--rl-muted)];
+  }
+
+  .surface-card {
+    @apply rounded-2xl border border-[color:var(--rl-border)] bg-white;
+    box-shadow: 0 1px 3px rgb(32 52 73 / 4%), 0 8px 24px -10px rgb(38 120 184 / 12%);
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--rl-muted)];
+  }
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+/* Keep long source names and wide matrices inside their own scroll regions. */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c8d7e4; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #a8bfd2; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-  border-radius: 9999px;
+
+@keyframes rl-workflow-ready {
+  0%, 8%, 100% { border-color: var(--rl-border); background-color: var(--rl-tint); }
+  12%, 23% { border-color: #9bc9ec; background-color: #e8f3fc; }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+
+@keyframes rl-workflow-question {
+  0%, 26%, 100% { border-color: var(--rl-border); background-color: var(--rl-tint); }
+  31%, 46% { border-color: #9bc9ec; background-color: #e8f3fc; }
+}
+
+@keyframes rl-workflow-evidence {
+  0%, 51%, 100% { border-color: #dce6ef; background-color: #fff; }
+  56%, 72% { border-color: #9bc9ec; background-color: #f0f7fd; }
+}
+
+@keyframes rl-workflow-dot {
+  0%, 15% { transform: translateY(-1rem); opacity: 0; }
+  28% { opacity: 1; }
+  48%, 100% { transform: translateY(1rem); opacity: 0; }
+}
+
+@keyframes rl-story-enter {
+  0%, 12% { opacity: 0.6; transform: translateY(5px); }
+  25%, 86% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0.75; transform: translateY(0); }
+}
+
+.workflow-stage { animation: rl-workflow-ready 6.4s ease-in-out infinite; border: 1px solid transparent; }
+.workflow-stage:nth-of-type(3) { animation-name: rl-workflow-question; }
+.workflow-stage:nth-of-type(5) { animation-name: rl-workflow-evidence; }
+.workflow-connector { position: relative; }
+.workflow-connector::after { position: absolute; top: 0; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 999px; background: var(--rl-primary); content: ""; animation: rl-workflow-dot 6.4s ease-in-out infinite; }
+.auth-story-vignette > :nth-child(1) { animation-delay: 0s; }
+.auth-story-vignette > :nth-child(2) { animation-delay: 0.6s; }
+.auth-story-vignette > :nth-child(3) { animation-delay: 1.2s; }
+.auth-story-vignette > * { animation: rl-story-enter 5.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-stage, .workflow-connector::after, .auth-story-vignette > * { animation: none !important; }
+}
+
+@media (max-height: 800px) and (min-width: 1024px) {
+  .auth-story-content { gap: 1rem; }
+  .auth-story-content > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+  .auth-story-content h1 { margin-top: 0.75rem; }
+  .auth-story-content p:not(.eyebrow) { margin-top: 0.75rem; }
+  .auth-story-vignette li { padding: 0.4rem; }
+}
+
+@media (max-height: 700px) and (min-width: 1024px) {
+  .auth-story-content ul li > span:first-child { width: 2rem; height: 2rem; }
 }

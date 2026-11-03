@@ -11,12 +11,22 @@ export const useChatScopeStore = create((set) => ({
     })),
 
   selectPapers: (paperIds) =>
-    set({
-      selectedPaperIds: paperIds || [],
+    set((state) => {
+      const next = paperIds || [];
+      if (
+        state.selectedPaperIds.length === next.length &&
+        state.selectedPaperIds.every((id, i) => id === next[i])
+      ) {
+        return state;
+      }
+      return {
+        selectedPaperIds: next,
+      };
     }),
 
   clearSelection: () =>
-    set({
-      selectedPaperIds: [],
+    set((state) => {
+      if (state.selectedPaperIds.length === 0) return state;
+      return { selectedPaperIds: [] };
     }),
 }));

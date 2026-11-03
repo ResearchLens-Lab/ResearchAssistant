@@ -13,16 +13,21 @@ import { summarizeClaimChecks } from "@/lib/researchWorkspace.mjs";
 export function SourceInspectorRail({ className = "", onClose }) {
   const { sources, activeSourceId, setActiveSource, activeTab, setActiveTab, researchTrace } = useCitationStore();
   const [showUncited, setShowUncited] = useState(false);
+  const [documentError, setDocumentError] = useState("");
   const claimSummary = summarizeClaimChecks(researchTrace || {});
   const claimChecks = researchTrace?.claim_verification?.items || [];
   const sourceStatuses = (sourceId) => [...new Set(claimChecks.filter((item) => item.source_ids?.includes(sourceId)).map((item) => item.status))];
 
   const openSource = async (source) => {
     setActiveSource(source.source_id || null);
+    setDocumentError("");
     try {
-      await openAuthenticatedPdfSource(source);
+      const opened = await openAuthenticatedPdfSource(source);
+      if (/\.pdf$/i.test(source.filename || "") && !opened) {
+        setDocumentError("The PDF could not be opened. Allow new tabs for this site and try again.");
+      }
     } catch (error) {
-      console.error("Could not open source document", error);
+      setDocumentError(error.message || "The source document could not be opened. You can still inspect the excerpt below.");
     }
   };
 
@@ -30,7 +35,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
   const uncitedSources = sources.filter((s) => !s.source_id);
 
   return (
-    <aside aria-label="Evidence inspector" className={`flex h-full w-80 max-w-full shrink-0 flex-col border-l border-slate-200 bg-[#f8faf9] ${className}`}>
+    <aside aria-label="Evidence inspector" className={`flex h-full w-full shrink-0 flex-col border-l border-[var(--rl-border)] bg-[var(--rl-canvas)] sm:w-96 ${className}`}>
       {/* Inspector Header Tabs */}
       <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
         <Tabs
@@ -50,7 +55,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
                 Trace
               </TabsTrigger>
             </TabsList>
-            {onClose && <button autoFocus type="button" aria-label="Close evidence inspector" onClick={onClose} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"><X className="h-4 w-4" /></button>}
+            {onClose && <button autoFocus type="button" aria-label="Close evidence inspector" onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-[var(--rl-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)]"><X className="h-4 w-4" /></button>}
           </div>
         </Tabs>
       </div>
@@ -62,7 +67,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
             {/* Grounding Verification Ribbon */}
             <div className="flex items-center justify-between border-b border-zinc-200/80 bg-zinc-100/70 px-3.5 py-2 text-[11px] font-mono text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-teal-700" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-[var(--rl-primary)]" />
                 <span className="font-semibold tracking-tight text-zinc-800 dark:text-zinc-200">
                   EVIDENCE: {citedSources.length} PASSAGES
                 </span>
@@ -73,6 +78,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
             </div>
 
             <ScrollArea className="flex-1 p-3">
+              {documentError && <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">{documentError}</div>}
               <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
                 <h3 className="text-[11px] font-semibold text-slate-800">Claim support</h3>
                 {claimSummary.available ? (
@@ -168,7 +174,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
         {activeTab === "notes" && (
           <div className="p-4 text-xs text-zinc-500 space-y-3">
             <div className="flex items-center gap-2 text-zinc-800 font-semibold">
-              <Sparkles className="h-4 w-4 text-indigo-600" />
+              <Sparkles className="h-4 w-4 text-[var(--rl-primary)]" />
               <span>RAG Execution Trace</span>
             </div>
             <div className="rounded-md bg-zinc-100 p-2.5 font-mono text-[10px] space-y-1 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">

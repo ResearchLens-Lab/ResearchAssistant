@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { usePapers } from "@/hooks/usePapers";
 import { papersService } from "@/services/papers.service";
 import { useChatScopeStore } from "@/store/chatScopeStore";
@@ -23,34 +23,35 @@ export function PaperScopeRail({ className = "", onClose }) {
   const { papers, isLoading, isError, error } = usePapers(1, 50);
   const { selectedPaperIds, togglePaper, selectPapers, clearSelection } = useChatScopeStore();
   const [filter, setFilter] = useState("");
-  const documentQueries = useQueries({
-    queries: papers.map((paper) => ({
-      queryKey: ["paperDocuments", paper.id],
-      queryFn: () => papersService.getDocuments(paper.id),
-      staleTime: 10_000,
-    })),
+  const paperIds = useMemo(() => papers.map((paper) => paper.id), [papers]);
+  const documentsQuery = useQuery({
+    queryKey: ["paperDocumentsByPapers", paperIds],
+    queryFn: () => papersService.getDocumentsByPapers(paperIds),
+    enabled: paperIds.length > 0,
+    staleTime: 10_000,
   });
-  const entries = useMemo(() => papers.map((paper, index) => ({
+  const documentsByPaper = documentsQuery.data || {};
+  const entries = useMemo(() => papers.map((paper) => ({
     paper,
-    documents: documentQueries[index]?.data || [],
-    loading: documentQueries[index]?.isLoading,
-    error: documentQueries[index]?.isError,
-  })), [papers, documentQueries]);
+    documents: documentsByPaper[paper.id] || [],
+    loading: documentsQuery.isLoading,
+    error: documentsQuery.isError,
+  })), [papers, documentsByPaper, documentsQuery.isLoading, documentsQuery.isError]);
   const filteredEntries = entries.filter(({ paper, documents }) =>
     `${paper.title} ${(paper.authors || []).join(" ")} ${documents.map((doc) => doc.filename).join(" ")}`.toLowerCase().includes(filter.toLowerCase()));
   const selectableIds = indexedPaperIds(entries);
 
   return (
-    <aside aria-label="Research sources" className={`flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-[#f8faf9] ${className}`}>
+    <aside aria-label="Research sources" className={`flex h-full w-full shrink-0 flex-col border-r border-[var(--rl-border)] bg-[var(--rl-canvas)] sm:w-80 ${className}`}>
       <div className="border-b border-slate-200 bg-white px-4 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-700">Research library</p>
-            <h2 className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900"><Layers className="h-4 w-4 text-teal-700" />Source scope</h2>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--rl-primary)]">Research library</p>
+            <h2 className="mt-1 flex items-center gap-2 text-base font-semibold text-[var(--rl-ink)]"><Layers className="h-4 w-4 text-[var(--rl-primary)]" />Source scope</h2>
           </div>
-          {onClose && <button autoFocus type="button" aria-label="Close sources" onClick={onClose} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"><X className="h-4 w-4" /></button>}
-          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 border-slate-300 px-2.5 text-xs">
-            <Link href="/papers/upload" aria-label="Upload source documents"><Plus className="h-3.5 w-3.5" /> Add</Link>
+          {onClose && <button autoFocus type="button" aria-label="Close sources" onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-[var(--rl-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)]"><X className="h-4 w-4" /></button>}
+            <Button asChild variant="soft" size="sm" className="h-9 gap-1.5 px-3 text-xs">
+            <Link href={selectedPaperIds.length === 1 ? `/papers/upload?paper_id=${selectedPaperIds[0]}` : "/papers/upload"} aria-label="Add source documents"><Plus className="h-3.5 w-3.5" /> Add sources</Link>
           </Button>
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
@@ -76,7 +77,7 @@ export function PaperScopeRail({ className = "", onClose }) {
             <BookOpen className="mx-auto h-6 w-6 text-slate-400" />
             <p className="mt-2 text-sm font-medium text-slate-800">Your library is ready</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">Upload research papers and supporting files to begin.</p>
-            <Button asChild size="sm" className="mt-3 bg-teal-800 text-white hover:bg-teal-900"><Link href="/papers/upload">Upload sources</Link></Button>
+            <Button asChild size="sm" variant="workbench" className="mt-3"><Link href="/papers/upload">Add sources</Link></Button>
           </div>
         ) : filteredEntries.length === 0 ? (
           <p className="px-2 py-6 text-center text-xs text-slate-500">No sources match “{filter}”.</p>
@@ -107,7 +108,7 @@ export function PaperScopeRail({ className = "", onClose }) {
                       </ul>
                     ) : <p className="text-[10px] text-slate-500">No files attached · paper scope unavailable</p>}
                     {indexedCount > 0 && <p className="mt-1.5 text-[10px] text-slate-400">{indexedCount} indexed file{indexedCount === 1 ? "" : "s"} included in this paper scope</p>}
-                    <Link href={`/papers/${paper.id}`} onClick={(event) => event.stopPropagation()} className="mt-1.5 inline-flex rounded text-[10px] font-medium text-teal-800 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">Open paper details</Link>
+                    <Link href={`/papers/${paper.id}`} onClick={(event) => event.stopPropagation()} className="mt-1.5 inline-flex rounded text-xs font-medium text-[var(--rl-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)]">Open project details</Link>
                   </div>
                 </section>
               );

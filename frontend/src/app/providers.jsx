@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/store/authStore";
+import { AuthSuccessToast } from "@/components/auth/AuthSuccessToast";
 
 export function Providers({ children }) {
   const [queryClient] = useState(
@@ -29,14 +30,17 @@ export function Providers({ children }) {
   );
 
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const authCheckStarted = useRef(false);
 
   useEffect(() => {
+    if (authCheckStarted.current) return;
+    authCheckStarted.current = true;
     checkAuth();
   }, [checkAuth]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+      <TooltipProvider delayDuration={200}>{children}<AuthSuccessToast /></TooltipProvider>
     </QueryClientProvider>
   );
 }

@@ -24,9 +24,9 @@ export function SourceCard({ source, isActive = false, onSelect, claimStatuses =
       onClick={onSelect}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect?.(); } }}
       className={cn(
-        "group relative block w-full rounded-lg border p-3 transition-all duration-200 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700",
+        "group relative block w-full rounded-xl border p-3 transition-all duration-200 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)]",
         isActive
-          ? "border-blue-500 bg-blue-50/25 ring-2 ring-blue-500/20 shadow-xs"
+          ? "border-sky-400 bg-[var(--rl-selected)] ring-2 ring-sky-500/20 shadow-xs"
           : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-2xs dark:border-zinc-800 dark:bg-zinc-900"
       )}
     >
@@ -66,7 +66,7 @@ export function SourceCard({ source, isActive = false, onSelect, claimStatuses =
 
       {/* Verbatim Snippet */}
       {source.text && (
-        <div className="mt-2 text-xs text-zinc-700 leading-relaxed font-sans line-clamp-4 italic border-l-2 border-zinc-200 pl-2.5 dark:text-zinc-300 dark:border-zinc-700">
+        <div className="mt-2 rounded-r-md border-l-2 border-[var(--rl-sky)] bg-[var(--rl-tint)] px-2.5 py-2 text-sm leading-relaxed text-[var(--rl-ink)] line-clamp-4">
           &ldquo;{source.text.trim()}&rdquo;
         </div>
       )}

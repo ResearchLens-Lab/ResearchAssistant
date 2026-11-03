@@ -1,10 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
-import { GroundedAnswer } from "./GroundedAnswer";
+import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
 import { User, ShieldCheck, Sparkles, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const GroundedAnswer = dynamic(
+  () => import("./GroundedAnswer").then((mod) => mod.GroundedAnswer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-2 py-2">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-100" />
+        <div className="h-4 w-1/2 animate-pulse rounded bg-zinc-100" />
+      </div>
+    ),
+  }
+);
 
 export function MessageItem({ message }) {
   const isAssistant = message.role === "assistant";
@@ -27,8 +40,8 @@ export function MessageItem({ message }) {
       {/* Avatar */}
       <div className="shrink-0 pt-0.5">
         {isAssistant ? (
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 text-white shadow-2xs">
-            <Sparkles className="h-4 w-4 text-indigo-400" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--rl-selected)] text-[var(--rl-primary)]">
+            <Sparkles className="h-4 w-4" />
           </div>
         ) : (
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-200 text-zinc-700 font-semibold text-xs dark:bg-zinc-800 dark:text-zinc-300">
@@ -52,6 +65,17 @@ export function MessageItem({ message }) {
                 {message.sources.length} sources cited
               </Badge>
             )}
+            {isAssistant && (message.meta?.answer_mode || message.metadata?.answer_mode) && (() => {
+              const mode = message.meta?.answer_mode || message.metadata?.answer_mode;
+              const reason = message.meta?.generation_reason || message.metadata?.generation_reason;
+              const label = mode === "generated" ? "Gemini synthesis"
+                : mode === "evidence_fallback" ? "Evidence only · synthesis unavailable"
+                  : reason === "direct_factual_lookup" ? "Evidence only · direct lookup"
+                    : reason === "insufficient_evidence" ? "Evidence only · insufficient support"
+                  : mode === "mock" ? "Test response" : "Evidence only";
+              return <Badge variant="outline" title={reason ? `Reason: ${reason.replaceAll("_", " ")}` : undefined}
+                className="text-[9px] px-1.5 py-0">{label}</Badge>;
+            })()}
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

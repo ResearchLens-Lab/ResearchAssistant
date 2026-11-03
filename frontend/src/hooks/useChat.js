@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatService } from "@/services/chat.service";
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { applyChatStreamEvent } from "@/lib/researchWorkspace.mjs";
 
 export function useChat(conversationId = null) {
@@ -73,6 +73,7 @@ export function useChat(conversationId = null) {
           additional_retrieval: "Looking for missing evidence…",
           sources_found: `Found ${event.data?.count ?? 0} evidence passages`,
           evidence_ready: "Evidence collected; preparing an answer…",
+          generation_skipped: "Answering with a directly retrieved passage…",
           generation_started: "Drafting an evidence-based answer…",
           verification_started: "Checking claims and citations…",
           verification_completed: "Evidence check complete",
@@ -98,6 +99,14 @@ export function useChat(conversationId = null) {
     }
   };
 
+  const rawMessages = Array.isArray(messagesQuery.data)
+    ? messagesQuery.data
+    : messagesQuery.data?.items || null;
+
+  const messages = useMemo(() => {
+    return [...(rawMessages || []), ...pendingMessages];
+  }, [rawMessages, pendingMessages]);
+
   return {
     conversations: Array.isArray(conversationsQuery.data)
       ? conversationsQuery.data
@@ -105,9 +114,7 @@ export function useChat(conversationId = null) {
     isLoadingConversations: conversationsQuery.isLoading,
     conversation: conversationQuery.data,
     isLoadingConversation: conversationQuery.isLoading,
-    messages: [...(Array.isArray(messagesQuery.data)
-      ? messagesQuery.data
-      : messagesQuery.data?.items || []), ...pendingMessages],
+    messages,
     isLoadingMessages: messagesQuery.isLoading,
     sendMessage,
     isSendingMessage: isStreaming || sendMessageMutation.isPending,

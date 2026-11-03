@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/*.test.mjs"
+    "test": "node --test src/lib/*.test.mjs src/utils/*.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.1.2",
