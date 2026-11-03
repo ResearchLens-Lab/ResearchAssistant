@@ -1,6 +1,6 @@
 """
 Document loaders for PDF, Markdown, and Text research papers.
-Preserves page-level structure and line integrity.
+Preserves page-level structure, equations, tables, and line integrity.
 """
 
 import os
@@ -12,6 +12,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+from collections import Counter
 
 from rag.ingestion.document_normalizer import Page, NormalizedDocument, DocumentMetadata, DocumentNormalizer
 from rag.ingestion.metadata_mapper import MetadataMapper
@@ -25,7 +26,7 @@ class BaseDocumentLoader(ABC):
     """
 
     @abstractmethod
-    def load(self, file_path: str, metadata: Optional[Dict[str, Any]] = None) -> NormalizedDocument:
+    def load(self, file_path: str, metadata: Optional[Dict[str, Any]] = None, progress_callback=None, cancel_event=None) -> NormalizedDocument:
         """
         Loads document from file_path and returns a NormalizedDocument.
         """
@@ -34,13 +35,51 @@ class BaseDocumentLoader(ABC):
 
 class PDFDocumentLoader(BaseDocumentLoader):
     """
-    Extracts text from PDF documents page by page using pypdf.
+    Extracts text from PDFs page by page using PyMuPDF, retaining the source page
+    numbers used by citations. PyMuPDF avoids pypdf's Python-level parsing cost
+    on large, image-heavy research PDFs.
     """
 
     def __init__(self, normalizer: Optional[DocumentNormalizer] = None):
         self.normalizer = normalizer or DocumentNormalizer()
 
-    def load(self, file_path: str, metadata: Optional[Dict[str, Any]] = None) -> NormalizedDocument:
+    @staticmethod
+    def _filter_repeated_headers_footers(pages: List[Page]) -> List[Page]:
+        """Filter out repeating page headers, running heads, and footers across pages."""
+        if len(pages) < 3:
+            return pages
+        first_lines = []
+        last_lines = []
+        for p in pages:
+            lines = [line.strip() for line in p.text.split("\n") if line.strip()]
+            if lines:
+                first_lines.append(lines[0])
+                last_lines.append(lines[-1])
+        threshold = max(2, int(len(pages) * 0.45))
+        rep_headers = {l for l, c in Counter(first_lines).items() if c >= threshold and len(l) < 120}
+        rep_footers = {l for l, c in Counter(last_lines).items() if c >= threshold and len(l) < 120}
+        page_num_pat = re.compile(r"^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?(?:\s*of\s*\d+)?$", re.IGNORECASE)
+
+        cleaned = []
+        for p in pages:
+            lines = p.text.split("\n")
+            out = []
+            for i, line in enumerate(lines):
+                s = line.strip()
+                if not s:
+                    out.append(line)
+                    continue
+                if s in rep_headers and i < 3:
+                    continue
+                if s in rep_footers and i >= len(lines) - 3:
+                    continue
+                if page_num_pat.match(s) and (i < 2 or i >= len(lines) - 2):
+                    continue
+                out.append(line)
+            cleaned.append(Page(page_number=p.page_number, text="\n".join(out)))
+        return cleaned
+
+    def load(self, file_path: str, metadata: Optional[Dict[str, Any]] = None, progress_callback=None, cancel_event=None) -> NormalizedDocument:
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {file_path}")
@@ -52,23 +91,48 @@ class PDFDocumentLoader(BaseDocumentLoader):
 
         pages: List[Page] = []
         try:
-            from pypdf import PdfReader
-            reader = PdfReader(str(path))
+            import pymupdf
+            with pymupdf.open(str(path)) as reader:
+                if reader.is_encrypted and not reader.authenticate(""):
+                    raise ValueError("PDF is password-protected and cannot be opened without a password.")
+                if meta.title == "Untitled Research Paper":
+                    title = (reader.metadata or {}).get("title")
+                    if title:
+                        meta.title = str(title)
 
-            # Attempt to extract title from PDF metadata if not provided
-            if meta.title == "Untitled Research Paper" and reader.metadata and reader.metadata.title:
-                meta.title = str(reader.metadata.title)
+                # Keep source page numbers intact; empty pages matter to citations.
+                page_count = len(reader)
+                for idx, pdf_page in enumerate(reader, start=1):
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise RuntimeError("Ingestion cancelled during extraction.")
+                    page_text = pdf_page.get_text("text") or ""
+                    pages.append(Page(page_number=idx, text=page_text))
+                    if progress_callback and (idx == 1 or idx % 10 == 0 or idx == page_count):
+                        progress_callback({
+                            "stage": "extracting_text",
+                            "progress": round(5 + 15 * idx / max(page_count, 1)),
+                            "progress_type": "estimated",
+                            "completed_pages": idx,
+                            "total_pages": page_count,
+                        })
 
-            for idx, pdf_page in enumerate(reader.pages, start=1):
-                extracted_text = pdf_page.extract_text() or ""
-                pages.append(Page(page_number=idx, text=extracted_text))
+                if progress_callback:
+                    progress_callback({
+                        "stage": "extracting_text", "progress": 20,
+                        "progress_type": "actual", "completed_pages": page_count,
+                        "total_pages": page_count, "force": True,
+                    })
 
             if not any(page.text.strip() for page in pages):
                 raise ValueError("PDF contains no extractable text; scanned PDFs require OCR, which is not enabled.")
 
+            pages = self._filter_repeated_headers_footers(pages)
+
         except Exception as e:
-            logger.error("Failed to load PDF via pypdf exception_type=%s", type(e).__name__)
-            raise RuntimeError(f"Error parsing PDF file {file_path}: {e}") from e
+            logger.error("Failed to load PDF exception_type=%s", type(e).__name__)
+            if isinstance(e, ValueError):
+                raise
+            raise RuntimeError(f"Could not read this PDF ({type(e).__name__}). Check that it is a valid, unencrypted PDF.") from e
 
         return self.normalizer.normalize(pages=pages, metadata=meta)
 
@@ -158,7 +222,7 @@ class DocumentLoaderFactory:
         ext = os.path.splitext(file_path)[1].lower()
         if ext == ".pdf":
             return PDFDocumentLoader()
-        elif ext in {".txt", ".md", ".tex"}:
+        elif ext in {".txt", ".md", ".markdown", ".tex"}:
             return TextDocumentLoader()
         elif ext == ".docx":
             return DOCXDocumentLoader()
@@ -199,6 +263,18 @@ class DOCXDocumentLoader(BaseDocumentLoader):
                 blocks.append(f"Row {row_number}: " + "; ".join(
                     f"{headers[i]}: {cell.text.strip()}" for i, cell in enumerate(row.cells)
                 ))
+
+        # Extract OMML equations (from RAG-Anything technique)
+        try:
+            from rag.ingestion.omml_extractor import extract_omml_equations
+            eqs = extract_omml_equations(str(path))
+            if eqs:
+                eq_text = "\n\n".join(f"$$\n{eq['text']}\n$$" for eq in eqs if eq.get("text", "").strip())
+                if eq_text:
+                    blocks.append(f"### Equations\n\n{eq_text}")
+        except Exception as exc:
+            logger.debug("DOCX OMML equation extraction skipped: %s", exc)
+
         text = "\n\n".join(blocks)
         if not text.strip():
             raise ValueError(f"{path.name} contains no extractable text.")

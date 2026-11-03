@@ -7,6 +7,7 @@ Enforces deterministic IDs and source provenance.
 import logging
 import re
 import sqlite3
+import time
 from pathlib import Path
 from contextlib import contextmanager
 from typing import List, Dict, Any, Optional
@@ -60,19 +61,25 @@ class VectorRepository:
         documents = [chunk.text for chunk in chunks]
         metadatas = [chunk.metadata.to_chroma_metadata() for chunk in chunks]
 
-        # Chroma upsert updates existing IDs or inserts new ones
+        # Chroma upsert updates existing IDs or inserts new ones.
+        chroma_started = time.perf_counter()
         self.collection.upsert(
             ids=ids,
             embeddings=embeddings,
             documents=documents,
             metadatas=metadatas,
         )
-        try:
-            self._upsert_lexical(chunks)
-        except sqlite3.Error as exc:
-            logger.warning("Lexical index update deferred; it will be rebuilt on demand (%s)", type(exc).__name__)
+        chroma_seconds = time.perf_counter() - chroma_started
+        lexical_started = time.perf_counter()
+        # FTS5 is part of the indexing transaction contract. Surface failures so
+        # ingestion can clean the Chroma half instead of reporting false success.
+        self._upsert_lexical(chunks)
+        lexical_seconds = time.perf_counter() - lexical_started
 
-        logger.info("Successfully upserted %d vector chunks into ChromaDB", len(chunks))
+        logger.info(
+            "Vector indexing complete chunks=%d chroma_seconds=%.3f lexical_seconds=%.3f",
+            len(chunks), chroma_seconds, lexical_seconds,
+        )
         return len(chunks)
 
     def query_vectors(
@@ -151,8 +158,10 @@ class VectorRepository:
         persist_dir = ChromaClientFactory.persist_dir_for(self.collection_manager.client)
         path = Path(persist_dir) / "researchlens_lexical.sqlite3"
         path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(path)
+        conn = sqlite3.connect(path, timeout=30.0)
         try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS lexical_chunks USING fts5(chunk_id UNINDEXED, collection_name UNINDEXED, paper_id UNINDEXED, document_id UNINDEXED, section UNINDEXED, page_start UNINDEXED, page_end UNINDEXED, title UNINDEXED, filename UNINDEXED, locator UNINDEXED, text, tokenize='unicode61')")
             yield conn
             conn.commit()
@@ -187,13 +196,19 @@ class VectorRepository:
     def _upsert_lexical(self, chunks: List[DocumentChunk]) -> None:
         collection_name = self.collection.name
         with self._lexical_connection() as conn:
-            for chunk in chunks:
-                meta = chunk.metadata
-                conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ? AND chunk_id = ?", (collection_name, meta.chunk_id))
-                conn.execute("INSERT INTO lexical_chunks (chunk_id, collection_name, paper_id, document_id, section, page_start, page_end, title, filename, locator, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
-                    meta.chunk_id, collection_name, meta.paper_id, meta.document_id, meta.section,
-                    meta.page_start, meta.page_end, meta.title or "", meta.filename or "", meta.locator or "", chunk.text,
-                ))
+            conn.executemany(
+                "DELETE FROM lexical_chunks WHERE collection_name = ? AND chunk_id = ?",
+                ((collection_name, chunk.metadata.chunk_id) for chunk in chunks),
+            )
+            conn.executemany(
+                "INSERT INTO lexical_chunks (chunk_id, collection_name, paper_id, document_id, section, page_start, page_end, title, filename, locator, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ((
+                    chunk.metadata.chunk_id, collection_name, chunk.metadata.paper_id,
+                    chunk.metadata.document_id, chunk.metadata.section, chunk.metadata.page_start,
+                    chunk.metadata.page_end, chunk.metadata.title or "", chunk.metadata.filename or "",
+                    chunk.metadata.locator or "", chunk.text,
+                ) for chunk in chunks),
+            )
 
     def _ensure_lexical_index(self) -> None:
         with self._lexical_connection() as conn:
@@ -224,36 +239,66 @@ class VectorRepository:
         """
         Deletes all chunks belonging to a paper.
         """
-        try:
-            # Query existing IDs for this paper
-            existing = self.collection.get(where={"paper_id": paper_id})
-            count = len(existing.get("ids", []))
-            if count > 0:
-                self.collection.delete(where={"paper_id": paper_id})
-                with self._lexical_connection() as conn:
-                    conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ? AND paper_id = ?", (self.collection.name, paper_id))
-                logger.info("Deleted %d chunks for paper_id='%s'", count, paper_id)
-            return count
-        except Exception as e:
-            logger.error("Failed to delete paper chunks exception_type=%s", type(e).__name__)
-            return 0
+        existing = self.collection.get(where={"paper_id": paper_id})
+        count = len(existing.get("ids", []))
+        if count > 0:
+            self.collection.delete(where={"paper_id": paper_id})
+        # Always remove FTS rows, including orphan rows from a partial index.
+        with self._lexical_connection() as conn:
+            conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ? AND paper_id = ?", (self.collection.name, paper_id))
+        logger.info("Deleted %d chunks for paper_id='%s'", count, paper_id)
+        return count
 
     def delete_document_chunks(self, document_id: str) -> int:
         """
         Deletes all chunks belonging to a document.
         """
-        try:
-            existing = self.collection.get(where={"document_id": document_id})
-            count = len(existing.get("ids", []))
-            if count > 0:
-                self.collection.delete(where={"document_id": document_id})
-                with self._lexical_connection() as conn:
-                    conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ? AND document_id = ?", (self.collection.name, document_id))
-                logger.info("Deleted %d chunks for document_id='%s'", count, document_id)
-            return count
-        except Exception as e:
-            logger.error("Failed to delete document chunks exception_type=%s", type(e).__name__)
-            return 0
+        existing = self.collection.get(where={"document_id": document_id})
+        count = len(existing.get("ids", []))
+        if count > 0:
+            self.collection.delete(where={"document_id": document_id})
+        # Always remove lexical rows: a previous partial failure may have left
+        # FTS entries even when Chroma has none.
+        with self._lexical_connection() as conn:
+            conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ? AND document_id = ?", (self.collection.name, document_id))
+        logger.info("Deleted %d Chroma chunks for document_id='%s'", count, document_id)
+        return count
+
+    def reconcile_document_chunks(self, document_id: str, expected_ids: set[str]) -> None:
+        """Remove stale IDs left by older/partial attempts for this document."""
+        chroma_ids = set(self.collection.get(where={"document_id": document_id}).get("ids", []))
+        stale_chroma = chroma_ids - expected_ids
+        if stale_chroma:
+            self.collection.delete(ids=sorted(stale_chroma))
+        with self._lexical_connection() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id FROM lexical_chunks WHERE collection_name = ? AND document_id = ?",
+                (self.collection.name, document_id),
+            ).fetchall()
+            stale_fts = {row[0] for row in rows} - expected_ids
+            if stale_fts:
+                conn.executemany(
+                    "DELETE FROM lexical_chunks WHERE collection_name = ? AND document_id = ? AND chunk_id = ?",
+                    ((self.collection.name, document_id, chunk_id) for chunk_id in stale_fts),
+                )
+
+    def document_index_counts(self, document_id: str) -> Dict[str, Any]:
+        """Inspect the active collection and FTS5 rows without repairing either."""
+        chroma_ids = set(self.collection.get(where={"document_id": document_id}).get("ids", []))
+        with self._lexical_connection() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id FROM lexical_chunks WHERE collection_name = ? AND document_id = ?",
+                (self.collection.name, document_id),
+            ).fetchall()
+        fts_id_list = [row[0] for row in rows]
+        fts_ids = set(fts_id_list)
+        return {
+            "collection_name": self.collection.name,
+            "chroma_count": len(chroma_ids),
+            "fts_count": len(fts_id_list),
+            "unique_fts_count": len(fts_ids),
+            "ids_match": chroma_ids == fts_ids and len(fts_id_list) == len(fts_ids),
+        }
 
     def count_chunks(self, where: Optional[Dict[str, Any]] = None) -> int:
         if where:

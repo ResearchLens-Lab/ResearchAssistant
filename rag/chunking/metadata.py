@@ -7,6 +7,16 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 
+def make_chunk_id(paper_id: str, document_id: str, chunk_index: int,
+                  page_start: Optional[int] = None, page_end: Optional[int] = None,
+                  is_pdf: bool = False) -> str:
+    """Build a stable chunk key scoped to both project and uploaded source."""
+    chunk_id = f"{paper_id}_c{chunk_index:04d}_d{document_id}"
+    if is_pdf:
+        chunk_id += f"_p{page_start or 1}-{page_end or page_start or 1}"
+    return chunk_id
+
+
 class ChunkMetadata(BaseModel):
     chunk_id: str = Field(..., description="Deterministic unique identifier for the chunk")
     paper_id: str = Field(..., description="ID of the research paper")

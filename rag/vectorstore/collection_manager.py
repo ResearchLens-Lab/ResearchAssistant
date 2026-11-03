@@ -27,14 +27,18 @@ class CollectionManager:
     ) -> Collection:
         coll_name = name or settings.chroma_collection_name
         embedding_model = settings.embedding_model
-        if settings.embedding_provider == "openai" and not embedding_model.startswith("text-embedding"):
-            embedding_model = "text-embedding-3-small"
+        embedding_provider = settings.embedding_provider
+        if embedding_provider == "fastembed":
+            import fastembed
+            embedding_model = f"{embedding_model}@fastembed-{fastembed.__version__}"
         if name is None and settings.chroma_namespace_by_embedding:
-            safe_model = "".join(c if c.isalnum() or c in "_-" else "_" for c in embedding_model)
-            suffix = f"_{safe_model}_{settings.embedding_dimension}"
+            safe_model = "".join(c if c.isalnum() or c in "_-" else "_" for c in f"{embedding_provider}_{embedding_model}_chunkidv2")
+            suffix = f"_{safe_model}_{settings.embedding_dimension}"[-58:]
             coll_name = f"{coll_name[:63-len(suffix)]}{suffix}"
         meta = metadata or {"hnsw:space": "cosine", "embedding_model": embedding_model,
-                            "embedding_dimension": settings.embedding_dimension}
+                            "embedding_provider": embedding_provider,
+                            "embedding_dimension": settings.embedding_dimension,
+                            "chunk_id_schema": "document-scoped-v2"}
 
         logger.debug("Getting or creating collection '%s'", coll_name)
         return self.client.get_or_create_collection(

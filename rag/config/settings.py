@@ -18,9 +18,12 @@ class RAGSettings(BaseSettings):
         extra="ignore",
     )
 
-    # General
+    # General & Modes
     app_env: Literal["development", "testing", "production"] = "development"
     log_level: str = "INFO"
+    rag_mode: str = "local"
+    llm_enabled: bool = False
+    retrieval_mode: Literal["hybrid", "dense", "bm25"] = "hybrid"
 
     # ChromaDB
     chroma_persist_dir: str = ".chroma"
@@ -31,25 +34,31 @@ class RAGSettings(BaseSettings):
     chroma_use_http: bool = False
 
     # Embedding Settings
-    embedding_provider: Literal["mock", "openai"] = "mock"
-    embedding_model: str = "mock-dense-384"
+    embedding_provider: Literal["fastembed", "gemini", "mock", "local"] = "fastembed"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = 384
-    embedding_api_key: str = Field(default="", repr=False)
-    embedding_batch_size: int = 32
+    gemini_api_key: str = Field(default="", repr=False)
+    embedding_batch_size: int = 128
+    embedding_cache_path: str = ""
+    fastembed_cache_dir: str = ".model_cache"
 
     # LLM Settings
-    llm_provider: Literal["mock", "openai"] = "mock"
-    llm_model: str = "gpt-4o-mini"
+    llm_provider: Literal["local", "mock", "gemini"] = "gemini"
+    llm_model: str = "gemini-3.8-flash"
     llm_api_key: str = Field(default="", repr=False)
     llm_temperature: float = 0.1
     llm_max_tokens: int = 1024
     llm_timeout_seconds: float = 30.0
+    # Per-provider outbound generation requests, reset at 00:00 UTC.
+    llm_daily_call_budget: int = Field(default=25, ge=0)
     claim_verification_use_llm: bool = False
     claim_repair_enabled: bool = True
 
-    # Chunking Settings
+    # Chunking Settings (Token-budgeted section-aware chunking)
     chunk_size: int = 500
     chunk_overlap: int = 80
+    chunk_size_tokens: int = 800
+    chunk_overlap_tokens: int = 120
 
     # Retrieval & Context Settings
     retrieval_top_k: int = 5

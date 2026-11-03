@@ -5,10 +5,11 @@ Preserves section semantics, sentence/paragraph boundaries, and page provenance.
 
 import re
 import logging
+from bisect import bisect_left, bisect_right
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 from rag.ingestion.document_normalizer import NormalizedDocument, Section, Page
-from rag.chunking.metadata import DocumentChunk, ChunkMetadata
+from rag.chunking.metadata import DocumentChunk, ChunkMetadata, make_chunk_id
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,14 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self._match_cursor = 0
+        self._source_text = ""
+        self._source_tokens = []
+        self._source_token_starts = []
 
     def chunk(self, document: NormalizedDocument) -> List[DocumentChunk]:
+        self._source_text = document.full_text
+        self._source_tokens = []
+        self._source_token_starts = []
         self._match_cursor = 0
         chunks: List[DocumentChunk] = []
         chunk_idx = 0
@@ -73,6 +80,13 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
 
         return chunks
 
+    def clear_match_cache(self) -> None:
+        """Release source text indexes after chunking to bound document memory."""
+        self._source_text = ""
+        self._source_tokens = []
+        self._source_token_starts = []
+        self._match_cursor = 0
+
     def _build_page_index(self, pages: List[Page]) -> List[Tuple[int, int, int]]:
         """
         Returns list of tuples: (page_number, start_char_index, end_char_index)
@@ -95,35 +109,73 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
         fallback_end: int,
     ) -> Tuple[int, int]:
         """
-        Finds the exact start and end page for a chunk snippet.
+        Finds the exact start and end page for a chunk snippet using fast
+        string searching and binary search page resolution.
         """
         if not page_offsets:
             return fallback_start, fallback_end
 
-        # Match on whitespace-normalized text while retaining source offsets. PDF
-        # extractors often wrap lines differently from the chunker.
-        match = self._find_normalized_match(document_text, chunk_text, self._match_cursor)
-        start_pos = match[0] if match else -1
+        words = chunk_text.split()
+        if not words:
+            return fallback_start, fallback_end
+
+        start_pos = -1
+        # 1. Exact string search using a prefix of words (fast C-level Boyer-Moore .find)
+        prefix_len = min(6, len(words))
+        prefix = " ".join(words[:prefix_len])
+        start_pos = document_text.find(prefix, self._match_cursor)
+        if start_pos == -1 and self._match_cursor > 0:
+            start_pos = document_text.find(prefix)
+
+        # 2. Shorter prefix fallback if line break or formatting split the prefix
+        if start_pos == -1 and prefix_len > 3:
+            prefix3 = " ".join(words[:3])
+            start_pos = document_text.find(prefix3, self._match_cursor)
+            if start_pos == -1 and self._match_cursor > 0:
+                start_pos = document_text.find(prefix3)
+
+        # 3. Regex fallback with flexible whitespace across line-breaks
+        if start_pos == -1:
+            search_words = words[:min(4, len(words))]
+            pattern = re.compile(r"\s+".join(re.escape(w) for w in search_words))
+            # First search in local forward window of 50,000 chars for efficiency
+            window = document_text[self._match_cursor: self._match_cursor + 50000]
+            match = pattern.search(window)
+            if match:
+                start_pos = self._match_cursor + match.start()
+            else:
+                match = pattern.search(document_text)
+                if match:
+                    start_pos = match.start()
+
         if start_pos == -1:
             return fallback_start, fallback_end
-        end_pos = match[1]
-        # Advance by the match start, not its end, so overlapping chunks can
-        # still resolve while repeated identical passages map in document order.
-        # Keep the matcher stateless so overlapping chunks can resolve the same
-        # passage; ambiguity from repeated text is bounded by source page range.
 
-        p_start = fallback_start
-        p_end = fallback_end
-        found_start = False
+        # Find end position using suffix
+        suffix_len = min(6, len(words))
+        suffix = " ".join(words[-suffix_len:])
+        end_pos = -1
+        suffix_pos = document_text.find(suffix, start_pos)
+        if suffix_pos != -1:
+            end_pos = suffix_pos + len(suffix)
+        else:
+            suffix_words = words[-min(4, len(words)):]
+            pattern_end = re.compile(r"\s+".join(re.escape(w) for w in suffix_words))
+            match_end = pattern_end.search(document_text, start_pos)
+            if match_end:
+                end_pos = match_end.end()
+            else:
+                end_pos = min(len(document_text), start_pos + len(chunk_text))
 
-        for page_num, p_from, p_to in page_offsets:
-            if not found_start and start_pos < p_to:
-                p_start = page_num
-                found_start = True
-            if end_pos <= p_to:
-                p_end = page_num
-                break
-            p_end = page_num
+        self._match_cursor = start_pos + 1
+
+        # Binary search page boundaries in O(log P)
+        page_starts = [p[1] for p in page_offsets]
+        p_idx = bisect_right(page_starts, start_pos) - 1
+        p_start = page_offsets[max(0, p_idx)][0]
+
+        p_end_idx = bisect_right(page_starts, end_pos) - 1
+        p_end = page_offsets[max(0, min(p_end_idx, len(page_offsets) - 1))][0]
 
         return max(1, p_start), max(p_start, p_end)
 
@@ -147,20 +199,39 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
                 return f"Slide {min(slides)}" if min(slides) == max(slides) else f"Slides {min(slides)}-{max(slides)}"
         return f"{section_name} · passage {chunk_number}"
 
-    @staticmethod
-    def _find_normalized_match(source: str, target: str, start_at: int = 0):
-        tokens = list(re.finditer(r"\S+", source))
-        wanted = target.split()
-        if not wanted:
+    def _find_normalized_match(self, source: str, target: str, start_at: int = 0):
+        words = target.split()
+        if not words:
             return None
-        # Compare token streams so differences in line breaks and repeated spaces
-        # do not invalidate provenance. The first contiguous exact sequence wins.
-        for i in range(0, len(tokens) - len(wanted) + 1):
-            if tokens[i].start() < start_at:
-                continue
-            if all(tokens[i + j].group() == word for j, word in enumerate(wanted)):
-                return tokens[i].start(), tokens[i + len(wanted) - 1].end()
-        return None
+        prefix_len = min(6, len(words))
+        prefix = " ".join(words[:prefix_len])
+        start_pos = source.find(prefix, start_at)
+        if start_pos == -1 and start_at > 0:
+            start_pos = source.find(prefix)
+        if start_pos == -1:
+            search_words = words[:min(4, len(words))]
+            pattern = re.compile(r"\s+".join(re.escape(w) for w in search_words))
+            match = pattern.search(source, start_at)
+            if not match and start_at > 0:
+                match = pattern.search(source)
+            if not match:
+                return None
+            start_pos = match.start()
+
+        suffix_len = min(6, len(words))
+        suffix = " ".join(words[-suffix_len:])
+        suffix_pos = source.find(suffix, start_pos)
+        if suffix_pos != -1:
+            end_pos = suffix_pos + len(suffix)
+        else:
+            suffix_words = words[-min(4, len(words)):]
+            pattern_end = re.compile(r"\s+".join(re.escape(w) for w in suffix_words))
+            match_end = pattern_end.search(source, start_pos)
+            if match_end:
+                end_pos = match_end.end()
+            else:
+                end_pos = min(len(source), start_pos + len(target))
+        return start_pos, end_pos
 
     def _chunk_section(
         self,
@@ -173,26 +244,110 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
         if not text:
             return []
 
-        # Split into sentence-like or paragraph units
+        # Split into sentence-like or paragraph units, keeping tables intact where practical
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
         units: List[str] = []
         for p in paragraphs:
-            # If paragraph is long, split by sentences
-            if len(p.split()) > self.chunk_size:
+            # Check if this paragraph is a Markdown table
+            lines = [line.strip() for line in p.split("\n") if line.strip()]
+            is_table = len(lines) >= 2 and all(l.startswith("|") and l.endswith("|") for l in lines)
+
+            if is_table:
+                # Keep table together if it fits inside chunk_size, else split by row
+                table_words = p.split()
+                if len(table_words) <= self.chunk_size:
+                    units.append(p)
+                else:
+                    # Very large table: chunk by rows while repeating header
+                    header_line = lines[0]
+                    separator_line = lines[1] if len(lines) > 1 and "---" in lines[1] else "| " + " | ".join(["---"] * (header_line.count("|") - 1)) + " |"
+                    current_rows = []
+                    for row in lines[2:] if "---" in lines[1] else lines[1:]:
+                        current_rows.append(row)
+                        if len(" ".join(current_rows).split()) >= self.chunk_size:
+                            units.append("\n".join([header_line, separator_line] + current_rows))
+                            current_rows = []
+                    if current_rows:
+                        units.append("\n".join([header_line, separator_line] + current_rows))
+            elif len(p.split()) > self.chunk_size:
+                # If paragraph is long, split by sentences without breaking mid-sentence
                 sentences = re.split(r"(?<=[.?!])\s+", p)
-                units.extend([s.strip() for s in sentences if s.strip()])
+                for sentence in sentences:
+                    sentence_words = sentence.split()
+                    if len(sentence_words) <= self.chunk_size:
+                        if sentence_words:
+                            units.append(" ".join(sentence_words))
+                        continue
+                    # Hard window fallback for extremely long unpunctuated text
+                    units.extend(
+                        " ".join(sentence_words[start:start + self.chunk_size])
+                        for start in range(0, len(sentence_words), self.chunk_size)
+                    )
             else:
                 units.append(p)
 
         section_chunks: List[DocumentChunk] = []
         current_words: List[str] = []
-        current_unit_texts: List[str] = []
-        doc_full_text = document.full_text
+        doc_full_text = self._source_text
 
         for unit in units:
             unit_words = unit.split()
             if len(current_words) + len(unit_words) > self.chunk_size and current_words:
                 chunk_text = " ".join(current_words).strip()
+                # Skip meaningless or empty chunks
+                if len(re.sub(r"\W+", "", chunk_text)) >= 3:
+                    p_start, p_end = self._find_page_range_for_text(
+                        document_text=doc_full_text,
+                        chunk_text=chunk_text,
+                        page_offsets=page_offsets,
+                        fallback_start=section.page_start,
+                        fallback_end=section.page_end,
+                    )
+
+                    chunk_idx = start_chunk_idx + len(section_chunks)
+                    is_pdf = (document.metadata.source_format or "pdf").lower() == "pdf"
+                    locator = self._locator_for(document, chunk_text, section.name, chunk_idx + 1)
+                    chunk_id = make_chunk_id(document.paper_id, document.document_id, chunk_idx, p_start, p_end, is_pdf)
+
+                    meta = ChunkMetadata(
+                        chunk_id=chunk_id,
+                        paper_id=document.paper_id,
+                        document_id=document.document_id,
+                        page_start=p_start if is_pdf else None,
+                        page_end=p_end if is_pdf else None,
+                        section=section.name,
+                        chunk_index=chunk_idx,
+                        token_count=len(current_words),
+                        title=document.title,
+                        filename=document.metadata.filename,
+                        locator=locator,
+                    )
+                    section_chunks.append(DocumentChunk(text=chunk_text, metadata=meta))
+
+                # Slide window with overlap, preferring sentence boundary
+                if self.chunk_overlap > 0 and len(current_words) > self.chunk_overlap:
+                    overlap_target = self.chunk_overlap
+                    # Try to align overlap to sentence boundary
+                    tail_text = " ".join(current_words[-min(len(current_words), overlap_target * 2):])
+                    sentence_matches = list(re.finditer(r"(?<=[.?!])\s+", tail_text))
+                    if sentence_matches:
+                        last_sentence_start = sentence_matches[-1].end()
+                        sentence_words = tail_text[last_sentence_start:].split()
+                        if 10 <= len(sentence_words) <= overlap_target * 2:
+                            current_words = sentence_words
+                        else:
+                            current_words = current_words[-overlap_target:]
+                    else:
+                        current_words = current_words[-overlap_target:]
+                else:
+                    current_words = []
+
+            current_words.extend(unit_words)
+
+        # Append trailing words
+        if current_words:
+            chunk_text = " ".join(current_words).strip()
+            if len(re.sub(r"\W+", "", chunk_text)) >= 3:
                 p_start, p_end = self._find_page_range_for_text(
                     document_text=doc_full_text,
                     chunk_text=chunk_text,
@@ -200,11 +355,10 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
                     fallback_start=section.page_start,
                     fallback_end=section.page_end,
                 )
-
                 chunk_idx = start_chunk_idx + len(section_chunks)
                 is_pdf = (document.metadata.source_format or "pdf").lower() == "pdf"
                 locator = self._locator_for(document, chunk_text, section.name, chunk_idx + 1)
-                chunk_id = f"{document.paper_id}_c{chunk_idx:04d}" + (f"_p{p_start}-{p_end}" if is_pdf else "")
+                chunk_id = make_chunk_id(document.paper_id, document.document_id, chunk_idx, p_start, p_end, is_pdf)
 
                 meta = ChunkMetadata(
                     chunk_id=chunk_id,
@@ -220,43 +374,5 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
                     locator=locator,
                 )
                 section_chunks.append(DocumentChunk(text=chunk_text, metadata=meta))
-
-                # Slide window with overlap
-                if self.chunk_overlap > 0 and len(current_words) > self.chunk_overlap:
-                    current_words = current_words[-self.chunk_overlap:]
-                else:
-                    current_words = []
-
-            current_words.extend(unit_words)
-
-        # Append trailing words
-        if current_words:
-            chunk_text = " ".join(current_words).strip()
-            p_start, p_end = self._find_page_range_for_text(
-                document_text=doc_full_text,
-                chunk_text=chunk_text,
-                page_offsets=page_offsets,
-                fallback_start=section.page_start,
-                fallback_end=section.page_end,
-            )
-            chunk_idx = start_chunk_idx + len(section_chunks)
-            is_pdf = (document.metadata.source_format or "pdf").lower() == "pdf"
-            locator = self._locator_for(document, chunk_text, section.name, chunk_idx + 1)
-            chunk_id = f"{document.paper_id}_c{chunk_idx:04d}" + (f"_p{p_start}-{p_end}" if is_pdf else "")
-
-            meta = ChunkMetadata(
-                chunk_id=chunk_id,
-                paper_id=document.paper_id,
-                document_id=document.document_id,
-                page_start=p_start if is_pdf else None,
-                page_end=p_end if is_pdf else None,
-                section=section.name,
-                chunk_index=chunk_idx,
-                token_count=len(current_words),
-                title=document.title,
-                filename=document.metadata.filename,
-                locator=locator,
-            )
-            section_chunks.append(DocumentChunk(text=chunk_text, metadata=meta))
 
         return section_chunks

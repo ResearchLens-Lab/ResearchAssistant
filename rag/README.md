@@ -25,6 +25,20 @@ rag/
 └── tests/              # Full unit and end-to-end test suite
 ```
 
+Embedding collections are separated by provider, model, version, and dimension.
+After changing the embedding model, first review the selection with a dry run,
+then explicitly apply it to a selected document or (only when intended) all
+eligible documents. The previous collection remains available for rollback:
+
+```bash
+python scripts/reindex_documents.py --document-id <document-id> --dry-run
+python scripts/reindex_documents.py --document-id <document-id> --apply
+```
+
+`--all` also requires a dry-run review before `--apply`. Interrupted processing
+rows are excluded by default; use `--resume-stale` only to include rows whose
+heartbeat is older than the configured stale interval.
+
 ---
 
 ## ⚙️ Configuration
@@ -32,15 +46,18 @@ rag/
 All configuration is managed via `rag/config/settings.py` and can be overridden using environment variables or a `.env` file:
 
 ```env
-# Embedding Provider: 'mock' (default offline) or 'openai'
-EMBEDDING_PROVIDER=mock
-EMBEDDING_MODEL=mock-dense-384
-EMBEDDING_API_KEY=
+# Local embeddings (no Gemini API key or quota required for ingestion/search)
+EMBEDDING_PROVIDER=fastembed
+EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+EMBEDDING_DIMENSION=384
+EMBEDDING_BATCH_SIZE=64
+FASTEMBED_CACHE_DIR=.model_cache
 
-# LLM Provider: 'mock' (default offline) or 'openai'
-LLM_PROVIDER=mock
-LLM_MODEL=gpt-4o-mini
-LLM_API_KEY=
+# Optional Gemini generation
+GEMINI_API_KEY=your-key
+
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-3.8-flash
 
 # ChromaDB Settings
 CHROMA_PERSIST_DIR=.chroma
