@@ -22,6 +22,7 @@ class QueryRequest(BaseModel):
     filters: Optional[QueryFilters] = None
     top_k: int = Field(default=5, ge=1, le=50)
     min_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    intent: Optional[str] = Field(default=None, description="Query intent for specialized reranking and retrieval")
 
 
 class RetrievedSource(BaseModel):

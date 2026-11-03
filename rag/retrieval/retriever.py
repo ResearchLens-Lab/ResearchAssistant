@@ -13,7 +13,7 @@ from rag.vectorstore.vector_repository import VectorRepository
 from rag.retrieval.query import QueryRequest, RetrievedSource, QueryFilters
 from rag.retrieval.filters import FilterBuilder
 from rag.retrieval.ranking import ResultRanker
-from rag.retrieval.reranker import BaseReranker, IdentityReranker
+from rag.retrieval.reranker import BaseReranker, IdentityReranker, IntentAwareReranker
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class ResearchRetriever:
     ):
         self.embedder = embedder or EmbeddingModelRegistry.get_embedder()
         self.vector_repo = vector_repo or VectorRepository()
-        self.reranker = reranker or IdentityReranker()
+        self.reranker = reranker or IntentAwareReranker()
 
     def retrieve(self, request: QueryRequest) -> List[RetrievedSource]:
         """
@@ -54,7 +54,7 @@ class ResearchRetriever:
         )
 
         # 3. Retrieve candidates (fetch slightly more than top_k for ranking headroom)
-        fetch_limit = min(50, max(request.top_k * 2, 10))
+        fetch_limit = min(80, max(request.top_k * 4, 30))
         vector_records = self.vector_repo.query_vectors(
             query_embedding=query_embedding,
             top_k=fetch_limit,
@@ -107,6 +107,7 @@ class ResearchRetriever:
             query=request.question,
             sources=candidate_sources,
             top_k=request.top_k,
+            intent=request.intent,
         )
 
         # For comparison queries, preserve the best genuinely matching passage

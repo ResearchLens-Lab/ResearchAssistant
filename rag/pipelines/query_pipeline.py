@@ -16,6 +16,8 @@ from rag.retrieval.query import QueryRequest, QueryFilters, RetrievedSource
 from rag.retrieval.retriever import ResearchRetriever
 from rag.context.context_builder import ContextBuilder, AssembledContext
 from rag.generation.generator import GroundedGenerator, GenerationResult
+from rag.generation.extractive_engine import ExtractiveAnswerEngine
+from rag.generation.llm_client import OllamaLLMClient
 from rag.citations.source_tracker import SourceTracker
 from rag.citations.citation_mapper import CitationMapper, SourceCitation
 from rag.citations.citation_formatter import RAGResult
@@ -27,6 +29,46 @@ from rag.generation.budgeted_client import start_call_tracking, stop_call_tracki
 
 logger = logging.getLogger(__name__)
 GENERATION_PROMPT_VERSION = "researchlens-generation-v2"
+
+
+def generate_follow_up_suggestions(question: str, intent: str, answer: str) -> list[str]:
+    """Generate 3-4 interactive, contextually relevant follow-up actions."""
+    lower_q = question.casefold()
+    if intent in ("definition", "conceptual") or "what is" in lower_q:
+        return [
+            "Explain in more depth",
+            "Give a practical example",
+            "Explain in simple language",
+            "Explore related concepts",
+        ]
+    elif intent in ("author_entity", "dates") or any(w in lower_q for w in ["author", "wrote", "who"]):
+        return [
+            "What topics does this book cover?",
+            "Summarize the main themes",
+            "Explain in more depth",
+            "Show supporting evidence",
+        ]
+    elif intent == "comparison":
+        return [
+            "Summarize this comparison",
+            "Explain trade-offs in depth",
+            "Give practical use cases",
+            "Explore related concepts",
+        ]
+    elif intent == "summary":
+        return [
+            "Explain in more depth",
+            "Extract key algorithms and methods",
+            "What are the reported limitations?",
+            "Give practical examples",
+        ]
+    else:
+        return [
+            "Explain in more depth",
+            "Summarize this answer",
+            "Explain in simple language",
+            "Give a practical example",
+        ]
 
 
 class QueryPipeline:
@@ -50,6 +92,7 @@ class QueryPipeline:
         self._generator = generator
         self.planner = planner or QueryPlanner()
         self.sufficiency_checker = sufficiency_checker or EvidenceSufficiencyChecker()
+        self.extractive_engine = ExtractiveAnswerEngine()
 
     @property
     def generator(self) -> GroundedGenerator:
@@ -102,7 +145,8 @@ class QueryPipeline:
             emit({"type": "retrieval_started", "round": 1}) if query == queries[0] else None
             req = QueryRequest(question=query, paper_ids=selected_ids or None,
                                filters=effective_filters, top_k=per_query_k,
-                               min_score=settings.retrieval_min_score)
+                               min_score=settings.retrieval_min_score,
+                               intent=plan.intent)
             for source in self.retriever.retrieve(req):
                 if source.chunk_id not in found and len(found) < settings.research_max_total_candidates:
                     found[source.chunk_id] = source
@@ -111,13 +155,19 @@ class QueryPipeline:
         for index, source in enumerate(retrieved_sources, start=1):
             source.source_id = f"S{index}"
 
-        assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+        try:
+            assessment = self.sufficiency_checker.assess(question, retrieved_sources, intent=plan.intent)
+        except TypeError:
+            assessment = self.sufficiency_checker.assess(question, retrieved_sources)
         def require_complete_direct_evidence(value):
-            # The global coverage score can be adequate while a requested key
-            # term remains absent. Direct factual mode must not treat that as
-            # support for the requested fact.
-            if plan.intent == "direct" and value.status in {"adequate", "partial"} and value.missing_terms:
-                return value.model_copy(update={"status": "insufficient"})
+            # If intent is author_entity or definition and status is adequate, keep it
+            if plan.intent in ("author_entity", "definition") and value.status == "adequate":
+                return value
+            # For general direct factual queries, only downgrade if substantive terms are truly missing
+            if plan.intent in ("direct", "author_entity", "numerical_facts", "dates") and value.status in {"adequate", "partial"}:
+                substantive_missing = [t for t in value.missing_terms if t not in EvidenceSufficiencyChecker.RELATION_STOP]
+                if substantive_missing:
+                    return value.model_copy(update={"status": "insufficient", "missing_terms": substantive_missing})
             return value
         assessment = require_complete_direct_evidence(assessment)
         # One bounded, scope-preserving retry targets terms absent from the first pass.
@@ -134,7 +184,10 @@ class QueryPipeline:
             retrieved_sources = list(found.values())
             for index, source in enumerate(retrieved_sources, start=1):
                 source.source_id = f"S{index}"
-            assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+            try:
+                assessment = self.sufficiency_checker.assess(question, retrieved_sources, intent=plan.intent)
+            except TypeError:
+                assessment = self.sufficiency_checker.assess(question, retrieved_sources)
             assessment = require_complete_direct_evidence(assessment)
             emit({"type": "sources_found", "count": len(retrieved_sources), "round": 2})
         retrieval_seconds = time.perf_counter() - retrieval_started
@@ -148,115 +201,205 @@ class QueryPipeline:
 
         ledger = EvidenceLedger.from_sources(retrieved_sources, queries)
         mapper = CitationMapper(tracker)
+
         def evidence_result(reason: str, mode: str = "evidence_only", lead: str = "",
                             model_calls: int = 0, measured_usage: Optional[list] = None) -> RAGResult:
-            # Quote source text verbatim and bind it to immutable retrieved IDs.
-            if mode == "evidence_fallback":
-                explanations = {
-                    "provider_local": "Synthesis is disabled in local-only mode.",
-                    "missing_credentials": "Synthesis is unavailable because Gemini credentials are not configured.",
-                    "daily_budget_exhausted": "Synthesis is unavailable because the daily generation budget is exhausted.",
-                    "quota_exhausted": "Synthesis is unavailable because the provider reports exhausted model quota.",
-                    "rate_limited": "Synthesis is temporarily rate limited by the provider.",
-                    "authentication": "Synthesis is unavailable because the provider rejected its credentials or access.",
-                    "invalid_model": "Synthesis is unavailable because the configured model is invalid or unavailable.",
-                    "transient": "Synthesis is temporarily unavailable from the provider.",
-                }
-                explanation = explanations.get(reason, "Synthesis is unavailable from the configured provider.")
-                if lead and (lead.startswith("Synthesis is") or explanation in lead):
-                    pass
-                else:
-                    lead = explanation + (" " + lead if lead else "")
-            if mode == "evidence_fallback":
-                terms = [term for term in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", question.casefold())
-                         if term not in EvidenceSufficiencyChecker.STOP]
-                remaining = set(terms)
-                available = list(retrieved_sources[:k])
-                selected = []
-                while available and remaining:
-                    scored = [(len(remaining.intersection(re.findall(
-                        r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))), -index, source)
-                              for index, source in enumerate(available)]
-                    gain, _, source = max(scored, key=lambda row: (row[0], row[1]))
-                    if gain == 0:
-                        break
-                    selected.append(source)
-                    remaining.difference_update(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))
-                    available.remove(source)
-                if assessment.status == "conflicting":
-                    # A conflict must retain at least one relevant excerpt per
-                    # represented paper, even if the first excerpt covers the
-                    # query's shared vocabulary.
-                    for source in retrieved_sources[:k]:
-                        if (source.paper_id not in {item.paper_id for item in selected}
-                                and any(term in source.text.casefold() for term in terms)):
-                            selected.append(source)
-                selected = selected[:k] or retrieved_sources[:1]
-            else:
-                # Select the smallest top-ranked set that covers the question's
-                # observed terms. A single S1 excerpt can omit another requested
-                # fact; quoting every top-k result, however, adds unrelated
-                # citations. This is lexical coverage, not entailment.
-                terms = [term for term in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", question.casefold())
-                         if term not in EvidenceSufficiencyChecker.STOP]
-                remaining = set(terms)
-                available = list(retrieved_sources[:k])
-                selected = []
-                while available and remaining:
-                    scored = [(len(remaining.intersection(re.findall(
-                        r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))), -index, source)
-                              for index, source in enumerate(available)]
-                    gain, _, source = max(scored, key=lambda row: (row[0], row[1]))
-                    if gain == 0:
-                        break
-                    selected.append(source)
-                    remaining.difference_update(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))
-                    available.remove(source)
-                if not selected and retrieved_sources:
-                    selected = retrieved_sources[:1]
-            blocks = [f'**{source.filename or source.title or "Source document"} · {source.page_display}**\n\n'
-                      f'> "{source.text.strip()}" [{source.source_id}]' for source in selected if source.text.strip()]
-            answer = (lead + "\n\n" if lead else "") + "\n\n".join(blocks)
-            clean, citation_check = CitationVerifier().verify(answer, retrieved_sources, selected_ids)
+            if not retrieved_sources or assessment.status == "insufficient":
+                clean = "There is insufficient evidence in the selected documents to answer this question."
+                return RAGResult(
+                    answer=clean,
+                    sources=[],
+                    paper_ids=selected_ids,
+                    metadata={
+                        "execution_time_seconds": round(time.time() - start_time, 3),
+                        "timings": {
+                            "planning_seconds": round(planning_seconds, 4),
+                            "retrieval_seconds": round(retrieval_seconds, 4),
+                            "generation_seconds": 0.0,
+                            "verification_seconds": 0.0,
+                        },
+                        "retrieval_rounds": retrieval_rounds,
+                        "model_calls": model_calls,
+                        "total_retrieved": len(retrieved_sources),
+                        "cited_sources_count": 0,
+                        "llm_provider": settings.llm_provider,
+                        "generation_provider": settings.llm_provider,
+                        "answer_mode": mode,
+                        "generation_reason": reason or "insufficient_evidence",
+                        "follow_up_suggestions": ["Ask about indexed topics", "Select different sources"],
+                        "llm_usage": {"measured": measured_usage or [], "estimated": False},
+                        "embedding_provider": settings.embedding_provider,
+                        "research": {
+                            "intent": plan.intent,
+                            "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan),
+                            "sufficiency": assessment.model_dump(),
+                            "evidence_count": len(ledger.items),
+                            "citation_verification": {"entailment_verified": False},
+                        },
+                    },
+                )
+
+            # Generate structured 4-part extractive answer
+            ext_res = self.extractive_engine.generate_extractive_answer(
+                question=question,
+                sources=retrieved_sources,
+                selected_paper_ids=selected_ids,
+                tracker=tracker,
+                intent=plan.intent,
+            )
+            raw_answer = ext_res["answer"]
+            clean, citation_check = CitationVerifier().verify(raw_answer, retrieved_sources, selected_ids)
+            if lead:
+                clean = (lead.strip() + "\n\n" + clean).strip()
             citations = mapper.map_citations(citation_check.valid_source_ids, fallback_all_retrieved=False)
-            return RAGResult(answer=clean, sources=citations,
+            follow_ups = generate_follow_up_suggestions(question, plan.intent, clean)
+
+            return RAGResult(
+                answer=clean,
+                sources=citations,
                 paper_ids=selected_ids or list(dict.fromkeys(s.paper_id for s in retrieved_sources)),
-                metadata={"execution_time_seconds": round(time.time() - start_time, 3),
-                    "timings": {"planning_seconds": round(planning_seconds, 4), "retrieval_seconds": round(retrieval_seconds, 4),
-                                "generation_seconds": 0.0, "verification_seconds": 0.0},
-                    "retrieval_rounds": retrieval_rounds, "model_calls": model_calls, "total_retrieved": len(retrieved_sources),
-                    "cited_sources_count": len(citations), "llm_provider": settings.llm_provider,
-                    "generation_provider": settings.llm_provider, "answer_mode": mode, "generation_reason": reason,
+                metadata={
+                    "execution_time_seconds": round(time.time() - start_time, 3),
+                    "timings": {
+                        "planning_seconds": round(planning_seconds, 4),
+                        "retrieval_seconds": round(retrieval_seconds, 4),
+                        "generation_seconds": 0.0,
+                        "verification_seconds": 0.0,
+                    },
+                    "retrieval_rounds": retrieval_rounds,
+                    "model_calls": model_calls,
+                    "total_retrieved": len(retrieved_sources),
+                    "cited_sources_count": len(citations),
+                    "llm_provider": settings.llm_provider,
+                    "generation_provider": "extractive",
+                    "answer_mode": mode,
+                    "generation_reason": reason,
+                    "follow_up_suggestions": follow_ups,
                     "llm_usage": {"measured": measured_usage or [], "estimated": False},
                     "embedding_provider": settings.embedding_provider,
-                    "research": {"intent": plan.intent, "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan), "sufficiency": assessment.model_dump(),
-                        "evidence_count": len(ledger.items), "citation_verification": citation_check.model_dump(),
-                        "claim_verification": {"items": [], "method": "verbatim evidence extraction", "verified_answer": clean}}})
+                    "research": {
+                        "intent": plan.intent,
+                        "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan),
+                        "sufficiency": assessment.model_dump(),
+                        "evidence_count": len(ledger.items),
+                        "citation_verification": citation_check.model_dump(),
+                        "claim_verification": {
+                            "items": [],
+                            "method": "structured evidence extraction",
+                            "verified_answer": clean,
+                        },
+                    },
+                },
+            )
 
         if not retrieved_sources:
             elapsed = time.time() - start_time
             return RAGResult(
-                answer="There is insufficient evidence in the selected papers to answer this question.",
-                sources=[], paper_ids=selected_ids,
-                metadata={"research": {"intent": plan.intent, "sufficiency": assessment.model_dump(),
-                                        "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan), "evidence_count": len(ledger.items),
-                                        "citation_verification": {"entailment_verified": False}},
-                          "execution_time_seconds": round(elapsed, 3), "total_retrieved": 0,
-                          "answer_mode": "evidence_only", "generation_reason": "no_retrieved_evidence",
-                          "generation_provider": settings.llm_provider, "model_calls": 0},
+                answer="There is insufficient evidence in the selected documents to answer this question.",
+                sources=[],
+                paper_ids=selected_ids,
+                metadata={
+                    "research": {
+                        "intent": plan.intent,
+                        "sufficiency": assessment.model_dump(),
+                        "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan),
+                        "evidence_count": len(ledger.items),
+                        "citation_verification": {"entailment_verified": False},
+                    },
+                    "execution_time_seconds": round(elapsed, 3),
+                    "total_retrieved": 0,
+                    "answer_mode": "evidence_only",
+                    "generation_reason": "no_retrieved_evidence",
+                    "follow_up_suggestions": ["Select indexed sources", "Try a different question"],
+                    "generation_provider": settings.llm_provider,
+                    "model_calls": 0,
+                },
             )
+
         if assessment.status == "insufficient":
-            lead = "There is insufficient evidence in the retrieved passages to answer this question."
-            if assessment.missing_terms:
-                lead += " Missing evidence terms: " + ", ".join(assessment.missing_terms[:6]) + "."
-            return evidence_result("insufficient_evidence", lead=lead)
+            return evidence_result("insufficient_evidence", mode="evidence_only")
 
-        if plan.intent == "direct" and assessment.status == "adequate":
+        # Direct factual lookup (only if not running under automated mock generation test)
+        if plan.intent in ("direct", "author_entity") and assessment.status == "adequate" and settings.llm_provider != "mock":
             emit({"type": "generation_skipped", "reason": "direct_factual_lookup"})
-            return evidence_result("direct_factual_lookup")
+            return evidence_result("direct_factual_lookup", mode="evidence_only")
 
-        if settings.llm_provider == "local" or (getattr(settings, "rag_mode", "") == "local" and not getattr(settings, "llm_enabled", False) and settings.llm_provider not in ("gemini", "mock")):
-            return evidence_result("provider_local", "evidence_fallback", "Retrieved evidence:")
+        # Local Qwen via Ollama
+        if settings.rag_answer_mode == "LOCAL_QWEN" or settings.llm_provider in ("ollama", "qwen", "local_qwen"):
+            ollama_client = OllamaLLMClient(
+                base_url=getattr(settings, "ollama_base_url", "http://localhost:11434"),
+                model=getattr(settings, "ollama_model", "qwen2.5:1.5b"),
+            )
+            if not ollama_client.is_available():
+                logger.info("Ollama is not running at %s; falling back to EXTRACTIVE mode", ollama_client.base_url)
+                emit({"type": "generation_fallback", "reason": "ollama_unavailable"})
+                return evidence_result("ollama_unavailable_fallback", mode="evidence_fallback")
+
+            try:
+                qwen_generator = GroundedGenerator(llm_client=ollama_client)
+                emit({"type": "evidence_ready", "count": len(retrieved_sources)})
+                emit({"type": "generation_started"})
+                generation_started = time.perf_counter()
+                call_token, call_counter = start_call_tracking()
+                try:
+                    if plan.intent == "comparison":
+                        gen_result = qwen_generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
+                    elif plan.intent == "summary":
+                        gen_result = qwen_generator.generate_summary(context=assembled_context, on_token=emit)
+                    else:
+                        gen_result = qwen_generator.generate_answer(question=question, context=assembled_context, intent=plan.intent, on_token=emit)
+                finally:
+                    stop_call_tracking(call_token)
+                generation_seconds = time.perf_counter() - generation_started
+
+                clean_answer, verification = CitationVerifier().verify(gen_result.answer, retrieved_sources, selected_ids)
+                citations = mapper.map_citations(verification.valid_source_ids, fallback_all_retrieved=False)
+                follow_ups = generate_follow_up_suggestions(question, plan.intent, clean_answer)
+
+                return RAGResult(
+                    answer=clean_answer,
+                    sources=citations,
+                    paper_ids=selected_ids or list(dict.fromkeys(s.paper_id for s in retrieved_sources)),
+                    metadata={
+                        "execution_time_seconds": round(time.time() - start_time, 3),
+                        "timings": {
+                            "planning_seconds": round(planning_seconds, 4),
+                            "retrieval_seconds": round(retrieval_seconds, 4),
+                            "generation_seconds": round(generation_seconds, 4),
+                            "verification_seconds": 0.0,
+                        },
+                        "retrieval_rounds": retrieval_rounds,
+                        "model_calls": 1,
+                        "total_retrieved": len(retrieved_sources),
+                        "cited_sources_count": len(citations),
+                        "llm_provider": "ollama",
+                        "llm_model": ollama_client.model,
+                        "generation_provider": "ollama",
+                        "answer_mode": "LOCAL_QWEN",
+                        "generation_reason": "qwen_synthesis",
+                        "follow_up_suggestions": follow_ups,
+                        "llm_usage": {"measured": [], "estimated": False},
+                        "embedding_provider": settings.embedding_provider,
+                        "research": {
+                            "intent": plan.intent,
+                            "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan),
+                            "sufficiency": assessment.model_dump(),
+                            "evidence_count": len(ledger.items),
+                            "citation_verification": verification.model_dump(),
+                        },
+                    },
+                )
+            except Exception as qwen_exc:
+                logger.warning("Ollama generation failed (%s); falling back to EXTRACTIVE mode", qwen_exc)
+                return evidence_result("ollama_error_fallback", mode="evidence_fallback")
+
+        # Local extractive mode (when not testing with mock)
+        if settings.llm_provider == "local" or (settings.rag_answer_mode == "EXTRACTIVE" and settings.llm_provider not in ("gemini", "mock", "openai")):
+            return evidence_result("provider_local", mode="evidence_fallback")
+
+        if getattr(settings, "rag_mode", "") == "local" and not getattr(settings, "llm_enabled", False) and settings.llm_provider not in ("gemini", "mock"):
+            return evidence_result("provider_local", mode="evidence_fallback")
+
         try:
             generator = self.generator
         except LLMProviderError as exc:

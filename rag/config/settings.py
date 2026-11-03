@@ -43,7 +43,13 @@ class RAGSettings(BaseSettings):
     fastembed_cache_dir: str = ".model_cache"
 
     # LLM Settings
-    llm_provider: Literal["local", "mock", "gemini"] = "gemini"
+    # Answer Generation Mode (EXTRACTIVE or LOCAL_QWEN)
+    rag_answer_mode: Literal["EXTRACTIVE", "LOCAL_QWEN"] = "EXTRACTIVE"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:1.5b"
+
+    # LLM Settings
+    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai"] = "gemini"
     llm_model: str = "gemini-3.8-flash"
     llm_api_key: str = Field(default="", repr=False)
     llm_temperature: float = 0.1

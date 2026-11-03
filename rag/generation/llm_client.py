@@ -288,6 +288,114 @@ class GeminiLLMClient(BaseLLMClient):
             raise classify_provider_error(exc) from exc
 
 
+class OllamaLLMClient(BaseLLMClient):
+    """
+    Local generation provider via Ollama's HTTP API (http://localhost:11434).
+    Uses strict source grounding with zero external network access and zero paid APIs.
+    """
+    supports_streaming = True
+
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ):
+        self.base_url = (base_url or getattr(settings, "ollama_base_url", "http://localhost:11434")).rstrip("/")
+        self.model = model or getattr(settings, "ollama_model", "qwen2.5:1.5b")
+        self.temperature = settings.llm_temperature if temperature is None else temperature
+        self.max_tokens = max_tokens or settings.llm_max_tokens
+        self.timeout = timeout or settings.llm_timeout_seconds
+
+    def is_available(self) -> bool:
+        """Fast non-blocking check whether Ollama is responsive."""
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                res = client.get(f"{self.base_url}/api/tags")
+                return res.status_code == 200
+        except Exception:
+            return False
+
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "options": {
+                "temperature": self.temperature if temperature is None else temperature,
+                "num_predict": max_tokens or self.max_tokens,
+            },
+            "stream": False,
+        }
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(f"{self.base_url}/api/chat", json=payload)
+                if resp.status_code == 404:
+                    raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed. Run 'ollama pull {self.model}'.")
+                resp.raise_for_status()
+                data = resp.json()
+                content = data.get("message", {}).get("content", "")
+                if not content:
+                    raise LLMProviderError("empty_response", "Ollama returned an empty response.")
+                return content
+        except httpx.ConnectError as exc:
+            raise LLMProviderError("provider_unavailable", f"Ollama is not running at {self.base_url}.") from exc
+        except httpx.TimeoutException as exc:
+            raise LLMProviderError("timeout", f"Ollama request timed out after {self.timeout}s.") from exc
+        except Exception as exc:
+            if isinstance(exc, LLMProviderError):
+                raise
+            raise LLMProviderError("transient", f"Ollama error: {exc}") from exc
+
+    def generate_stream(self, system_prompt, user_prompt, temperature=None, max_tokens=None):
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "options": {
+                "temperature": self.temperature if temperature is None else temperature,
+                "num_predict": max_tokens or self.max_tokens,
+            },
+            "stream": True,
+        }
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+                    if response.status_code == 404:
+                        raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed.")
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            chunk = httpx.Response(200, content=line).json()
+                            delta = chunk.get("message", {}).get("content", "")
+                            if delta:
+                                yield delta
+                        except Exception:
+                            continue
+        except httpx.ConnectError as exc:
+            raise LLMProviderError("provider_unavailable", f"Ollama is not running at {self.base_url}.") from exc
+        except httpx.TimeoutException as exc:
+            raise LLMProviderError("timeout", f"Ollama request timed out after {self.timeout}s.") from exc
+        except Exception as exc:
+            if isinstance(exc, LLMProviderError):
+                raise
+            raise LLMProviderError("transient", f"Ollama stream error: {exc}") from exc
+
+
 class LLMClientFactory:
     """
     Factory creating configured LLM client.
@@ -310,10 +418,15 @@ class LLMClientFactory:
             model = model_name or settings.llm_model
             logger.info("Initializing OpenAILLMClient (model: %s)", model)
             return OpenAILLMClient(api_key=key, model=model)
+        elif prov in ("ollama", "qwen", "local_qwen"):
+            base_url = getattr(settings, "ollama_base_url", "http://localhost:11434")
+            model = model_name or getattr(settings, "ollama_model", "qwen2.5:1.5b")
+            logger.info("Initializing OllamaLLMClient (model: %s, url: %s)", model, base_url)
+            return OllamaLLMClient(base_url=base_url, model=model)
         elif prov == "mock":
             if settings.app_env != "testing":
                 raise ValueError("The mock generation provider is only available when APP_ENV=testing.")
             logger.info("Initializing MockGroundedLLMClient")
             return MockGroundedLLMClient()
         else:
-            raise ValueError(f"Unsupported LLM provider '{prov}'. Choose 'gemini' or 'mock'.")
+            raise ValueError(f"Unsupported LLM provider '{prov}'. Choose 'gemini', 'ollama', or 'mock'.")

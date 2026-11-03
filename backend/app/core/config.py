@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     rag_mode: str = "local"
     llm_enabled: bool = False
     retrieval_mode: str = "hybrid"
+    rag_answer_mode: str = "EXTRACTIVE"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:1.5b"
 
     @property
     def cors_origin_list(self) -> list[str]:
