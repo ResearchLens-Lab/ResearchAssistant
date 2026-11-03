@@ -110,7 +110,7 @@ export default function SettingsPage() {
                 variant="workbench"
                 size="sm"
                 disabled={isUpdatingProfile}
-                className="text-xs bg-zinc-900 text-white"
+                className="text-sm"
               >
                 {isUpdatingProfile ? "Saving..." : "Save Changes"}
               </Button>
@@ -174,7 +174,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <span className="text-zinc-500">Upload Size Limit:</span>
               <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                25 MB
+                1 GiB per file · 1 GiB per batch
               </span>
             </div>
           </CardContent>

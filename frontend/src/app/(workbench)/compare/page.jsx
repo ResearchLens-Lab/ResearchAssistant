@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { usePapers } from "@/hooks/usePapers";
 import { useComparison } from "@/hooks/useComparison";
 import { papersService } from "@/services/papers.service";
@@ -13,18 +13,35 @@ import { Input } from "@/components/ui/input";
 import { GitCompare, Sparkles, AlertCircle, RefreshCw, PanelRight } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useCitationStore } from "@/store/citationStore";
 
 export default function ComparePapersPage() {
   const { papers, isLoading: isLoadingPapers } = usePapers(1, 50);
   const { comparePapers, comparisonResult, isComparing, isError, error, reset } = useComparison();
   const searchParams = useSearchParams();
   const [mobilePanel, setMobilePanel] = useState(false);
+  const { isDrawerOpen, closeDrawer, setSources } = useCitationStore();
   const initialIds = searchParams.get("paper_ids")?.split(",").filter(Boolean) || [];
   const [selectedIds, setSelectedIds] = useState(initialIds);
-  const documentQueries = useQueries({ queries: papers.map((paper) => ({ queryKey: ["paperDocuments", paper.id], queryFn: () => papersService.getDocuments(paper.id), staleTime: 10_000 })) });
-  const documentsByPaper = useMemo(() => Object.fromEntries(papers.map((paper, index) => [paper.id, documentQueries[index]?.data || []])), [papers, documentQueries]);
-  const isLoadingDocuments = documentQueries.some((query) => query.isLoading);
+  const selectedPaperIds = useMemo(() => selectedIds.filter((id) => papers.some((paper) => paper.id === id)), [papers, selectedIds]);
+  const selectedPaperIdsKey = useMemo(() => [...selectedPaperIds].sort(), [selectedPaperIds]);
+  const documentsQuery = useQuery({
+    queryKey: ["paperDocumentsByPapers", selectedPaperIdsKey],
+    queryFn: () => papersService.getDocumentsByPapers(selectedPaperIdsKey),
+    enabled: selectedPaperIdsKey.length > 0,
+    staleTime: 10_000,
+  });
+  const documentsByPaper = documentsQuery.data || {};
+  const checkedPaperIds = documentsQuery.isLoading ? [] : selectedPaperIds;
+  const errorPaperIds = documentsQuery.isError ? selectedPaperIds : [];
+  const isLoadingDocuments = documentsQuery.isLoading;
   const canCompare = selectedIds.length >= 2 && selectedIds.every((id) => documentsByPaper[id]?.some((doc) => doc.processing_status === "indexed"));
+  const canInspectEvidence = Boolean(comparisonResult?.sources?.length);
+
+  useEffect(() => {
+    closeDrawer();
+    setSources(comparisonResult?.sources || []);
+  }, [comparisonResult, closeDrawer, setSources]);
 
   const [focusArea, setFocusArea] = useState("");
 
@@ -52,48 +69,51 @@ export default function ComparePapersPage() {
   ];
 
   return (
-    <div className="relative flex h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-[#f8faf9]">
+    <div className="relative flex h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[var(--rl-canvas)]">
       {/* Left & Center Comparison Studio */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 max-w-5xl mx-auto">
+      <div className="flex-1 overflow-y-auto space-y-6 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
         {/* Header */}
         <div className="border-b border-slate-200 pb-4 space-y-1">
-          <div className="flex items-center gap-2">
-            <GitCompare className="h-5 w-5 text-teal-800" />
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Cross-paper research matrix
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><GitCompare className="h-5 w-5" /></span>
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--rl-ink)] sm:text-3xl">
+              Comparison Builder
             </h1>
           </div>
-          <p className="text-xs text-slate-600">
-            Compare the indexed evidence in your selected papers. Dimensions follow your question and the available passages.
+          <p className="text-sm leading-6 text-[var(--rl-muted)]">
+            Compare indexed papers with a question grounded in the passages each source provides. Missing fields stay explicit.
           </p>
-          <button type="button" onClick={() => setMobilePanel(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 xl:hidden"><PanelRight className="h-3.5 w-3.5" />Evidence inspector</button>
+          <button type="button" disabled={!canInspectEvidence} title={!canInspectEvidence ? "Generate a comparison with returned evidence before inspecting citations" : undefined} onClick={() => { setSources(comparisonResult.sources); setMobilePanel(true); }} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--rl-border)] bg-white px-3 text-xs font-medium text-[var(--rl-ink)] hover:bg-[var(--rl-tint)] disabled:cursor-not-allowed disabled:opacity-50"><PanelRight className="h-3.5 w-3.5" />Evidence Trail</button>
         </div>
 
         {/* Paper Selector & Focus Prompt */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {!isLoadingPapers && papers.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center md:col-span-2"><p className="text-sm font-semibold text-slate-900">No papers to compare yet</p><p className="mt-1 text-xs text-slate-600">Upload and index research documents before building a comparison.</p><Button asChild size="sm" className="mt-3 bg-teal-800 text-white hover:bg-teal-900"><Link href="/papers/upload">Add sources</Link></Button></div> : <>
+          {!isLoadingPapers && papers.length === 0 ? <div className="rounded-xl border border-dashed border-[var(--rl-border)] bg-white p-8 text-center md:col-span-2"><p className="text-base font-semibold text-[var(--rl-ink)]">No projects to compare yet</p><p className="mt-1 text-sm text-[var(--rl-muted)]">Add and index research sources before building a comparison.</p><Button asChild size="sm" variant="workbench" className="mt-3"><Link href="/papers/upload">Add sources</Link></Button></div> : <>
           <ComparePaperSelector
             papers={papers}
             documentsByPaper={documentsByPaper}
+            checkedPaperIds={checkedPaperIds}
+            loadingPaperIds={selectedPaperIds.filter((id, index) => documentQueries[index]?.isLoading)}
+            errorPaperIds={errorPaperIds}
             selectedIds={selectedIds}
             onToggle={handleToggle}
             onClear={() => setSelectedIds([])}
           />
 
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3 dark:border-zinc-800 dark:bg-zinc-900 shadow-2xs">
+          <div className="rounded-2xl border border-[var(--rl-border)] bg-white p-4 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-zinc-100 pb-2 dark:border-zinc-800">
-              <Sparkles className="h-4 w-4 text-indigo-600" />
-              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                Focus Dimensions
+              <Sparkles className="h-4 w-4 text-[var(--rl-primary)]" />
+              <span className="text-sm font-semibold text-[var(--rl-ink)]">
+                Comparison question
               </span>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-zinc-600">
-                Comparison Focus Prompt
+              <label className="text-sm font-medium text-[var(--rl-ink)]">
+                What would you like to compare?
               </label>
               <Input
-                placeholder="e.g. Compare loss function and BLEU scores..."
+                placeholder="Compare the reported evaluation methods and their conditions…"
                 value={focusArea}
                 onChange={(e) => setFocusArea(e.target.value)}
                 className="text-xs"
@@ -107,7 +127,7 @@ export default function ComparePapersPage() {
                   <button
                     key={preset}
                     onClick={() => setFocusArea(preset)}
-                    className="w-full text-left rounded-md bg-zinc-50 p-1.5 text-[11px] text-zinc-600 hover:bg-zinc-100 transition-colors truncate block dark:bg-zinc-800 dark:text-zinc-300"
+                    className="w-full rounded-lg bg-[var(--rl-tint)] p-2.5 text-left text-xs leading-5 text-[var(--rl-muted)] hover:bg-[var(--rl-selected)] transition-colors"
                   >
                     &ldquo;{preset}&rdquo;
                   </button>
@@ -118,18 +138,18 @@ export default function ComparePapersPage() {
               variant="workbench"
               onClick={handleRunCompare}
               disabled={!canCompare || isComparing}
-              className="w-full mt-2 h-8 text-xs gap-1.5 bg-zinc-900 text-white"
+              className="w-full mt-2 h-10 gap-1.5 text-sm"
             >
               {isComparing ? (
                 <>
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>Synthesizing cross-paper analysis...</span>
+                  <span>Comparing selected evidence…</span>
                 </>
               ) : (
                 <>
                   <GitCompare className="h-3.5 w-3.5" />
                   <span>
-                    Run Comparative RAG ({selectedIds.length} papers selected)
+                    Generate comparison ({selectedIds.length} selected)
                   </span>
                 </>
               )}
@@ -164,8 +184,7 @@ export default function ComparePapersPage() {
       </div>
 
       {/* Right Source Inspector */}
-      <SourceInspectorRail className="hidden xl:flex" />
-      {mobilePanel && <div className="absolute inset-0 z-40 flex justify-end bg-slate-950/35 xl:hidden" onClick={() => setMobilePanel(false)}><div className="h-full max-w-[90vw] shadow-xl" onClick={(event) => event.stopPropagation()}><SourceInspectorRail onClose={() => setMobilePanel(false)} /></div></div>}
+      {(mobilePanel || isDrawerOpen) && <div role="dialog" aria-modal="true" aria-label="Evidence Trail" className="fixed inset-x-0 bottom-0 top-16 z-40 flex justify-end bg-slate-950/35" onClick={() => { setMobilePanel(false); closeDrawer(); }} onKeyDown={(event) => { if (event.key === "Escape") { setMobilePanel(false); closeDrawer(); } }}><div className="h-full w-[min(26rem,94vw)] shadow-xl" onClick={(event) => event.stopPropagation()}><SourceInspectorRail onClose={() => { setMobilePanel(false); closeDrawer(); }} /></div></div>}
     </div>
   );
 }

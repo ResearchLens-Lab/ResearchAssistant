@@ -74,7 +74,7 @@ export default function SearchDiscoveryPage() {
             type="submit"
             variant="workbench"
             disabled={isFetching}
-            className="h-9 px-4 text-xs gap-1.5 bg-zinc-900 text-white shrink-0"
+            className="h-10 px-4 text-sm gap-1.5 shrink-0"
           >
             {isFetching ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />

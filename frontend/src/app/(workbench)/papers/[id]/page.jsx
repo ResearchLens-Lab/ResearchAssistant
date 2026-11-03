@@ -11,6 +11,7 @@ import { SourceInspectorRail } from "@/components/citations/SourceInspectorRail"
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { hasIndexedSources } from "@/lib/researchWorkspace.mjs";
 
 export default function PaperDetailsPage() {
   const params = useParams();
@@ -24,21 +25,22 @@ export default function PaperDetailsPage() {
     error,
     documents,
     isLoadingDocuments,
+    isDocumentsError,
+    documentsError,
+    refetchDocuments,
     summarize,
     summaryData,
     isSummarizing,
     summaryError,
-    uploadDocument,
-    isUploadingDocument,
   } = usePaperDetails(paperId);
 
-  const { setSources } = useCitationStore();
+  const { setSources, openDrawer, isDrawerOpen, closeDrawer } = useCitationStore();
+  const evidenceAvailable = hasIndexedSources(documents);
+  const currentSummary = summaryData?.paper_id === paperId ? summaryData : null;
 
   useEffect(() => {
-    if (summaryData?.sources) {
-      setSources(summaryData.sources);
-    }
-  }, [summaryData, setSources]);
+    setSources(currentSummary?.sources || []);
+  }, [currentSummary, setSources]);
 
   if (isLoading) {
     return (
@@ -66,9 +68,9 @@ export default function PaperDetailsPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-white dark:bg-zinc-950">
+    <div className="relative flex h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[var(--rl-canvas)]">
       {/* Left / Center Reading Room Canvas */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 max-w-4xl mx-auto">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs gap-1">
             <Link href="/papers">
@@ -78,28 +80,40 @@ export default function PaperDetailsPage() {
           </Button>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button variant="workbench" size="sm" disabled={!evidenceAvailable || isLoadingDocuments || isDocumentsError} title={isDocumentsError ? "Retry loading project sources" : !evidenceAvailable ? "Add and index a source before asking a grounded question" : undefined} onClick={() => router.push(`/chat?paper_id=${paperId}`)}>Ask in Research Desk</Button>
+          <Button variant="soft" size="sm" asChild><Link href={`/papers/upload?paper_id=${paperId}`}>Add sources</Link></Button>
+          <Button variant="outline" size="sm" disabled={!evidenceAvailable || isLoadingDocuments || isDocumentsError} title={isDocumentsError ? "Project source status could not be loaded" : !evidenceAvailable ? "Add and index a source to inspect evidence" : undefined} onClick={() => { setSources(currentSummary?.sources || []); openDrawer(); }}>View Evidence Trail</Button>
+          {!evidenceAvailable && !isLoadingDocuments && !isDocumentsError && <span className="self-center text-xs text-slate-500">Add and index a source to inspect evidence</span>}
+          {isDocumentsError && <span role="alert" className="self-center text-xs text-rose-700">Could not load source status. Retry below.</span>}
+        </div>
+
         {/* Paper Header Metadata */}
         <PaperMetadataHeader paper={paper} />
 
         {/* RAG Grounded Summary */}
         <GroundedSummaryCard
-          summary={summaryData}
+          summary={currentSummary}
           isLoading={isSummarizing}
           onGenerate={summarize}
           error={summaryError}
+          hasIndexedSources={evidenceAvailable}
+          isCheckingSources={isLoadingDocuments}
+          isSourceError={isDocumentsError}
         />
 
         {/* Document Attachments */}
         <DocumentAttachmentsList
           documents={documents}
           isLoading={isLoadingDocuments}
-          onUpload={uploadDocument}
-          isUploading={isUploadingDocument}
+          isError={isDocumentsError}
+          error={documentsError}
+          onRetry={refetchDocuments}
         />
       </div>
 
       {/* Right Evidence Inspector */}
-      <SourceInspectorRail />
+      {isDrawerOpen && <div role="dialog" aria-modal="true" aria-label="Evidence Trail" className="fixed inset-x-0 bottom-0 top-16 z-40 flex justify-end bg-slate-950/35" onClick={closeDrawer} onKeyDown={(event) => { if (event.key === "Escape") closeDrawer(); }}><div className="h-full w-[min(26rem,94vw)] shadow-xl" onClick={(event) => event.stopPropagation()}><SourceInspectorRail onClose={closeDrawer} /></div></div>}
     </div>
   );
 }

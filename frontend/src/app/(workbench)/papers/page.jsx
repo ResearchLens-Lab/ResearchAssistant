@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePapers } from "@/hooks/usePapers";
+import { papersService } from "@/services/papers.service";
 import { PaperGrid } from "@/components/papers/PaperGrid";
 import { PaperTableView } from "@/components/papers/PaperTableView";
 import { CreatePaperModal } from "@/components/papers/CreatePaperModal";
@@ -32,11 +34,40 @@ export default function PaperLibraryPage() {
     papers,
     pagination,
     isLoading,
+    isError,
+    error,
     createPaper,
     isCreating,
     deletePaper,
     isDeleting,
   } = usePapers(page, 18);
+  const paperIds = useMemo(() => papers.map((paper) => paper.id), [papers]);
+  const documentsQuery = useQuery({
+    queryKey: ["paperDocumentsByPapers", paperIds],
+    queryFn: () => papersService.getDocumentsByPapers(paperIds),
+    enabled: paperIds.length > 0,
+    staleTime: 10_000,
+    refetchInterval: (query) => {
+      const groups = Object.values(query.state.data || {});
+      return groups.some((documents) => documents.some((document) =>
+        document.processing_status === "processing" || document.processing_status === "uploaded"
+      )) ? 3000 : false;
+    },
+  });
+  const sourceCounts = useMemo(() => {
+    if (documentsQuery.data) return Object.fromEntries(paperIds.map((id) => {
+      const documents = documentsQuery.data[id] || [];
+      return [id, {
+        total: documents.length,
+        indexed: documents.filter((document) => document.processing_status === "indexed").length,
+        processing: documents.filter((document) => document.processing_status === "processing" || document.processing_status === "uploaded").length,
+        failed: documents.filter((document) => document.processing_status === "failed").length,
+        documents,
+      }];
+    }));
+    if (documentsQuery.isError) return Object.fromEntries(paperIds.map((id) => [id, -1]));
+    return {};
+  }, [documentsQuery.data, documentsQuery.isError, paperIds]);
 
   const filteredPapers = papers.filter((p) => {
     if (!searchFilter.trim()) return true;
@@ -56,54 +87,52 @@ export default function PaperLibraryPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="page-shell space-y-6">
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/80 pb-5 dark:border-zinc-800">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Paper Library
+              Research Library
             </h1>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {pagination.total} papers
-            </Badge>
+            {isLoading ? <Badge variant="secondary" className="font-mono text-xs">Loading projects</Badge> : !isError && <Badge variant="secondary" className="font-mono text-xs">{pagination.total} {pagination.total === 1 ? "project" : "projects"}</Badge>}
           </div>
           <p className="text-xs text-zinc-500 font-mono">
-            Browse, manage, and inspect all ingested academic publications.
+            Organize research sources into projects, then open a project to inspect evidence or continue your research.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
+          {!isLoading && <Button
             variant="outline"
             size="sm"
             onClick={() => setIsCreateOpen(true)}
             className="h-8 gap-1.5 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>Add Metadata</span>
-          </Button>
+            <span>Create project</span>
+          </Button>}
 
-          <Button
+          {!isLoading && pagination.total > 0 && <Button
             variant="workbench"
             size="sm"
             asChild
-            className="h-8 gap-1.5 text-xs bg-zinc-900 text-white"
+            className="h-9 gap-1.5 text-sm"
           >
             <Link href="/papers/upload">
               <UploadCloud className="h-3.5 w-3.5" />
-              <span>Ingest PDF</span>
+              <span>Add sources</span>
             </Link>
-          </Button>
+          </Button>}
         </div>
       </div>
 
       {/* Filter & View Switcher Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+      {(!isLoading && pagination.total > 0) && <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
           <Input
-            placeholder="Filter library by title or author..."
+            placeholder="Filter this page by title or author…"
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
             className="pl-8 h-8 text-xs bg-white dark:bg-zinc-900"
@@ -116,7 +145,7 @@ export default function PaperLibraryPage() {
               onClick={() => setViewMode("grid")}
               className={`p-1.5 rounded-md transition-colors ${
                 viewMode === "grid"
-                  ? "bg-zinc-900 text-white shadow-2xs dark:bg-zinc-100 dark:text-zinc-900"
+                  ? "bg-[var(--rl-primary)] text-white shadow-sm"
                   : "text-zinc-500 hover:text-zinc-900"
               }`}
               title="Grid view"
@@ -127,7 +156,7 @@ export default function PaperLibraryPage() {
               onClick={() => setViewMode("table")}
               className={`p-1.5 rounded-md transition-colors ${
                 viewMode === "table"
-                  ? "bg-zinc-900 text-white shadow-2xs dark:bg-zinc-100 dark:text-zinc-900"
+                  ? "bg-[var(--rl-primary)] text-white shadow-sm"
                   : "text-zinc-500 hover:text-zinc-900"
               }`}
               title="Table view"
@@ -136,35 +165,35 @@ export default function PaperLibraryPage() {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Paper List Content */}
-      {filteredPapers.length === 0 && !isLoading ? (
+      {isError ? <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">{error?.message || "Research projects could not be loaded. Please try again."}</div> : isLoading ? <PaperGrid papers={[]} isLoading /> : filteredPapers.length === 0 && !isLoading ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900 space-y-3">
           <BookOpen className="mx-auto h-8 w-8 text-zinc-300 stroke-[1.5]" />
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-              No research papers found
+              {pagination.total === 0 ? "Start with a Research Project" : "No projects match this filter"}
             </h3>
-            <p className="text-xs text-zinc-400">
-              {searchFilter
-                ? "No papers match your filter term."
-                : "Upload PDF documents to index academic sections and start querying."}
-            </p>
+            {pagination.total > 0 && <p className="text-xs text-zinc-400">No projects on this page match your filter.</p>}
           </div>
-          <Button variant="workbench" size="sm" asChild className="mt-2">
-            <Link href="/papers/upload">Upload Paper PDF</Link>
-          </Button>
+          {pagination.total === 0 ? <>
+            <p className="mx-auto max-w-lg text-sm text-zinc-500">Create a Research Project to organize your sources, ask questions, and inspect supporting evidence.</p>
+            <Button variant="workbench" size="sm" onClick={() => setIsCreateOpen(true)} className="mt-1"><Plus className="mr-1.5 h-3.5 w-3.5" />Create project</Button>
+            <ol className="mx-auto grid max-w-2xl gap-3 border-t border-zinc-100 pt-4 text-left sm:grid-cols-3">{["Create a Research Project", "Add supported documents and wait for indexing", "Ask a question and inspect its evidence"].map((step, index) => <li key={step} className="flex gap-2 text-xs text-zinc-500"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-50 font-semibold text-sky-700">{index + 1}</span><span>{step}</span></li>)}</ol>
+          </> : <p className="text-xs text-zinc-500">No projects on this page match your filter.</p>}
         </div>
       ) : viewMode === "grid" ? (
         <PaperGrid
           papers={filteredPapers}
           isLoading={isLoading}
+          sourceCounts={sourceCounts}
           onDelete={(id) => setPaperToDelete(id)}
         />
       ) : (
         <PaperTableView
           papers={filteredPapers}
+          sourceCounts={sourceCounts}
           onDelete={(id) => setPaperToDelete(id)}
         />
       )}
