@@ -73,6 +73,8 @@ class ChatService:
         # A RAG failure raises before the commit below, so the failed request
         # persists nothing and the client receives a structured 503.
         rag_kwargs = {"question": payload.question, "paper_ids": paper_ids}
+        if "user_id" in inspect.signature(self.rag.ask_question).parameters:
+            rag_kwargs["user_id"] = str(user.id)
         if conversation_context and "conversation_context" in inspect.signature(self.rag.ask_question).parameters:
             rag_kwargs["conversation_context"] = conversation_context
         if progress_callback and "progress_callback" in inspect.signature(self.rag.ask_question).parameters:
@@ -89,7 +91,13 @@ class ChatService:
             content=answer,
             sources=sources,
             meta={"paper_ids": result.get("paper_ids", paper_ids),
-                  "research": result.get("metadata", {}).get("research", {})},
+                  "research": result.get("metadata", {}).get("research", {}),
+                  "answer_mode": result.get("metadata", {}).get("answer_mode", "unknown"),
+                  "generation_reason": result.get("metadata", {}).get("generation_reason"),
+                  "generation_provider": result.get("metadata", {}).get("generation_provider"),
+                  "cache_hit": result.get("metadata", {}).get("cache_hit", False),
+                  "model_calls": result.get("metadata", {}).get("model_calls", 0),
+                  "llm_usage": result.get("metadata", {}).get("llm_usage", {"measured": [], "estimated": False})},
         )
         assistant_message.created_at = user_message.created_at + timedelta(microseconds=1)
         conversation.updated_at = utcnow()
@@ -109,7 +117,7 @@ class ChatService:
         queue: asyncio.Queue = asyncio.Queue()
         request_id = str(uuid.uuid4())
         allowed_events = {"retrieval_started", "sources_found", "additional_retrieval", "evidence_ready",
-                          "generation_started", "verification_started", "verification_completed", "planning_completed", "token"}
+                          "generation_skipped", "generation_started", "verification_started", "verification_completed", "planning_completed", "token"}
         cancelled = asyncio.Event()
 
         def event(event_type: str, data: dict[str, Any] | None = None):

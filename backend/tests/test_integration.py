@@ -6,7 +6,7 @@ from .conftest import VALID_PDF
 
 async def test_full_flow(client, rag_gateway):
     # Register + login
-    creds = {"email": "flow@example.com", "password": "flowpassword123"}
+    creds = {"email": "flow@example.com", "username": "flow_researcher", "password": "FlowPassword123!"}
     resp = await client.post("/api/v1/auth/register", json=creds)
     assert resp.status_code == 201
     resp = await client.post("/api/v1/auth/login", json=creds)

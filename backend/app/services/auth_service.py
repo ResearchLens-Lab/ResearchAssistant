@@ -1,12 +1,13 @@
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.config import get_settings
 from backend.app.core.exceptions import (
     EmailAlreadyRegisteredError,
-    ForbiddenError,
+    UsernameAlreadyTakenError,
     UnauthorizedError,
 )
 from backend.app.core.security import (
@@ -20,7 +21,8 @@ from backend.app.core.security import (
 from backend.app.models.user import User
 from backend.app.repositories.refresh_token_repository import RefreshTokenRepository
 from backend.app.repositories.user_repository import UserRepository
-from backend.app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from backend.app.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, TokenResponse
+from backend.app.schemas.user import UserResponse
 
 logger = logging.getLogger("backend.auth")
 
@@ -41,25 +43,37 @@ class AuthService:
         email = payload.email.lower()
         if await self.users.get_by_email(email):
             raise EmailAlreadyRegisteredError()
-        user = await self.users.create(
-            email=email,
-            hashed_password=hash_password(payload.password),
-            full_name=payload.full_name,
-        )
-        await self.db.commit()
+        if await self.users.get_by_username(payload.username):
+            raise UsernameAlreadyTakenError()
+        try:
+            user = await self.users.create(
+                email=email,
+                username=payload.username,
+                hashed_password=hash_password(payload.password),
+                full_name=payload.full_name,
+            )
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            # Database constraints remain authoritative under concurrent registrations.
+            if await self.users.get_by_username(payload.username):
+                raise UsernameAlreadyTakenError() from exc
+            if await self.users.get_by_email(email):
+                raise EmailAlreadyRegisteredError() from exc
+            raise
         logger.info("user registered user_id=%s", user.id)
         return user
 
-    async def login(self, payload: LoginRequest) -> TokenResponse:
-        user = await self.users.get_by_email(payload.email.lower())
+    async def login(self, payload: LoginRequest) -> LoginResponse:
+        user = await self.users.get_by_identifier(payload.identifier)
         if not user or not verify_password(payload.password, user.hashed_password):
-            raise UnauthorizedError("Invalid email or password.")
+            raise UnauthorizedError("The username or password is incorrect.")
         if not user.is_active:
-            raise ForbiddenError("User account is inactive.")
+            raise UnauthorizedError("The username or password is incorrect.")
         tokens = await self._issue_tokens(user.id)
         await self.db.commit()
         logger.info("user authenticated user_id=%s", user.id)
-        return tokens
+        return LoginResponse(**tokens.model_dump(), user=UserResponse.model_validate(user))
 
     async def refresh(self, refresh_token: str) -> TokenResponse:
         payload = decode_token(refresh_token, expected_type=REFRESH_TOKEN_TYPE)

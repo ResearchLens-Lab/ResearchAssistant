@@ -26,7 +26,21 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/researchassistant
       JWT_SECRET_KEY: local-dev-only-change-me-0123456789abcdef
       CORS_ORIGINS: http://localhost:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-64}
+      EMBEDDING_CACHE_PATH: ${EMBEDDING_CACHE_PATH:-}
+      FASTEMBED_CACHE_DIR: /srv/.model_cache
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.8-flash}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      LLM_DAILY_CALL_BUDGET: ${LLM_DAILY_CALL_BUDGET:-25}
+      RAG_INGEST_TIMEOUT_SECONDS: ${RAG_INGEST_TIMEOUT_SECONDS:-600}
       UPLOAD_DIR: /srv/storage/uploads
+      MAX_UPLOAD_SIZE_MB: 100
+      MAX_UPLOAD_BATCH_SIZE_MB: 500
     ports:
       - "8000:8000"
     depends_on:
@@ -35,6 +49,7 @@ services:
     volumes:
       - upload_data:/srv/storage/uploads
       - chroma_data:/srv/.chroma
+      - model_data:/srv/.model_cache
     command: >
       sh -c "alembic -c backend/alembic.ini upgrade head &&
              uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
@@ -43,3 +58,4 @@ volumes:
   postgres_data:
   upload_data:
   chroma_data:
+  model_data:

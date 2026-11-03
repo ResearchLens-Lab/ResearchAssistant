@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements-rag.txt -r requirements-backend.t
 
 COPY rag ./rag
 COPY backend ./backend
+COPY scripts ./scripts
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

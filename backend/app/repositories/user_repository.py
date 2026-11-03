@@ -17,10 +17,22 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
+    async def get_by_username(self, username: str) -> Optional[User]:
+        result = await self.db.execute(select(User).where(User.username == username))
+        return result.scalar_one_or_none()
+
+    async def get_by_identifier(self, identifier: str) -> Optional[User]:
+        # Keep email login for existing accounts while making username the primary path.
+        normalized = identifier.strip().lower()
+        result = await self.db.execute(
+            select(User).where((User.username == normalized) | (User.email == normalized))
+        )
+        return result.scalar_one_or_none()
+
     async def create(
-        self, *, email: str, hashed_password: str, full_name: Optional[str]
+        self, *, email: str, username: str, hashed_password: str, full_name: Optional[str]
     ) -> User:
-        user = User(email=email, hashed_password=hashed_password, full_name=full_name)
+        user = User(email=email, username=username, hashed_password=hashed_password, full_name=full_name)
         self.db.add(user)
         await self.db.flush()
         return user

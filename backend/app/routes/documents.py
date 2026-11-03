@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, Form, UploadFile, status
 from fastapi.responses import FileResponse
 
 from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
-from backend.app.schemas.document import DocumentResponse
+from backend.app.schemas.document import DocumentResponse, PaperDocumentsRequest
 from backend.app.services.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -14,9 +14,9 @@ router = APIRouter(prefix="/documents", tags=["documents"])
     "/upload",
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Upload a research-paper PDF and index it via the RAG boundary",
+    summary="Upload a supported source document and index it via the RAG boundary",
     description=(
-        "Accepts multipart/form-data with a `file` (PDF) and the `paper_id` it "
+        "Accepts multipart/form-data with a `file` and the `paper_id` it "
         "belongs to. The document record tracks processing status: "
         "uploaded → processing → indexed/failed."
     ),
@@ -25,13 +25,13 @@ async def upload_document(
     current_user: CurrentUser,
     db: DBSession,
     rag: RAGGatewayDep,
-    file: UploadFile = File(..., description="Research paper PDF"),
+    file: UploadFile = File(..., description="Supported research source document, up to 100 MB"),
     paper_id: str = Form(..., description="Paper this document belongs to"),
 ):
     return await DocumentService(db, rag).upload(current_user, paper_id, file)
 
 
-@router.post("/upload/batch", status_code=status.HTTP_201_CREATED, summary="Upload multiple documents or a ZIP archive into one paper")
+@router.post("/upload/batch", status_code=status.HTTP_201_CREATED, summary="Upload multiple supported documents or ZIP archives into one project (500 MB total batch limit)")
 async def upload_documents_batch(
     current_user: CurrentUser,
     db: DBSession,
@@ -42,6 +42,15 @@ async def upload_documents_batch(
     return await DocumentService(db, rag).upload_batch(current_user, paper_id, files)
 
 
+@router.post("/by-papers", response_model=dict[str, list[DocumentResponse]], summary="List documents for multiple owned projects")
+async def list_documents_by_papers(
+    payload: PaperDocumentsRequest,
+    current_user: CurrentUser,
+    db: DBSession,
+):
+    return await DocumentService(db).list_for_papers(current_user, payload.paper_ids)
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
@@ -49,6 +58,16 @@ async def upload_documents_batch(
 )
 async def get_document(document_id: str, current_user: CurrentUser, db: DBSession):
     return await DocumentService(db).get_owned(current_user, document_id)
+
+
+@router.post("/{document_id}/cancel", response_model=DocumentResponse, summary="Cancel an active document ingestion")
+async def cancel_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
+    return await DocumentService(db, rag).cancel(current_user, document_id)
+
+
+@router.post("/{document_id}/retry", response_model=DocumentResponse, summary="Retry a failed source using its stored original file")
+async def retry_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
+    return await DocumentService(db, rag).retry(current_user, document_id)
 
 
 @router.get("/{document_id}/file", summary="Download an owned source document")

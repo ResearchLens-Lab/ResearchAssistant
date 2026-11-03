@@ -110,6 +110,23 @@ async def test_delete_paper(client, auth_headers, rag_gateway):
     assert ("delete_paper", paper["id"]) in rag_gateway.calls
 
 
+async def test_delete_paper_does_not_remove_database_or_original_when_index_cleanup_fails(client, auth_headers, rag_gateway):
+    from .test_documents import upload
+    paper = await create_paper(client, auth_headers)
+    uploaded = await upload(client, auth_headers, paper["id"], filename="keep-on-cleanup-error.pdf")
+    document_id = uploaded.json()["id"]
+    from backend.app.core.config import get_settings
+    stored_path = get_settings().upload_path / f"{document_id}.pdf"
+    assert stored_path.is_file()
+
+    rag_gateway.mode = "unavailable"
+    deleted = await client.delete(f"/api/v1/papers/{paper['id']}", headers=auth_headers)
+    assert deleted.status_code == 503
+    assert stored_path.is_file()
+    still_owned = await client.get(f"/api/v1/papers/{paper['id']}", headers=auth_headers)
+    assert still_owned.status_code == 200
+
+
 async def test_summary_endpoint(client, auth_headers):
     paper = await create_paper(client, auth_headers)
     resp = await client.post(

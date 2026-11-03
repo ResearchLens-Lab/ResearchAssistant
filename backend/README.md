@@ -77,7 +77,10 @@ Never commit `.env` or real secrets. Key variables:
 | `ACCESS_TOKEN_EXPIRE_MINUTES` / `REFRESH_TOKEN_EXPIRE_DAYS` | 30 / 7 | Token lifetimes |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated frontend origins |
 | `RAG_TIMEOUT_SECONDS` | 60 | Timeout for RAG boundary calls |
-| `UPLOAD_DIR` / `MAX_UPLOAD_SIZE_MB` | `./storage/uploads` / 25 | PDF storage |
+| `UPLOAD_DIR` / `MAX_UPLOAD_SIZE_MB` | `./storage/uploads` / 100 | Staged source storage and per-file limit in MiB |
+| `MAX_UPLOAD_BATCH_SIZE_MB` / `MAX_UPLOAD_BATCH_FILES` | 500 / 100 | Combined multipart batch limit and file count |
+| `MAX_ZIP_ENTRIES` / `MAX_ZIP_ENTRY_SIZE_MB` | 100 / 100 | Archive entry count and per-entry expanded-size limits |
+| `MAX_ZIP_EXPANDED_SIZE_MB` / `MAX_ZIP_COMPRESSION_RATIO` | 100 / 200 | Total expanded archive size and maximum compression ratio |
 
 ## Database setup & migrations
 
@@ -136,7 +139,9 @@ integration flow.
 | `/papers/{paper_id}/summary` | POST | Grounded summary via RAG |
 | `/papers/compare` | POST | Multi-paper comparison via RAG |
 | `/papers/{paper_id}/documents` | GET | Documents for a paper |
-| `/documents/upload` | POST | multipart PDF upload → RAG indexing |
+| `/documents/upload` | POST | One supported source upload to RAG indexing |
+| `/documents/upload/batch` | POST | Multiple files or ZIP upload to RAG indexing |
+| `/documents/by-papers` | POST | Owned-project document statuses in one response |
 | `/documents/{document_id}` | GET | Metadata + processing status |
 | `/chat` | POST | Grounded Q&A with source persistence |
 | `/conversations…` | POST/GET/DELETE | Conversation history |
@@ -176,6 +181,12 @@ Codes include `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `PAPER_NOT_FOUND`,
 response carries an `X-Request-ID` header that also appears in the logs.
 
 ## File upload behavior
+
+- The batch endpoint accepts up to 100 files with a combined size of 500 MiB;
+  each file (including a ZIP archive) is limited to 100 MiB. Upload bytes are
+  staged to disk in bounded chunks. ZIP entries remain capped at 100 files,
+  100 MiB per entry and 100 MiB expanded total, with a 200:1 compression-ratio
+  limit and path/type checks.
 
 - `POST /api/v1/documents/upload` accepts `multipart/form-data`
   (`file` = PDF, `paper_id` = owning paper).

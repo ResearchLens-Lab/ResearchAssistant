@@ -40,3 +40,13 @@ class DocumentRepository:
             .order_by(Document.created_at.desc())
         )
         return list(rows.scalars().all())
+
+    async def list_by_papers(self, paper_ids: list[str]) -> list[Document]:
+        if not paper_ids:
+            return []
+        rows = await self.db.execute(
+            select(Document)
+            .where(Document.paper_id.in_(paper_ids))
+            .order_by(Document.created_at.desc())
+        )
+        return list(rows.scalars().all())
