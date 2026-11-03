@@ -542,9 +542,9 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             </div>
           ) : messages.length === 0 && !sendError ? (
             /* Welcome / New Research Workspace Hero */
-            <div className="min-h-full flex flex-col justify-center py-6 px-4 sm:px-6 pb-12 text-center text-slate-500 space-y-4 max-w-xl mx-auto">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--rl-selected)] text-[var(--rl-primary)] shadow-2xs">
-                <Sparkles className="h-7 w-7 text-[var(--rl-primary)]" />
+            <div className="min-h-full flex flex-col justify-center items-center py-6 px-4 sm:px-6 pb-36 text-center text-slate-500 space-y-4 max-w-xl mx-auto">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 shadow-2xs mx-auto">
+                <Sparkles className="h-6 w-6 text-sky-600" />
               </div>
 
               <div className="space-y-1.5">
@@ -638,7 +638,12 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
               {messages.map((msg) =>
                 msg.pending ? (
                   <div key={msg.id}>
-                    {msg.content ? <MessageItem message={msg} /> : null}
+                    {msg.content ? (
+                      <MessageItem
+                        message={msg}
+                        onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
+                      />
+                    ) : null}
                     <div className="flex items-center gap-3 px-4 pb-3 bg-zinc-50/50">
                       <Sparkles className="h-4 w-4 animate-spin text-[var(--rl-primary)]" />
                       <p className="text-xs text-zinc-600">
@@ -647,7 +652,11 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                     </div>
                   </div>
                 ) : (
-                  <MessageItem key={msg.id} message={msg} />
+                  <MessageItem
+                    key={msg.id}
+                    message={msg}
+                    onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
+                  />
                 )
               )}
 

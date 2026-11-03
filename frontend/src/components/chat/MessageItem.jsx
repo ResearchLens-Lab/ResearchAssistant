@@ -19,7 +19,7 @@ const GroundedAnswer = dynamic(
   }
 );
 
-export function MessageItem({ message }) {
+export function MessageItem({ message, onFollowUp }) {
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
 
@@ -67,14 +67,31 @@ export function MessageItem({ message }) {
             )}
             {isAssistant && (message.meta?.answer_mode || message.metadata?.answer_mode) && (() => {
               const mode = message.meta?.answer_mode || message.metadata?.answer_mode;
+              const provider = message.meta?.generation_provider || message.metadata?.generation_provider || message.meta?.llm_provider || message.metadata?.llm_provider;
               const reason = message.meta?.generation_reason || message.metadata?.generation_reason;
-              const label = mode === "generated" ? "Gemini synthesis"
-                : mode === "evidence_fallback" ? "Evidence only · synthesis unavailable"
-                  : reason === "direct_factual_lookup" ? "Evidence only · direct lookup"
-                    : reason === "insufficient_evidence" ? "Evidence only · insufficient support"
-                  : mode === "mock" ? "Test response" : "Evidence only";
-              return <Badge variant="outline" title={reason ? `Reason: ${reason.replaceAll("_", " ")}` : undefined}
-                className="text-[9px] px-1.5 py-0">{label}</Badge>;
+              let label = "Extractive Mode";
+              let badgeVariant = "outline";
+              if (mode === "LOCAL_QWEN" || provider === "ollama") {
+                label = "Local Qwen (qwen2.5:1.5b)";
+                badgeVariant = "secondary";
+              } else if (mode === "generated" || provider === "gemini") {
+                label = "Gemini synthesis";
+              } else if (mode === "EXTRACTIVE" || mode === "evidence_only") {
+                label = "Extractive Mode";
+              } else if (mode === "evidence_fallback") {
+                label = "Extractive Fallback";
+              } else if (mode === "mock") {
+                label = "Test Response";
+              }
+              return (
+                <Badge
+                  variant={badgeVariant}
+                  title={reason ? `Reason: ${reason.replaceAll("_", " ")}` : undefined}
+                  className="text-[9px] px-1.5 py-0 font-medium"
+                >
+                  {label}
+                </Badge>
+              );
             })()}
           </div>
 
@@ -97,7 +114,26 @@ export function MessageItem({ message }) {
 
         {/* Body */}
         {isAssistant ? (
-          <GroundedAnswer content={message.content} sources={message.sources} />
+          <div>
+            <GroundedAnswer content={message.content} sources={message.sources} />
+            {/* Interactive Contextual Follow-Up Chips */}
+            {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions)?.length > 0 && (
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-medium mr-0.5">Explore further:</span>
+                {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions).map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onFollowUp && onFollowUp(chip)}
+                    className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50/80 px-2.5 py-0.5 text-[11px] font-medium text-sky-800 hover:bg-sky-100 hover:border-sky-300 transition-colors shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <span>{chip}</span>
+                    <span className="text-sky-500 font-bold text-xs">&rarr;</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <p className="text-xs text-zinc-800 leading-relaxed dark:text-zinc-200 whitespace-pre-wrap">
             {message.content}
