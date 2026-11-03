@@ -52,4 +52,11 @@ export const papersService = {
       method: "GET",
     });
   },
+
+  async getDocumentsByPapers(paperIds) {
+    return apiClient("/documents/by-papers", {
+      method: "POST",
+      body: JSON.stringify({ paper_ids: paperIds }),
+    });
+  },
 };

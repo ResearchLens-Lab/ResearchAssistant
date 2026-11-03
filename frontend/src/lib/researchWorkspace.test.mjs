@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyChatStreamEvent, batchIngestStatus, buildResearchBrief, documentType, indexedPaperIds, parseComparisonMarkdown, summarizeClaimChecks, togglePaperSelection, validateUploadFiles } from "./researchWorkspace.mjs";
+import { applyChatStreamEvent, batchIngestStatus, buildProjectCreatePayload, buildResearchBrief, documentType, formatUploadSize, hasIndexedSources, indexedPaperIds, isRetryableIngestionError, mergeUploadFiles, parseComparisonMarkdown, projectHref, summarizeClaimChecks, togglePaperSelection, validateUploadFiles } from "./researchWorkspace.mjs";
 
 test("comparison parser preserves generated citations and synthesis", () => {
   const parsed = parseComparisonMarkdown("| Paper | Finding |\n|---|---|\n| A | 12% [S1] |\n\nDifferent settings explain the values.");
@@ -33,16 +33,46 @@ test("document type is derived from the actual filename", () => {
   assert.equal(documentType("methods.csv"), "CSV");
 });
 
-test("multiple file upload accepts supported files and ZIP but rejects invalid batches", () => {
+test("creating a project sends only its trimmed title and uses the returned id for its route", () => {
+  assert.deepEqual(buildProjectCreatePayload("  Algorithms  "), { title: "Algorithms" });
+  assert.equal(projectHref("project id"), "/papers/project%20id");
+});
+
+test("indexed source availability ignores uploaded, processing and failed files", () => {
+  assert.equal(hasIndexedSources([{ processing_status: "uploaded" }, { processing_status: "processing" }, { processing_status: "failed" }]), false);
+  assert.equal(hasIndexedSources([{ processing_status: "indexed" }]), true);
+});
+
+test("upload validation allows files up to 100 MB and rejects unsupported or oversized files", () => {
   assert.equal(validateUploadFiles([{ name: "paper.pdf", size: 10 }, { name: "appendix.zip", size: 20 }]), null);
   assert.match(validateUploadFiles([{ name: "notes.exe", size: 10 }]), /Supported formats/);
-  assert.match(validateUploadFiles([{ name: "paper.pdf", size: 26 * 1024 * 1024 }]), /25 MB/);
+  assert.match(validateUploadFiles([{ name: "empty.txt", size: 0 }]), /Empty files/);
+  assert.equal(validateUploadFiles([{ name: "paper.pdf", size: 100 * 1024 * 1024 }], 100 * 1024 * 1024), null);
+  assert.match(validateUploadFiles([{ name: "paper.pdf", size: 101 * 1024 * 1024 }], 100 * 1024 * 1024), /100 MB/);
+  assert.match(validateUploadFiles([{ name: "paper.pdf", size: 400 * 1024 * 1024 }, { name: "notes.txt", size: 101 * 1024 * 1024 }], 100 * 1024 * 1024), /100 MB/);
+  assert.equal(validateUploadFiles([{ name: "large.pdf", size: 1024 * 1024 * 1024 }]), null);
+  assert.match(validateUploadFiles([{ name: "large.pdf", size: 1024 * 1024 * 1024 + 1 }]), /1 GB/);
+});
+
+test("upload queue merges newly selected files, avoids duplicate selections and formats sizes", () => {
+  const first = { name: "one.pdf", size: 1536, lastModified: 1 };
+  const second = { name: "two.md", size: 1024 * 1024, lastModified: 2 };
+  const queue = mergeUploadFiles([first], [first, second]);
+  assert.deepEqual(queue, [first, second]);
+  assert.equal(formatUploadSize(second.size), "1.0 MB");
+  assert.equal(formatUploadSize(first.size), "2 KB");
 });
 
 test("batch status reflects per-file server outcomes including ZIP expansion", () => {
   assert.equal(batchIngestStatus([{ processing_status: "indexed" }, { processing_status: "indexed" }], []), "indexed");
   assert.equal(batchIngestStatus([{ processing_status: "indexed" }, { processing_status: "failed" }], [{ filename: "bad.csv" }]), "partial");
   assert.equal(batchIngestStatus([], [{ filename: "bad.zip" }]), "failed");
+});
+
+test("OCR-unavailable and permanent file errors do not offer pointless retries", () => {
+  assert.equal(isRetryableIngestionError("PDF contains no extractable text; scanned PDFs require OCR, which is not enabled."), false);
+  assert.equal(isRetryableIngestionError("PDF is password-protected and cannot be opened without a password."), false);
+  assert.equal(isRetryableIngestionError("The RAG service timed out."), true);
 });
 
 test("source scope selection includes only papers with indexed documents", () => {
@@ -59,8 +89,10 @@ test("streamed draft is replaced by the authoritative final persisted answer", (
   const draft = applyChatStreamEvent({ content: "", sources: [] }, { type: "token", data: { text: "provisional " } });
   assert.equal(draft.content, "provisional ");
   assert.equal(draft.provisional, true);
-  const final = applyChatStreamEvent(draft, { type: "completed", data: { answer: "accepted [S1]", sources: [{ source_id: "S1" }], metadata: { research: { claim_verification: {} } } } });
+  const final = applyChatStreamEvent(draft, { type: "completed", data: { answer: "accepted [S1]", sources: [{ source_id: "S1" }], metadata: { answer_mode: "evidence_fallback", generation_reason: "quota_exhausted", generation_provider: "gemini", research: { claim_verification: {} } } } });
   assert.equal(final.content, "accepted [S1]");
   assert.equal(final.provisional, false);
   assert.equal(final.sources[0].source_id, "S1");
+  assert.equal(final.meta.answer_mode, "evidence_fallback");
+  assert.equal(final.meta.generation_reason, "quota_exhausted");
 });

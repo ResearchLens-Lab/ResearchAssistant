@@ -1,92 +1,149 @@
-export function parseComparisonMarkdown(markdown = "") {
-  const lines = markdown.split(/\r?\n/);
-  const tableStart = lines.findIndex((line, index) => line.includes("|") && lines[index + 1]?.match(/^\s*\|?\s*:?-{3,}/));
-  if (tableStart < 0) return null;
-  const cells = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
-  const headers = cells(lines[tableStart]);
-  const rows = [];
-  let index = tableStart + 2;
-  for (; index < lines.length && lines[index].includes("|"); index += 1) {
-    const values = cells(lines[index]);
-    if (values.length === headers.length) rows.push(values);
-  }
-  return { headers, rows, synthesis: lines.slice(index).join("\n").trim() };
+export function projectHref(paperId) {
+  return `/papers/${encodeURIComponent(paperId)}`;
 }
 
-export function summarizeClaimChecks(research = {}) {
-  const items = research?.claim_verification?.items || [];
-  if (!items.length) return { available: false, supported: 0, partial: 0, issues: 0 };
-  return {
-    available: true,
-    supported: items.filter((item) => item.status === "supported").length,
-    partial: items.filter((item) => item.status === "partial").length,
-    issues: items.filter((item) => ["unsupported", "invalid_reference", "contradicted"].includes(item.status)).length,
-  };
-}
-
-export function buildResearchBrief(messages = [], title = "Research brief") {
-  const assistantMessages = messages.filter((message) => message.role === "assistant" && message.content?.trim());
-  const sections = [`# ${title || "Research brief"}`, "", `Generated from ${assistantMessages.length} saved research response${assistantMessages.length === 1 ? "" : "s"}.`, ""];
-  const sourceMap = new Map();
-  for (const message of assistantMessages) {
-    const answer = message.content.trim();
-    const question = messages
-      .slice(0, messages.indexOf(message))
-      .reverse()
-      .find((candidate) => candidate.role === "user")?.content?.trim();
-    sections.push(`## Research question\n\n${question || "Question not available"}`, `## Findings\n\n${answer}`);
-    const research = message.meta?.research;
-    if (research?.sufficiency?.status && research.sufficiency.status !== "adequate") {
-      sections.push(`_Evidence coverage: ${research.sufficiency.status}. This response may not cover every part of the question._`);
-    }
-    const checks = summarizeClaimChecks(research);
-    if (checks.available) {
-      sections.push(`**Claim review:** ${checks.supported} supported, ${checks.partial} partial, ${checks.issues} needing review. ${research.claim_verification.method?.includes("heuristic") ? "The configured check is lexical/numeric and does not establish semantic entailment." : "Provider-based support checks are fallible."}`);
-    }
-    for (const source of message.sources || []) {
-      const id = source.source_id || source.chunk_id;
-      if (id) sourceMap.set(id, source);
-    }
-  }
-  if (sourceMap.size) {
-    sections.push("## Sources");
-    for (const [id, source] of sourceMap) {
-      const locator = source.locator || (source.page_start ? `page ${source.page_start}${source.page_end && source.page_end !== source.page_start ? `–${source.page_end}` : ""}` : "locator not provided");
-      sections.push(`- **[${id}] ${source.filename || source.title || "Source document"}** — ${locator}${source.section ? `, ${source.section}` : ""}${source.text ? `\n  > ${source.text.trim().replace(/\s+/g, " ")}` : ""}`);
-    }
-  }
-  return `${sections.join("\n\n").trim()}\n`;
-}
-
-export function documentType(filename = "") {
-  const extension = filename.split(".").pop()?.toUpperCase();
-  return extension && extension !== filename.toUpperCase() ? extension : "FILE";
+export function buildProjectCreatePayload(title = "") {
+  return { title: String(title).trim() };
 }
 
 export function indexedPaperIds(entries = []) {
-  return entries.filter(({ documents = [] }) => documents.some((document) => document.processing_status === "indexed")).map(({ paper }) => paper.id);
+  return entries
+    .filter(({ documents = [] }) => hasIndexedSources(documents))
+    .map(({ paper }) => paper?.id)
+    .filter(Boolean);
 }
 
-export function togglePaperSelection(selectedIds = [], paperId) {
-  return selectedIds.includes(paperId) ? selectedIds.filter((id) => id !== paperId) : [...selectedIds, paperId];
+export function hasIndexedSources(documents = []) {
+  return documents.some((doc) => doc.processing_status === "indexed");
+}
+
+export function togglePaperSelection(current = [], paperId) {
+  if (!paperId) return current;
+  const set = new Set(current);
+  if (set.has(paperId)) set.delete(paperId);
+  else set.add(paperId);
+  return Array.from(set);
+}
+
+export function summarizeClaimChecks(metadata = {}) {
+  const items = metadata?.claim_verification?.items || [];
+  if (!items.length) {
+    return { available: false, supported: 0, partial: 0, issues: 0 };
+  }
+  let supported = 0;
+  let partial = 0;
+  let issues = 0;
+  for (const item of items) {
+    if (item.status === "supported") supported += 1;
+    else if (item.status === "partial") partial += 1;
+    else issues += 1;
+  }
+  return { available: true, supported, partial, issues };
+}
+
+export function buildResearchBrief(messages = [], title = "Research Brief") {
+  const lines = [`# ${title}`, ""];
+  const sourceMap = new Map();
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      lines.push(`## Q: ${message.content.trim()}`, "");
+    } else if (message.role === "assistant") {
+      lines.push(message.content.trim(), "");
+      for (const source of message.sources || []) {
+        if (source.source_id && !sourceMap.has(source.source_id)) {
+          sourceMap.set(source.source_id, source);
+        }
+      }
+    }
+  }
+
+  if (sourceMap.size) {
+    lines.push("## Cited Sources", "");
+    for (const [id, source] of sourceMap.entries()) {
+      const pageInfo = source.page_start ? ` (page ${source.page_start})` : "";
+      lines.push(`- **[${id}]** ${source.filename || "Source"}${pageInfo}: ${source.text ? source.text.slice(0, 160) + "…" : ""}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+export function parseComparisonMarkdown(raw = "") {
+  if (!raw || !raw.includes("|")) return null;
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  const tableLines = lines.filter((l) => l.startsWith("|") && l.endsWith("|"));
+  if (tableLines.length < 2) return null;
+
+  const parseRow = (line) => line.slice(1, -1).split("|").map((cell) => cell.trim());
+  const headers = parseRow(tableLines[0]);
+  const dataRows = tableLines.slice(2).map(parseRow);
+
+  const nonTable = lines.filter((l) => !l.startsWith("|"));
+  const synthesis = nonTable.join("\n\n").trim();
+
+  return { headers, rows: dataRows, synthesis };
+}
+
+export function documentType(filename = "") {
+  const ext = filename.split(".").pop()?.toUpperCase() || "";
+  return ext || "DOCUMENT";
 }
 
 export function batchIngestStatus(documents = [], failures = []) {
-  const indexed = documents.filter((document) => document.processing_status === "indexed").length;
-  if (documents.length > 0 && indexed === documents.length && failures.length === 0) return "indexed";
-  if (indexed > 0) return "partial";
+  if (failures.length && !documents.length) return "failed";
+  const allIndexed = documents.length > 0 && documents.every((d) => d.processing_status === "indexed") && !failures.length;
+  if (allIndexed) return "indexed";
+  const anyProcessing = documents.some((d) => d.processing_status === "processing" || d.processing_status === "uploaded");
+  if (anyProcessing) return "processing";
+  if (documents.some((d) => d.processing_status === "indexed")) return "partial";
+  if (documents.some((d) => d.processing_status === "cancelled")) return "cancelled";
   return "failed";
 }
 
-export function validateUploadFiles(files = [], maxBytes = 25 * 1024 * 1024) {
-  const supported = /\.(pdf|docx|txt|md|markdown|csv|xlsx|pptx|html?|json|zip)$/i;
-  if (files.some((file) => !supported.test(file.name || ""))) return "Supported formats: PDF, DOCX, TXT, Markdown, CSV, HTML, JSON, and ZIP.";
-  if (files.some((file) => file.size > maxBytes)) return "Each file must be no larger than 25 MB.";
+export function isRetryableIngestionError(error = "") {
+  return !/(OCR,?\s*which is not enabled|password-protected|does not appear to be a valid PDF|Unsupported document format|Invalid or unsafe ZIP archive|Unsafe archive|exceeds (?:the )?(?:maximum|upload|per-file|total))/i.test(error);
+}
+
+export const MAX_UPLOAD_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+export const MAX_UPLOAD_BATCH_SIZE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+export const MAX_UPLOAD_BATCH_FILES = 100;
+
+export function validateUploadFiles(files = [], maxBytes = MAX_UPLOAD_FILE_SIZE_BYTES) {
+  const supported = /\.(pdf|docx|txt|md|markdown|tex|csv|xlsx|pptx|html?|json|zip)$/i;
+  if (files.some((file) => !supported.test(file.name || ""))) return "Supported formats: PDF, DOCX, TXT, Markdown, TeX, CSV, XLSX, PPTX, HTML, JSON, and ZIP.";
+  if (files.some((file) => !file.size)) return "Empty files cannot be uploaded.";
+  if (files.some((file) => file.size > maxBytes)) {
+    const limitDisplay = maxBytes >= 1024 * 1024 * 1024
+      ? `${(maxBytes / (1024 * 1024 * 1024)).toFixed(0)} GB`
+      : `${Math.floor(maxBytes / (1024 * 1024))} MB`;
+    return `Each file must be no larger than ${limitDisplay}.`;
+  }
+  if (files.length > MAX_UPLOAD_BATCH_FILES) return `Choose no more than ${MAX_UPLOAD_BATCH_FILES} files at a time.`;
+  if (files.reduce((total, file) => total + file.size, 0) > MAX_UPLOAD_BATCH_SIZE_BYTES) {
+    const batchLimitDisplay = MAX_UPLOAD_BATCH_SIZE_BYTES >= 1024 * 1024 * 1024
+      ? `${(MAX_UPLOAD_BATCH_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(0)} GB`
+      : `${Math.floor(MAX_UPLOAD_BATCH_SIZE_BYTES / (1024 * 1024))} MB`;
+    return `The selected files exceed the ${batchLimitDisplay} total batch limit.`;
+  }
   return null;
+}
+
+export function mergeUploadFiles(current = [], incoming = []) {
+  const byIdentity = new Map(current.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
+  for (const file of incoming) byIdentity.set(`${file.name}:${file.size}:${file.lastModified}`, file);
+  return [...byIdentity.values()];
+}
+
+export function formatUploadSize(bytes = 0) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export function applyChatStreamEvent(message, event) {
   if (event.type === "token") return { ...message, content: message.content + (event.data?.text || ""), progress: "Draft answer · checking evidence…", provisional: true };
-  if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {} }, progress: "Saved answer · evidence check complete", provisional: false };
+  if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {}, answer_mode: event.data?.metadata?.answer_mode, generation_reason: event.data?.metadata?.generation_reason, generation_provider: event.data?.metadata?.generation_provider, cache_hit: event.data?.metadata?.cache_hit }, progress: "Saved answer · evidence check complete", provisional: false };
   return message;
 }

@@ -1,4 +1,4 @@
-import { apiClient, refreshAccessToken } from "./api.client";
+import { apiClient, refreshAccessToken, AppApiError } from "./api.client";
 import { tokenStorage } from "@/utils/tokenStorage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -41,16 +41,64 @@ export const documentsService = {
     });
   },
 
-  async uploadBatch(files, paperId) {
+  async uploadBatch(files, paperId, onUploadProgress, abortSignal = null) {
     const formData = new FormData();
     for (const file of files) formData.append("files", file);
     formData.append("paper_id", paperId);
-    return apiClient("/documents/upload/batch", { method: "POST", body: formData });
+    const send = (token) => new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/documents/upload/batch`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      if (abortSignal) {
+        if (abortSignal.aborted) {
+          reject(new Error("Upload was cancelled."));
+          return;
+        }
+        abortSignal.addEventListener("abort", () => {
+          xhr.abort();
+          reject(new Error("Upload was cancelled."));
+        });
+      }
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) onUploadProgress?.({ loaded: event.loaded, total: event.total, percent: Math.min(100, Math.round(event.loaded * 100 / event.total)) });
+      });
+      xhr.addEventListener("error", () => reject(new Error("Upload connection failed. Check your connection and retry.")));
+      xhr.addEventListener("abort", () => reject(new Error("Upload was cancelled.")));
+      xhr.addEventListener("load", () => {
+        let data;
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; }
+        catch { reject(new Error("The server returned an unreadable upload response.")); return; }
+        if (xhr.status >= 200 && xhr.status < 300) { resolve(data); return; }
+        const detail = data?.error;
+        reject(new AppApiError(detail?.message || xhr.statusText || "Upload failed", detail?.code || "API_ERROR", xhr.status, detail?.request_id, detail?.details));
+      });
+      xhr.send(formData);
+    });
+    try {
+      return await send(tokenStorage.getAccessToken());
+    } catch (error) {
+      if (error?.statusCode !== 401 || !tokenStorage.getRefreshToken()) throw error;
+      const token = await refreshAccessToken();
+      if (!token) throw error;
+      return send(token);
+    }
   },
 
   async getById(id) {
     return apiClient(`/documents/${id}`, {
       method: "GET",
     });
+  },
+
+  async retry(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  },
+
+  async cancel(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  },
+
+  async getSystemOverview() {
+    return apiClient("/system/overview", { method: "GET" });
   },
 };
