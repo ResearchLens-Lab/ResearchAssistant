@@ -3,7 +3,7 @@ import { chatService } from "@/services/chat.service";
 import { useRef, useState, useMemo } from "react";
 import { applyChatStreamEvent } from "@/lib/researchWorkspace.mjs";
 
-export function useChat(conversationId = null) {
+export function useChat(conversationId = null, searchQuery = "") {
   const queryClient = useQueryClient();
   const [pendingMessages, setPendingMessages] = useState([]);
   const [streamError, setStreamError] = useState(null);
@@ -11,20 +11,23 @@ export function useChat(conversationId = null) {
   const abortRef = useRef(null);
 
   const conversationsQuery = useQuery({
-    queryKey: ["conversations"],
-    queryFn: () => chatService.listConversations(1, 50),
+    queryKey: ["conversations", searchQuery],
+    queryFn: () => chatService.listConversations(1, 100, searchQuery),
+    staleTime: 10_000,
   });
 
   const conversationQuery = useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: () => chatService.getConversation(conversationId),
     enabled: !!conversationId,
+    staleTime: 30_000,
   });
 
   const messagesQuery = useQuery({
     queryKey: ["messages", conversationId],
     queryFn: () => chatService.getMessages(conversationId, 1, 100),
     enabled: !!conversationId,
+    staleTime: 30_000,
   });
 
   const sendMessageMutation = useMutation({
@@ -45,10 +48,23 @@ export function useChat(conversationId = null) {
     },
   });
 
+  const updateConversationMutation = useMutation({
+    /** @param {{ id: string, title?: string, paperIds?: string[] }} variables */
+    mutationFn: ({ id, title, paperIds }) => chatService.updateConversation(id, { title, paper_ids: paperIds }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      if (variables.id) {
+        queryClient.invalidateQueries({ queryKey: ["conversation", variables.id] });
+      }
+    },
+  });
+
   const deleteConversationMutation = useMutation({
     mutationFn: (id) => chatService.deleteConversation(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.removeQueries({ queryKey: ["conversation", id] });
+      queryClient.removeQueries({ queryKey: ["messages", id] });
     },
   });
 
@@ -112,6 +128,7 @@ export function useChat(conversationId = null) {
       ? conversationsQuery.data
       : conversationsQuery.data?.items || [],
     isLoadingConversations: conversationsQuery.isLoading,
+    refetchConversations: conversationsQuery.refetch,
     conversation: conversationQuery.data,
     isLoadingConversation: conversationQuery.isLoading,
     messages,
@@ -122,6 +139,8 @@ export function useChat(conversationId = null) {
     cancelMessage: () => abortRef.current?.abort(),
     createConversation: createConversationMutation.mutateAsync,
     isCreatingConversation: createConversationMutation.isPending,
+    updateConversation: updateConversationMutation.mutateAsync,
+    isUpdatingConversation: updateConversationMutation.isPending,
     deleteConversation: deleteConversationMutation.mutateAsync,
     isDeletingConversation: deleteConversationMutation.isPending,
   };

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyChatStreamEvent, batchIngestStatus, buildProjectCreatePayload, buildResearchBrief, documentType, formatUploadSize, hasIndexedSources, indexedPaperIds, isRetryableIngestionError, mergeUploadFiles, parseComparisonMarkdown, projectHref, summarizeClaimChecks, togglePaperSelection, validateUploadFiles } from "./researchWorkspace.mjs";
+import { aggregateConversationSources, applyChatStreamEvent, filterConversations, formatRelativeTime, groupConversationsByDate, batchIngestStatus, buildProjectCreatePayload, buildResearchBrief, documentType, formatUploadSize, hasIndexedSources, indexedPaperIds, isRetryableIngestionError, mergeUploadFiles, parseComparisonMarkdown, projectHref, summarizeClaimChecks, togglePaperSelection, validateUploadFiles } from "./researchWorkspace.mjs";
 
 test("comparison parser preserves generated citations and synthesis", () => {
   const parsed = parseComparisonMarkdown("| Paper | Finding |\n|---|---|\n| A | 12% [S1] |\n\nDifferent settings explain the values.");
@@ -96,3 +96,59 @@ test("streamed draft is replaced by the authoritative final persisted answer", (
   assert.equal(final.meta.answer_mode, "evidence_fallback");
   assert.equal(final.meta.generation_reason, "quota_exhausted");
 });
+
+test("groupConversationsByDate groups sessions into Today, Yesterday, Previous 7 days, and Older", () => {
+  const base = new Date("2026-11-03T18:00:00Z");
+  const conversations = [
+    { id: "1", title: "Today Conv", updated_at: "2026-11-03T14:00:00Z" },
+    { id: "2", title: "Yesterday Conv", updated_at: "2026-11-02T10:00:00Z" },
+    { id: "3", title: "5 Days Ago Conv", updated_at: "2026-10-29T10:00:00Z" },
+    { id: "4", title: "Older Conv", updated_at: "2026-10-15T10:00:00Z" },
+  ];
+  const groups = groupConversationsByDate(conversations, base);
+  assert.equal(groups.length, 4);
+  assert.equal(groups[0].label, "Today");
+  assert.equal(groups[0].items[0].id, "1");
+  assert.equal(groups[1].label, "Yesterday");
+  assert.equal(groups[1].items[0].id, "2");
+  assert.equal(groups[2].label, "Previous 7 days");
+  assert.equal(groups[2].items[0].id, "3");
+  assert.equal(groups[3].label, "Older");
+  assert.equal(groups[3].items[0].id, "4");
+});
+
+test("formatRelativeTime formats elapsed minutes, hours, days, and older dates accurately", () => {
+  const base = new Date("2026-11-03T18:00:00Z");
+  assert.equal(formatRelativeTime("2026-11-03T17:59:30Z", base), "Just now");
+  assert.equal(formatRelativeTime("2026-11-03T17:45:00Z", base), "15m ago");
+  assert.equal(formatRelativeTime("2026-11-03T15:00:00Z", base), "3h ago");
+  assert.equal(formatRelativeTime("2026-11-02T15:00:00Z", base), "Yesterday");
+  assert.equal(formatRelativeTime("2026-10-31T15:00:00Z", base), "3d ago");
+});
+
+test("filterConversations filters conversation titles case-insensitively", () => {
+  const convs = [
+    { id: "1", title: "Neural Attention Mechanism" },
+    { id: "2", title: "Quantum Computing Algorithms" },
+    { id: "3", title: "Distributed Consensus" },
+  ];
+  assert.equal(filterConversations(convs, "neural").length, 1);
+  assert.equal(filterConversations(convs, "ALGO").length, 1);
+  assert.equal(filterConversations(convs, "").length, 3);
+});
+
+test("aggregateConversationSources deduplicates sources across multi-turn assistant messages", () => {
+  const messages = [
+    { role: "user", content: "Q1" },
+    { role: "assistant", sources: [{ source_id: "S1", chunk_id: "c1", filename: "book.pdf" }] },
+    { role: "user", content: "Q2" },
+    { role: "assistant", sources: [
+      { source_id: "S1", chunk_id: "c1", filename: "book.pdf" },
+      { source_id: "S2", chunk_id: "c2", filename: "paper.pdf" },
+    ] },
+  ];
+  const aggregated = aggregateConversationSources(messages);
+  assert.equal(aggregated.length, 2);
+  assert.deepEqual(aggregated.map((s) => s.source_id), ["S1", "S2"]);
+});
+

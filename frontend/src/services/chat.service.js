@@ -48,6 +48,7 @@ export const chatService = {
     if (!completed) throw new Error("The chat stream ended before a response was persisted.");
     return completed;
   },
+
   async askQuestion(payload) {
     return apiClient("/chat", {
       method: "POST",
@@ -55,8 +56,9 @@ export const chatService = {
     });
   },
 
-  async listConversations(page = 1, pageSize = 20) {
-    return apiClient(`/conversations?page=${page}&page_size=${pageSize}`, {
+  async listConversations(page = 1, pageSize = 50, query = "") {
+    const qParam = query && query.trim() ? `&q=${encodeURIComponent(query.trim())}` : "";
+    return apiClient(`/conversations?page=${page}&page_size=${pageSize}${qParam}`, {
       method: "GET",
     });
   },
@@ -67,7 +69,17 @@ export const chatService = {
     });
   },
 
-  async getMessages(conversationId, page = 1, pageSize = 50) {
+  async updateConversation(id, { title, paper_ids }) {
+    const payload = {};
+    if (title !== undefined) payload.title = title;
+    if (paper_ids !== undefined) payload.paper_ids = paper_ids;
+    return apiClient(`/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getMessages(conversationId, page = 1, pageSize = 100) {
     return apiClient(`/conversations/${conversationId}/messages?page=${page}&page_size=${pageSize}`, {
       method: "GET",
     });

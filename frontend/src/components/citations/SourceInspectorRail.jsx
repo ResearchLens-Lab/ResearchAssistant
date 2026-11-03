@@ -27,7 +27,11 @@ export function SourceInspectorRail({ className = "", onClose }) {
         setDocumentError("The PDF could not be opened. Allow new tabs for this site and try again.");
       }
     } catch (error) {
-      setDocumentError(error.message || "The source document could not be opened. You can still inspect the excerpt below.");
+      if (error?.message?.includes("404") || error?.statusCode === 404) {
+        setDocumentError("This source document is no longer available in your library. You can still inspect the preserved evidence excerpt below.");
+      } else {
+        setDocumentError(error.message || "The source document could not be opened. You can still inspect the excerpt below.");
+      }
     }
   };
 

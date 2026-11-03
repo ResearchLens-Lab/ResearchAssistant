@@ -147,3 +147,77 @@ export function applyChatStreamEvent(message, event) {
   if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {}, answer_mode: event.data?.metadata?.answer_mode, generation_reason: event.data?.metadata?.generation_reason, generation_provider: event.data?.metadata?.generation_provider, cache_hit: event.data?.metadata?.cache_hit }, progress: "Saved answer · evidence check complete", provisional: false };
   return message;
 }
+
+
+export function groupConversationsByDate(conversations = [], now = new Date()) {
+  const todayItems = [];
+  const yesterdayItems = [];
+  const last7DaysItems = [];
+  const olderItems = [];
+
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const startOfYesterday = startOfToday - oneDayMs;
+  const startOf7Days = startOfToday - 6 * oneDayMs;
+
+  for (const conv of conversations) {
+    const rawTime = conv.updated_at || conv.created_at;
+    const time = rawTime ? new Date(rawTime).getTime() : 0;
+    if (time >= startOfToday) {
+      todayItems.push(conv);
+    } else if (time >= startOfYesterday) {
+      yesterdayItems.push(conv);
+    } else if (time >= startOf7Days) {
+      last7DaysItems.push(conv);
+    } else {
+      olderItems.push(conv);
+    }
+  }
+
+  const groups = [];
+  if (todayItems.length) groups.push({ label: "Today", items: todayItems });
+  if (yesterdayItems.length) groups.push({ label: "Yesterday", items: yesterdayItems });
+  if (last7DaysItems.length) groups.push({ label: "Previous 7 days", items: last7DaysItems });
+  if (olderItems.length) groups.push({ label: "Older", items: olderItems });
+  return groups;
+}
+
+export function formatRelativeTime(dateString, now = new Date()) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0 || isNaN(diffMs)) return "Just now";
+
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return "Yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+export function filterConversations(conversations = [], query = "") {
+  if (!query || !query.trim()) return conversations;
+  const q = query.trim().toLowerCase();
+  return conversations.filter((c) => (c.title || "Untitled research").toLowerCase().includes(q));
+}
+
+export function aggregateConversationSources(messages = []) {
+  const map = new Map();
+  for (const msg of messages) {
+    if (msg.role === "assistant" && Array.isArray(msg.sources)) {
+      for (const src of msg.sources) {
+        const key = src.source_id || src.chunk_id || `${src.filename}:${src.page_start}`;
+        if (!map.has(key)) {
+          map.set(key, src);
+        }
+      }
+    }
+  }
+  return Array.from(map.values());
+}
