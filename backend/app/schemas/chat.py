@@ -39,12 +39,18 @@ class ConversationCreate(BaseModel):
     paper_ids: Optional[list[str]] = None
 
 
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    paper_ids: Optional[list[str]] = None
+
+
 class ConversationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     title: Optional[str] = None
     paper_ids: Optional[list[str]] = None
+    message_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

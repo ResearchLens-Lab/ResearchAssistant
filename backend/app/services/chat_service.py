@@ -45,6 +45,8 @@ class ChatService:
             conversation = await self.conversation_service.get_owned(
                 user, payload.conversation_id
             )
+            if paper_ids and (not conversation.paper_ids or set(conversation.paper_ids) != set(paper_ids)):
+                conversation.paper_ids = paper_ids
         else:
             title = payload.question.strip()
             if len(title) > _TITLE_MAX:
