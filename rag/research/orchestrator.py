@@ -109,6 +109,18 @@ class SufficiencyAssessment(BaseModel):
 class EvidenceSufficiencyChecker:
     STOP = {"what", "which", "where", "when", "does", "this", "that", "with", "from", "about", "these", "those", "their", "there", "have", "into", "based", "paper", "papers", "they", "them", "than", "then", "explain", "compare", "describe", "discuss", "provide", "please", "and", "the", "did", "was", "were", "are", "is", "for", "not", "can", "could", "will", "evaluate", "evaluated"}
 
+    # Conflict detection is deliberately limited to explicit, comparable statements.
+    # A shared metric label alone is not enough: studies may use different systems,
+    # datasets, units, or experimental conditions.
+    COMPARABLE_FACT = re.compile(
+        r"(?P<subject>[A-Z][A-Za-z0-9_. -]{1,60}?)\s+"
+        r"(?:reported|achieved|scored|had|recorded)\s+(?:an?\s+)?"
+        r"(?P<metric>accuracy|precision|recall|bleu|f1|error rate)\s+(?:of\s+)?"
+        r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>%|percent|percentage points|points)?"
+        r"(?:\s+(?:on|under|for|using|with)\s+(?P<context>[^.;\n]{1,100}))?",
+        re.I,
+    )
+
     def assess(self, question: str, sources: list[RetrievedSource]) -> SufficiencyAssessment:
         terms = [t for t in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", question.casefold()) if t not in self.STOP]
         terms = list(dict.fromkeys(terms))
@@ -118,17 +130,23 @@ class EvidenceSufficiencyChecker:
         matched = [term for term in terms if re.search(rf"\b{re.escape(term)}\b", text)]
         coverage = len(matched) / max(1, len(terms))
         status = "adequate" if coverage >= 0.4 else "partial" if coverage >= 0.15 else "insufficient"
-        metric_values: dict[str, dict[str, set[str]]] = {}
+        metric_values: dict[tuple[str, str, str, str], dict[str, set[str]]] = {}
         for source in sources:
-            for metric in ("accuracy", "precision", "recall", "bleu", "f1", "error rate"):
-                pattern = rf"\b{re.escape(metric)}\b[^.\n]{{0,50}}?\b(\d+(?:\.\d+)?)\s*(?:%|percent)?"
-                values = re.findall(pattern, source.text, re.I)
-                metric_values.setdefault(metric, {}).setdefault(source.paper_id, set()).update(values)
+            for match in self.COMPARABLE_FACT.finditer(source.text):
+                subject = " ".join(match.group("subject").casefold().split())
+                metric = " ".join(match.group("metric").casefold().split())
+                unit = (match.group("unit") or "").casefold().replace("%", "percent")
+                context = " ".join((match.group("context") or "").casefold().split()).rstrip(".,;:")
+                key = (subject, metric, unit, context)
+                metric_values.setdefault(key, {}).setdefault(source.paper_id, set()).add(match.group("value"))
         conflicts = []
-        for metric, papers in metric_values.items():
+        for (_subject, metric, unit, context), papers in metric_values.items():
             all_values = set().union(*papers.values()) if papers else set()
-            if len(all_values) > 1 and len(papers) > 1:
-                conflicts.append(f"{metric}: " + ", ".join(sorted(all_values)))
+            # Distinct papers are not required: a single document can report
+            # inconsistent values for the exact same subject/metric/conditions.
+            if len(all_values) > 1:
+                qualifier = f" ({unit}; {context})" if unit or context else ""
+                conflicts.append(f"{metric}{qualifier}: " + ", ".join(sorted(all_values)))
         if conflicts:
             status = "conflicting"
         return SufficiencyAssessment(status=status, coverage=round(coverage, 3),

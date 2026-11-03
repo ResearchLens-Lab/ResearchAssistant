@@ -98,3 +98,74 @@ def test_openai_sse_protocol_parser_yields_incremental_content(monkeypatch):
     client = OpenAILLMClient(api_key="test-only", model="fixture")
     assert client.supports_streaming is True
     assert list(client.generate_stream("system", "question")) == ["first ", "second"]
+
+
+def test_gemini_generation_and_streaming_use_official_sdk_client():
+    from types import SimpleNamespace
+    from rag.generation.llm_client import GeminiLLMClient
+
+    class Models:
+        def generate_content(self, **kwargs):
+            assert kwargs["model"] == "gemini-3.8-flash"
+            assert kwargs["contents"] == "question"
+            return SimpleNamespace(text="grounded answer [S1]")
+        def generate_content_stream(self, **kwargs):
+            return [SimpleNamespace(text="grounded "), SimpleNamespace(text="answer [S1]")]
+
+    client = GeminiLLMClient(api_key="test-key", client=SimpleNamespace(models=Models()))
+    assert client.generate("system instructions", "question") == "grounded answer [S1]"
+    assert list(client.generate_stream("system instructions", "question")) == ["grounded ", "answer [S1]"]
+
+
+def test_gemini_generation_fails_clearly_without_key(monkeypatch):
+    from rag.config.settings import settings
+    from rag.generation.llm_client import GeminiLLMClient
+
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    with pytest.raises(ValueError, match="Set GEMINI_API_KEY"):
+        GeminiLLMClient().generate("instructions", "question")
+
+
+def test_query_pipeline_defers_unsupported_generation_until_answer_is_needed(monkeypatch):
+    from types import SimpleNamespace
+    from rag.config.settings import settings
+    from rag.pipelines.query_pipeline import QueryPipeline
+    from rag.retrieval.query import RetrievedSource
+
+    monkeypatch.setattr(settings, "llm_provider", "local")
+
+    class Planner:
+        def plan(self, *_args):
+            return SimpleNamespace(intent="direct", search_queries=["known fact"], max_retrieval_rounds=1)
+
+    class Retriever:
+        def retrieve(self, _request):
+            return [RetrievedSource(source_id="S1", chunk_id="chunk", paper_id="paper",
+                                    document_id="doc", page_start=1, page_end=1,
+                                    text="The known fact is 42.")]
+
+    class Sufficient:
+        def assess(self, *_args):
+            return SimpleNamespace(status="adequate", missing_terms=[], model_dump=lambda: {})
+
+    # Initializing the pipeline is safe for local ingestion/retrieval.
+    pipeline = QueryPipeline(retriever=Retriever(), planner=Planner(), sufficiency_checker=Sufficient())
+    result = pipeline.answer_question("What is the known fact?")
+    assert result.metadata["answer_mode"] == "evidence_only"
+    assert result.metadata["generation_reason"] == "direct_factual_lookup"
+    assert result.metadata["model_calls"] == 0
+    assert "The known fact is 42." in result.answer
+    assert result.sources[0].page_start == 1
+
+
+def test_gemini_generator_is_initialized_only_when_requested_without_live_api(monkeypatch):
+    from rag.config.settings import settings
+    from rag.generation.llm_client import LLMClientFactory
+    from rag.pipelines.query_pipeline import QueryPipeline
+
+    sentinel = object()
+    monkeypatch.setattr(settings, "llm_provider", "gemini")
+    monkeypatch.setattr(LLMClientFactory, "get_client", lambda **_kwargs: sentinel)
+    pipeline = QueryPipeline()
+    assert pipeline._generator is None
+    assert pipeline.generator.llm_client is sentinel

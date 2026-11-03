@@ -6,6 +6,8 @@ Orchestrates: Question -> Retrieval -> Context Construction -> Grounded Generati
 import time
 import logging
 import re
+import hashlib
+import unicodedata
 from typing import Callable
 from typing import Optional, List, Dict, Any
 
@@ -19,8 +21,12 @@ from rag.citations.citation_mapper import CitationMapper, SourceCitation
 from rag.citations.citation_formatter import RAGResult
 from rag.research.orchestrator import QueryPlanner, EvidenceSufficiencyChecker, EvidenceLedger, CitationVerifier
 from rag.research.claim_verifier import ClaimEvidenceVerifier, LLMClaimJudge
+from rag.generation.local_state import SQLiteLLMState, LLMUsageBudgetExceeded
+from rag.generation.provider_errors import LLMProviderError
+from rag.generation.budgeted_client import start_call_tracking, stop_call_tracking
 
 logger = logging.getLogger(__name__)
+GENERATION_PROMPT_VERSION = "researchlens-generation-v2"
 
 
 class QueryPipeline:
@@ -38,9 +44,18 @@ class QueryPipeline:
     ):
         self.retriever = retriever or ResearchRetriever()
         self.context_builder = context_builder or ContextBuilder()
-        self.generator = generator or GroundedGenerator()
+        # Generation is only needed after retrieval has established that the
+        # selected evidence is sufficient. Keep ingestion/local retrieval usable
+        # even when no generation provider is configured.
+        self._generator = generator
         self.planner = planner or QueryPlanner()
         self.sufficiency_checker = sufficiency_checker or EvidenceSufficiencyChecker()
+
+    @property
+    def generator(self) -> GroundedGenerator:
+        if self._generator is None:
+            self._generator = GroundedGenerator()
+        return self._generator
 
     def answer_question(
         self,
@@ -50,6 +65,7 @@ class QueryPipeline:
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
+        user_id: Optional[str] = None,
     ) -> RAGResult:
         """
         Answers a research question grounded in indexed papers with verified citations.
@@ -96,6 +112,14 @@ class QueryPipeline:
             source.source_id = f"S{index}"
 
         assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+        def require_complete_direct_evidence(value):
+            # The global coverage score can be adequate while a requested key
+            # term remains absent. Direct factual mode must not treat that as
+            # support for the requested fact.
+            if plan.intent == "direct" and value.status in {"adequate", "partial"} and value.missing_terms:
+                return value.model_copy(update={"status": "insufficient"})
+            return value
+        assessment = require_complete_direct_evidence(assessment)
         # One bounded, scope-preserving retry targets terms absent from the first pass.
         if assessment.status != "adequate" and assessment.missing_terms and plan.max_retrieval_rounds > 1:
             retrieval_rounds = 2
@@ -111,6 +135,7 @@ class QueryPipeline:
             for index, source in enumerate(retrieved_sources, start=1):
                 source.source_id = f"S{index}"
             assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+            assessment = require_complete_direct_evidence(assessment)
             emit({"type": "sources_found", "count": len(retrieved_sources), "round": 2})
         retrieval_seconds = time.perf_counter() - retrieval_started
 
@@ -122,31 +147,168 @@ class QueryPipeline:
         )
 
         ledger = EvidenceLedger.from_sources(retrieved_sources, queries)
-        if not retrieved_sources or assessment.status == "insufficient":
+        mapper = CitationMapper(tracker)
+        def evidence_result(reason: str, mode: str = "evidence_only", lead: str = "",
+                            model_calls: int = 0, measured_usage: Optional[list] = None) -> RAGResult:
+            # Quote source text verbatim and bind it to immutable retrieved IDs.
+            if mode == "evidence_fallback":
+                explanations = {
+                    "provider_local": "Synthesis is disabled in local-only mode.",
+                    "missing_credentials": "Synthesis is unavailable because Gemini credentials are not configured.",
+                    "daily_budget_exhausted": "Synthesis is unavailable because the daily generation budget is exhausted.",
+                    "quota_exhausted": "Synthesis is unavailable because the provider reports exhausted model quota.",
+                    "rate_limited": "Synthesis is temporarily rate limited by the provider.",
+                    "authentication": "Synthesis is unavailable because the provider rejected its credentials or access.",
+                    "invalid_model": "Synthesis is unavailable because the configured model is invalid or unavailable.",
+                    "transient": "Synthesis is temporarily unavailable from the provider.",
+                }
+                explanation = explanations.get(reason, "Synthesis is unavailable from the configured provider.")
+                if lead and (lead.startswith("Synthesis is") or explanation in lead):
+                    pass
+                else:
+                    lead = explanation + (" " + lead if lead else "")
+            if mode == "evidence_fallback":
+                terms = [term for term in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", question.casefold())
+                         if term not in EvidenceSufficiencyChecker.STOP]
+                remaining = set(terms)
+                available = list(retrieved_sources[:k])
+                selected = []
+                while available and remaining:
+                    scored = [(len(remaining.intersection(re.findall(
+                        r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))), -index, source)
+                              for index, source in enumerate(available)]
+                    gain, _, source = max(scored, key=lambda row: (row[0], row[1]))
+                    if gain == 0:
+                        break
+                    selected.append(source)
+                    remaining.difference_update(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))
+                    available.remove(source)
+                if assessment.status == "conflicting":
+                    # A conflict must retain at least one relevant excerpt per
+                    # represented paper, even if the first excerpt covers the
+                    # query's shared vocabulary.
+                    for source in retrieved_sources[:k]:
+                        if (source.paper_id not in {item.paper_id for item in selected}
+                                and any(term in source.text.casefold() for term in terms)):
+                            selected.append(source)
+                selected = selected[:k] or retrieved_sources[:1]
+            else:
+                # Select the smallest top-ranked set that covers the question's
+                # observed terms. A single S1 excerpt can omit another requested
+                # fact; quoting every top-k result, however, adds unrelated
+                # citations. This is lexical coverage, not entailment.
+                terms = [term for term in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", question.casefold())
+                         if term not in EvidenceSufficiencyChecker.STOP]
+                remaining = set(terms)
+                available = list(retrieved_sources[:k])
+                selected = []
+                while available and remaining:
+                    scored = [(len(remaining.intersection(re.findall(
+                        r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))), -index, source)
+                              for index, source in enumerate(available)]
+                    gain, _, source = max(scored, key=lambda row: (row[0], row[1]))
+                    if gain == 0:
+                        break
+                    selected.append(source)
+                    remaining.difference_update(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", source.text.casefold()))
+                    available.remove(source)
+                if not selected and retrieved_sources:
+                    selected = retrieved_sources[:1]
+            blocks = [f'**{source.filename or source.title or "Source document"} · {source.page_display}**\n\n'
+                      f'> "{source.text.strip()}" [{source.source_id}]' for source in selected if source.text.strip()]
+            answer = (lead + "\n\n" if lead else "") + "\n\n".join(blocks)
+            clean, citation_check = CitationVerifier().verify(answer, retrieved_sources, selected_ids)
+            citations = mapper.map_citations(citation_check.valid_source_ids, fallback_all_retrieved=False)
+            return RAGResult(answer=clean, sources=citations,
+                paper_ids=selected_ids or list(dict.fromkeys(s.paper_id for s in retrieved_sources)),
+                metadata={"execution_time_seconds": round(time.time() - start_time, 3),
+                    "timings": {"planning_seconds": round(planning_seconds, 4), "retrieval_seconds": round(retrieval_seconds, 4),
+                                "generation_seconds": 0.0, "verification_seconds": 0.0},
+                    "retrieval_rounds": retrieval_rounds, "model_calls": model_calls, "total_retrieved": len(retrieved_sources),
+                    "cited_sources_count": len(citations), "llm_provider": settings.llm_provider,
+                    "generation_provider": settings.llm_provider, "answer_mode": mode, "generation_reason": reason,
+                    "llm_usage": {"measured": measured_usage or [], "estimated": False},
+                    "embedding_provider": settings.embedding_provider,
+                    "research": {"intent": plan.intent, "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan), "sufficiency": assessment.model_dump(),
+                        "evidence_count": len(ledger.items), "citation_verification": citation_check.model_dump(),
+                        "claim_verification": {"items": [], "method": "verbatim evidence extraction", "verified_answer": clean}}})
+
+        if not retrieved_sources:
             elapsed = time.time() - start_time
             return RAGResult(
-                answer=("There is insufficient evidence in the selected passages to answer this question. Missing evidence terms: "
-                        + ", ".join(assessment.missing_terms[:6])) if retrieved_sources else
-                       "There is insufficient evidence in the selected papers to answer this question.",
+                answer="There is insufficient evidence in the selected papers to answer this question.",
                 sources=[], paper_ids=selected_ids,
                 metadata={"research": {"intent": plan.intent, "sufficiency": assessment.model_dump(),
-                                        "plan": plan.model_dump(), "evidence_count": len(ledger.items),
+                                        "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan), "evidence_count": len(ledger.items),
                                         "citation_verification": {"entailment_verified": False}},
-                          "execution_time_seconds": round(elapsed, 3), "total_retrieved": 0},
+                          "execution_time_seconds": round(elapsed, 3), "total_retrieved": 0,
+                          "answer_mode": "evidence_only", "generation_reason": "no_retrieved_evidence",
+                          "generation_provider": settings.llm_provider, "model_calls": 0},
             )
+        if assessment.status == "insufficient":
+            lead = "There is insufficient evidence in the retrieved passages to answer this question."
+            if assessment.missing_terms:
+                lead += " Missing evidence terms: " + ", ".join(assessment.missing_terms[:6]) + "."
+            return evidence_result("insufficient_evidence", lead=lead)
+
+        if plan.intent == "direct" and assessment.status == "adequate":
+            emit({"type": "generation_skipped", "reason": "direct_factual_lookup"})
+            return evidence_result("direct_factual_lookup")
+
+        if settings.llm_provider == "local" or (getattr(settings, "rag_mode", "") == "local" and not getattr(settings, "llm_enabled", False) and settings.llm_provider not in ("gemini", "mock")):
+            return evidence_result("provider_local", "evidence_fallback", "Retrieved evidence:")
+        try:
+            generator = self.generator
+        except LLMProviderError as exc:
+            return evidence_result(exc.kind, "evidence_fallback", "Synthesis is unavailable. Retrieved evidence:")
+        except Exception:
+            return evidence_result("provider_unavailable", "evidence_fallback", "Synthesis is unavailable. Retrieved evidence:")
+
+        state = SQLiteLLMState()
+        normalized_question = " ".join(unicodedata.normalize("NFKC", question).casefold().split())
+        scope = {"provider": settings.llm_provider, "user_id": user_id or "local-user", "paper_ids": sorted(selected_ids),
+            "document_ids": sorted({s.document_id for s in retrieved_sources}),
+            "sources": sorted([{"source_id": s.source_id, "chunk_id": s.chunk_id, "document_id": s.document_id,
+                         "paper_id": s.paper_id, "filename": s.filename, "title": s.title,
+                         "section": s.section, "locator": s.locator,
+                         "page_start": s.page_start, "page_end": s.page_end,
+                         "text_hash": hashlib.sha256(s.text.encode("utf-8")).hexdigest()} for s in retrieved_sources],
+                         key=lambda source: source["chunk_id"]),
+            "conversation_context": " ".join(unicodedata.normalize("NFKC", (conversation_context or "")).casefold().split())}
+        cache_key = state.cache_key(settings.llm_model, "", plan.intent, settings.llm_temperature,
+            settings.llm_max_tokens, prompt_version=GENERATION_PROMPT_VERSION,
+            normalized_question=normalized_question, scope=scope)
+        cached = state.get_response(cache_key)
+        if cached:
+            try:
+                result = RAGResult.model_validate_json(cached)
+                result.metadata["cache_hit"] = True
+                result.metadata["model_calls"] = 0
+                result.metadata["llm_usage"] = {"measured": [], "estimated": False}
+                result.metadata["timings"] = {**result.metadata.get("timings", {}), "generation_seconds": 0.0}
+                result.metadata["execution_time_seconds"] = round(time.time() - start_time, 3)
+                return result
+            except (ValueError, TypeError):
+                logger.warning("Ignoring invalid cached LLM response record")
 
         # 4. Grounded Generation
         emit({"type": "evidence_ready", "count": len(retrieved_sources)})
         emit({"type": "generation_started"})
         generation_started = time.perf_counter()
-        if plan.intent == "comparison":
-            gen_result = self.generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
-        elif plan.intent == "summary":
-            gen_result = self.generator.generate_summary(context=assembled_context, on_token=emit)
-        else:
-            gen_result = self.generator.generate_answer(
-                question=question, context=assembled_context, intent=plan.intent, on_token=emit,
-            )
+        call_token, call_counter = start_call_tracking()
+        try:
+            if plan.intent == "comparison":
+                gen_result = generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
+            elif plan.intent == "summary":
+                gen_result = generator.generate_summary(context=assembled_context, on_token=emit)
+            else:
+                gen_result = generator.generate_answer(question=question, context=assembled_context, intent=plan.intent, on_token=emit)
+        except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
+            reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
+            return evidence_result(reason, "evidence_fallback", "Synthesis is unavailable. Retrieved evidence:",
+                                   call_counter[0], call_counter[1])
+        finally:
+            stop_call_tracking(call_token)
         generation_seconds = time.perf_counter() - generation_started
 
         # 5. Citation Mapping
@@ -154,16 +316,45 @@ class QueryPipeline:
         clean_answer, verification = CitationVerifier().verify(gen_result.answer, retrieved_sources, selected_ids)
         emit({"type": "verification_started"})
         verification_started = time.perf_counter()
-        claim_judge = LLMClaimJudge(self.generator.llm_client) if settings.claim_verification_use_llm else None
-        claim_report = ClaimEvidenceVerifier(judge=claim_judge).verify(clean_answer, retrieved_sources, selected_ids)
+        claim_judge = LLMClaimJudge(generator.llm_client) if settings.claim_verification_use_llm else None
+        judge_error_reason = None
+        judge_token, judge_counter = start_call_tracking()
+        try:
+            claim_report = ClaimEvidenceVerifier(judge=claim_judge).verify(clean_answer, retrieved_sources, selected_ids)
+        except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
+            judge_error_reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
+            claim_judge = None
+            claim_report = ClaimEvidenceVerifier().verify(clean_answer, retrieved_sources, selected_ids)
+        finally:
+            stop_call_tracking(judge_token)
         repair_attempted = False
         repair_statuses = {"unsupported", "invalid_reference", "contradicted"}
+        repair_counter = [0, []]
+        repaired_judge_counter = [0, []]
         if any(item.status in repair_statuses for item in claim_report.items):
             repair_attempted = True
             issues = [f"{item.status}: {item.claim_text}; {item.reason or 'review against evidence'}" for item in claim_report.items if item.status in repair_statuses]
-            repaired = self.generator.repair_answer(question, gen_result.answer, issues, assembled_context)
+            repair_token, repair_counter = start_call_tracking()
+            try:
+                repaired = generator.repair_answer(question, gen_result.answer, issues, assembled_context)
+            except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
+                reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
+                calls = call_counter[0] + judge_counter[0] + repair_counter[0]
+                usage = call_counter[1] + judge_counter[1] + repair_counter[1]
+                return evidence_result(reason, "evidence_fallback", "The generated draft could not be verified. Retrieved evidence:",
+                                       calls, usage)
+            finally:
+                stop_call_tracking(repair_token)
             repaired_clean, repaired_citations = CitationVerifier().verify(repaired, retrieved_sources, selected_ids)
-            repaired_report = ClaimEvidenceVerifier(judge=claim_judge).verify(repaired_clean, retrieved_sources, selected_ids)
+            repaired_judge_token, repaired_judge_counter = start_call_tracking()
+            try:
+                repaired_report = ClaimEvidenceVerifier(judge=claim_judge).verify(repaired_clean, retrieved_sources, selected_ids)
+            except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
+                judge_error_reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
+                claim_judge = None
+                repaired_report = ClaimEvidenceVerifier().verify(repaired_clean, retrieved_sources, selected_ids)
+            finally:
+                stop_call_tracking(repaired_judge_token)
             repaired_report.repair_attempted = True
             # Keep only the verifier's safe projection; never restore repaired raw text.
             gen_result.answer = repaired
@@ -198,7 +389,7 @@ class QueryPipeline:
         elif assessment.status == "conflicting":
             clean_answer = "The selected passages report differing values or findings; the available evidence does not resolve the difference. " + clean_answer
 
-        return RAGResult(
+        result = RAGResult(
             answer=clean_answer,
             sources=citations,
             paper_ids=resolved_paper_ids,
@@ -209,13 +400,19 @@ class QueryPipeline:
                             "generation_seconds": round(generation_seconds, 4),
                             "verification_seconds": round(verification_seconds, 4)},
                 "retrieval_rounds": retrieval_rounds,
-                "model_calls": 1 + int(repair_attempted) + (claim_judge.calls if claim_judge else 0),
+                "model_calls": call_counter[0] + repair_counter[0] + judge_counter[0] + repaired_judge_counter[0],
+                "llm_usage": {"measured": call_counter[1] + judge_counter[1] + repair_counter[1] + repaired_judge_counter[1],
+                              "estimated": False},
                 "total_retrieved": len(retrieved_sources),
                 "total_context_sources": assembled_context.total_sources,
                 "cited_sources_count": len(citations),
                 "llm_provider": settings.llm_provider,
+                "generation_provider": settings.llm_provider,
+                "answer_mode": "mock" if settings.llm_provider == "mock" else "generated",
+                "generation_reason": "synthesis_required", "cache_hit": False,
+                "verification_provider_status": judge_error_reason or "available",
                 "embedding_provider": settings.embedding_provider,
-                "research": {"intent": plan.intent, "plan": plan.model_dump(),
+                "research": {"intent": plan.intent, "plan": plan.model_dump() if hasattr(plan, "model_dump") else vars(plan),
                              "sufficiency": assessment.model_dump(),
                              "evidence_count": len(ledger.items),
                              "evidence_ledger": [{"source_id": i.source_id, "chunk_id": i.chunk_id,
@@ -225,6 +422,11 @@ class QueryPipeline:
                              "claim_verification": claim_report.model_dump()},
             },
         )
+        if (settings.llm_provider != "mock" and assessment.status == "adequate" and result.answer.strip() and citations
+                and not verification.invalid_source_ids and not repair_attempted
+                and all(item.status == "supported" for item in claim_report.items)):
+            state.put_response(cache_key, result.model_dump_json())
+        return result
 
     def summarize_paper(
         self,

@@ -18,6 +18,7 @@ from rag.generation.prompts import (
 from rag.generation.response_parser import ResponseParser, ParsedResponse
 from rag.context.context_builder import AssembledContext
 from rag.config.settings import settings
+from rag.generation.budgeted_client import BudgetedLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,13 @@ class GroundedGenerator:
     """
 
     def __init__(self, llm_client: Optional[BaseLLMClient] = None):
-        self.llm_client = llm_client or LLMClientFactory.get_client()
+        provider = settings.llm_provider
+        client = llm_client or LLMClientFactory.get_client()
+        if provider == "mock" and settings.app_env != "testing" and llm_client is None:
+            raise ValueError("The mock generation provider is only available in automated tests.")
+        self.llm_client = (client if isinstance(client, BudgetedLLMClient) or provider == "mock"
+                           or not isinstance(client, BaseLLMClient)
+                           else BudgetedLLMClient(client, provider))
 
     def _generate(self, system_prompt, user_prompt, temperature=None, on_token=None):
         if on_token and self.llm_client.supports_streaming:

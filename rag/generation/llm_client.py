@@ -11,6 +11,8 @@ from typing import Optional, Dict, Any, List
 import httpx
 
 from rag.config.settings import settings
+from rag.generation.provider_errors import classify_provider_error
+from rag.generation.provider_errors import LLMProviderError
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +167,9 @@ class OpenAILLMClient(BaseLLMClient):
                 resp = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
+                if isinstance(data.get("usage"), dict):
+                    from rag.generation.budgeted_client import record_provider_usage
+                    record_provider_usage("openai", self.model, data["usage"])
                 return data["choices"][0]["message"]["content"]
         except httpx.TimeoutException as exc:
             raise RuntimeError("Language model request timed out.") from exc
@@ -177,7 +182,8 @@ class OpenAILLMClient(BaseLLMClient):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {"model": self.model, "messages": [{"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}], "temperature": temperature if temperature is not None else self.temperature,
-            "max_tokens": max_tokens or self.max_tokens, "stream": True}
+            "max_tokens": max_tokens or self.max_tokens, "stream": True,
+            "stream_options": {"include_usage": True}}
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 with client.stream("POST", "https://api.openai.com/v1/chat/completions", json=payload, headers=headers) as response:
@@ -189,7 +195,11 @@ class OpenAILLMClient(BaseLLMClient):
                         if data == "[DONE]":
                             break
                         try:
-                            delta = httpx.Response(200, content=data).json()["choices"][0].get("delta", {}).get("content")
+                            chunk = httpx.Response(200, content=data).json()
+                            if isinstance(chunk.get("usage"), dict):
+                                from rag.generation.budgeted_client import record_provider_usage
+                                record_provider_usage("openai", self.model, chunk["usage"])
+                            delta = chunk["choices"][0].get("delta", {}).get("content") if chunk.get("choices") else None
                         except (ValueError, KeyError, IndexError, TypeError):
                             continue
                         if delta:
@@ -198,6 +208,84 @@ class OpenAILLMClient(BaseLLMClient):
             raise RuntimeError("Language model request timed out.") from exc
         except httpx.HTTPStatusError as exc:
             raise RuntimeError(f"Language model provider rejected the request (HTTP {exc.response.status_code}).") from exc
+
+
+class GeminiLLMClient(BaseLLMClient):
+    """Gemini text generation through Google's official google-genai SDK."""
+    supports_streaming = True
+
+    def __init__(self, api_key=None, model=None, temperature=None, max_tokens=None, timeout=None, client=None):
+        self.api_key = api_key or settings.gemini_api_key
+        self.model = model or settings.llm_model
+        self.temperature = settings.llm_temperature if temperature is None else temperature
+        self.max_tokens = max_tokens or settings.llm_max_tokens
+        self.timeout = timeout or settings.llm_timeout_seconds
+        self.client = client
+
+    def _get_client(self):
+        if self.client is None:
+            if not self.api_key:
+                raise ValueError("Gemini API key is missing. Set GEMINI_API_KEY.")
+            try:
+                from google import genai
+            except ImportError as exc:
+                raise RuntimeError("Gemini support requires the google-genai package.") from exc
+            # The SDK otherwise retries 429 and transient responses by default. One
+            # SDK attempt keeps our application-level budget truthful.
+            from google.genai import types
+            self.client = genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
+                timeout=int(self.timeout * 1000),
+                retry_options=types.HttpRetryOptions(attempts=1),
+            ))
+        return self.client
+
+    def _config(self, system_prompt, temperature, max_tokens):
+        from google.genai import types
+        return types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=self.temperature if temperature is None else temperature,
+            max_output_tokens=max_tokens or self.max_tokens,
+        )
+
+    def generate(self, system_prompt, user_prompt, temperature=None, max_tokens=None):
+        try:
+            response = self._get_client().models.generate_content(
+                model=self.model, contents=user_prompt,
+                config=self._config(system_prompt, temperature, max_tokens),
+            )
+            if not response.text:
+                raise RuntimeError("Gemini returned an empty response.")
+            usage = getattr(response, "usage_metadata", None)
+            if usage:
+                from rag.generation.budgeted_client import record_provider_usage
+                counts = {key: getattr(usage, key, None) for key in
+                          ("prompt_token_count", "candidates_token_count", "total_token_count")}
+                record_provider_usage("gemini", self.model, {key: value for key, value in counts.items() if value is not None})
+            return response.text
+        except Exception as exc:
+            if isinstance(exc, (RuntimeError, ValueError)) and "GEMINI_API_KEY" in str(exc):
+                raise
+            raise classify_provider_error(exc) from exc
+
+    def generate_stream(self, system_prompt, user_prompt, temperature=None, max_tokens=None):
+        try:
+            response = self._get_client().models.generate_content_stream(
+                model=self.model, contents=user_prompt,
+                config=self._config(system_prompt, temperature, max_tokens),
+            )
+            for part in response:
+                if part.text:
+                    yield part.text
+                usage = getattr(part, "usage_metadata", None)
+                if usage:
+                    from rag.generation.budgeted_client import record_provider_usage
+                    counts = {key: getattr(usage, key, None) for key in
+                              ("prompt_token_count", "candidates_token_count", "total_token_count")}
+                    record_provider_usage("gemini", self.model, {key: value for key, value in counts.items() if value is not None})
+        except Exception as exc:
+            if isinstance(exc, ValueError) and "GEMINI_API_KEY" in str(exc):
+                raise
+            raise classify_provider_error(exc) from exc
 
 
 class LLMClientFactory:
@@ -212,13 +300,20 @@ class LLMClientFactory:
         api_key: Optional[str] = None,
     ) -> BaseLLMClient:
         prov = (provider or settings.llm_provider).lower()
-        if prov == "openai":
+        if prov == "gemini":
+            model = model_name or settings.llm_model
+            if not model.startswith("gemini-"):
+                raise LLMProviderError("invalid_model", "The configured generation model is not a supported Gemini model ID.")
+            return GeminiLLMClient(api_key=api_key or settings.gemini_api_key, model=model)
+        elif prov == "openai":
             key = api_key or settings.llm_api_key
             model = model_name or settings.llm_model
             logger.info("Initializing OpenAILLMClient (model: %s)", model)
             return OpenAILLMClient(api_key=key, model=model)
         elif prov == "mock":
+            if settings.app_env != "testing":
+                raise ValueError("The mock generation provider is only available when APP_ENV=testing.")
             logger.info("Initializing MockGroundedLLMClient")
             return MockGroundedLLMClient()
         else:
-            raise ValueError(f"Unsupported LLM provider '{prov}'. Choose 'mock' or 'openai'.")
+            raise ValueError(f"Unsupported LLM provider '{prov}'. Choose 'gemini' or 'mock'.")

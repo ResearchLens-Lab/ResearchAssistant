@@ -83,7 +83,7 @@ def test_query_pipeline_performs_one_safe_repair(full_rag_pipeline, monkeypatch)
         repairs.append((answer, issues))
         return "The Transformer achieves 28.4 BLEU on English-to-German translation [S1]."
     monkeypatch.setattr(query.generator, "repair_answer", repair)
-    result = query.answer_question("What BLEU score was reported?", paper_ids=["paper_repair"])
+    result = query.answer_question("Explain the experimental results and reported BLEU scores", paper_ids=["paper_repair"])
     assert len(repairs) == 1
     assert "28.4 BLEU" in result.answer
     assert "99 BLEU" not in result.answer
@@ -100,10 +100,13 @@ def test_unresolved_repair_never_returns_the_unverified_numeric_claim(full_rag_p
         repairs.append(1)
         return "The Transformer achieved 100 BLEU on English-to-German translation [S1]."
     monkeypatch.setattr(query.generator, "repair_answer", repair)
-    result = query.answer_question("What BLEU score was reported?", paper_ids=["paper_repair_failure"])
+    result = query.answer_question("Explain the experimental results and reported BLEU scores", paper_ids=["paper_repair_failure"])
     assert len(repairs) == 1
     assert "99 BLEU" not in result.answer and "100 BLEU" not in result.answer
-    assert "not reported as established" in result.answer
+    # A missing metric value is called a contradiction only when the cited
+    # excerpt actually reports that same metric; otherwise the claim is
+    # unsupported and the pipeline uses its general abstention wording.
+    assert "not reported as established" in result.answer or "do not adequately support" in result.answer
     # Keep the cited passage available in the evidence inspector with its failed
     # claim check, even though neither unverified numeric answer is returned.
     assert [source.source_id for source in result.sources] == ["S1"]

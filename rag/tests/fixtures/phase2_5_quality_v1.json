@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic two-paper corpus for deterministic local ResearchLens retrieval and provenance evaluation.",
+  "documents": [
+    {
+      "paper_id": "paper-atlas-01",
+      "document_id": "doc-atlas-01",
+      "filename": "Atlas-Protocol.pdf",
+      "title": "Atlas Protocol Evaluation",
+      "passages": [
+        {"chunk_id": "atlas-p1", "page": 1, "section": "Methods", "text": "Atlas system identifier AX-17A was evaluated on the Argo-9 benchmark using the amber routing protocol."},
+        {"chunk_id": "atlas-p2", "page": 2, "section": "Results", "text": "Atlas reported an accuracy of 91.2 percent on 2024-03-14 using 64 nodes."}
+      ]
+    },
+    {
+      "paper_id": "paper-boreal-02",
+      "document_id": "doc-boreal-02",
+      "filename": "Boreal-Protocol.pdf",
+      "title": "Boreal Protocol Evaluation",
+      "passages": [
+        {"chunk_id": "boreal-p1", "page": 1, "section": "Methods", "text": "Boreal system identifier AX-17B was evaluated on the Argo-9 benchmark using the blue routing protocol."},
+        {"chunk_id": "boreal-p2", "page": 2, "section": "Results", "text": "Boreal reported an accuracy of 87.6 percent on 2024-04-02 using 96 nodes."}
+      ]
+    }
+  ],
+  "cases": [
+    {"id": "single_fact_identifier", "question": "What is the Atlas system identifier?", "scope": ["paper-atlas-01"], "relevant_chunk_ids": ["atlas-p1"], "expected_facts": ["AX-17A"], "expected_pages": {"atlas-p1": 1}},
+    {"id": "single_fact_numeric_date", "question": "What accuracy on 2024-03-14 is reported by Atlas?", "scope": ["paper-atlas-01"], "relevant_chunk_ids": ["atlas-p2"], "expected_facts": ["91.2 percent", "2024-03-14"], "expected_pages": {"atlas-p2": 2}},
+    {"id": "multi_passage_atlas_profile", "question": "Atlas AX-17A system identifier; reported 91.2 percent accuracy on 2024-03-14.", "scope": ["paper-atlas-01"], "relevant_chunk_ids": ["atlas-p1", "atlas-p2"], "expected_facts": ["AX-17A", "91.2 percent", "2024-03-14"], "expected_pages": {"atlas-p1": 1, "atlas-p2": 2}},
+    {"id": "cross_document_comparison", "question": "Compare Atlas and Boreal reported accuracy on 2024-03-14 and 2024-04-02.", "scope": ["paper-atlas-01", "paper-boreal-02"], "relevant_chunk_ids": ["atlas-p2", "boreal-p2"], "expected_facts": ["91.2 percent", "87.6 percent", "2024-03-14", "2024-04-02"], "expected_pages": {"atlas-p2": 2, "boreal-p2": 2}},
+    {"id": "different_system_accuracy", "question": "Compare Atlas and Boreal reported accuracy values.", "scope": ["paper-atlas-01", "paper-boreal-02"], "relevant_chunk_ids": ["atlas-p2", "boreal-p2"], "expected_facts": ["91.2 percent", "87.6 percent"], "different_systems_not_conflict": true, "expected_pages": {"atlas-p2": 2, "boreal-p2": 2}},
+    {"id": "absent_recall", "question": "What recall did Atlas report on the Zeta-404 benchmark?", "scope": ["paper-atlas-01"], "relevant_chunk_ids": [], "expected_facts": [], "abstain_expected": true},
+    {"id": "lookalike_identifier", "question": "What is Boreal's AX-17B identifier?", "scope": ["paper-boreal-02"], "relevant_chunk_ids": ["boreal-p1"], "expected_facts": ["AX-17B"], "expected_pages": {"boreal-p1": 1}},
+    {"id": "scope_excludes_answer", "question": "What accuracy did Boreal report?", "scope": ["paper-atlas-01"], "relevant_chunk_ids": [], "expected_facts": [], "abstain_expected": true, "answer_only_outside_scope": "paper-boreal-02"}
+  ]
+}

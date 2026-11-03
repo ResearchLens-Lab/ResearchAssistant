@@ -23,6 +23,54 @@ def test_unsupported_binary_extension_is_rejected():
         DocumentLoaderFactory.get_loader("payload.exe")
 
 
+def test_pdf_extraction_keeps_original_page_numbers_and_reports_ocr_requirement(tmp_path: Path):
+    from pymupdf import Document as PdfDocument
+    from rag.ingestion.document_loader import PDFDocumentLoader
+
+    path = tmp_path / "multipage.pdf"
+    with PdfDocument() as pdf:
+        for content in ("", "Supporting evidence. " * 700, "Distinctive evidence on source page three."):
+            page = pdf.new_page()
+            if content:
+                page.insert_text((72, 72), content)
+        pdf.save(path)
+    extraction_events = []
+    document = PDFDocumentLoader().load(str(path), {"paper_id": "p", "document_id": "pdf"}, extraction_events.append)
+    assert extraction_events[-1]["completed_pages"] == 3
+    assert extraction_events[-1]["total_pages"] == 3
+    assert extraction_events[-1]["stage"] == "extracting_text"
+    assert extraction_events[-1]["completed_pages"] == 3
+    assert extraction_events[-1]["progress_type"] == "actual"
+    assert extraction_events[-1]["force"] is True
+    assert [page.page_number for page in document.pages] == [1, 2, 3]
+    chunks = SectionAwareChunkingStrategy().chunk(document)
+    evidence_chunk = next(chunk for chunk in chunks if "Distinctive evidence" in chunk.text)
+    assert evidence_chunk.metadata.page_start == 2
+    assert evidence_chunk.metadata.page_end == 3
+
+    scanned = tmp_path / "scanned.pdf"
+    with PdfDocument() as pdf:
+        pdf.new_page()
+        pdf.save(scanned)
+    with pytest.raises(ValueError, match="OCR, which is not enabled"):
+        PDFDocumentLoader().load(str(scanned), {"paper_id": "p", "document_id": "scanned"})
+
+
+def test_large_pdf_is_extracted_pagewise_without_losing_page_provenance(tmp_path: Path):
+    from pymupdf import Document as PdfDocument
+    from rag.ingestion.document_loader import PDFDocumentLoader
+
+    path = tmp_path / "many-pages.pdf"
+    with PdfDocument() as pdf:
+        for page_number in range(1, 251):
+            page = pdf.new_page()
+            page.insert_text((72, 72), f"Page marker source-page-{page_number:03d}. " + "Research text. " * 40)
+        pdf.save(path)
+    document = PDFDocumentLoader().load(str(path), {"paper_id": "p", "document_id": "large"})
+    assert document.total_pages == 250
+    assert "source-page-250" in document.pages[-1].text
+
+
 def test_text_and_csv_loaders_preserve_source_filename(tmp_path: Path):
     text = tmp_path / "notes.md"
     text.write_text("# Findings\n\nEvidence appears here.", encoding="utf-8")
