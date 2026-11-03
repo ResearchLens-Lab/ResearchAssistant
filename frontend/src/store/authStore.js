@@ -28,8 +28,10 @@ export const useAuthStore = create((set, get) => ({
   login: async (payload) => {
     set({ isLoading: true });
     try {
-      await authService.login(payload);
-      const user = await authService.getMe();
+      const response = await authService.login(payload);
+      // Current servers include the verified profile with the token response;
+      // retain /me fallback compatibility with an older backend deployment.
+      const user = response.user || await authService.getMe();
       set({ user, isAuthenticated: true, isLoading: false });
       return user;
     } catch (error) {
