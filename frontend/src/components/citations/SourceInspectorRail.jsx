@@ -39,7 +39,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
   const uncitedSources = sources.filter((s) => !s.source_id);
 
   return (
-    <aside aria-label="Evidence inspector" className={`flex h-full w-full shrink-0 flex-col border-l border-[var(--rl-border)] bg-[var(--rl-canvas)] sm:w-96 ${className}`}>
+    <aside aria-label="Evidence inspector" className={`flex h-full w-full min-w-0 flex-col border-l border-[var(--rl-border)] bg-[var(--rl-canvas)] ${className}`}>
       {/* Inspector Header Tabs */}
       <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
         <Tabs

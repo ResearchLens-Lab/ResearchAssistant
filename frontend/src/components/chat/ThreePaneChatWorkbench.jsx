@@ -289,10 +289,10 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   ]);
 
   return (
-    <div className="relative flex h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[var(--rl-canvas)]">
+    <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-[var(--rl-canvas)]">
       {/* Pane 1: Desktop Left Persistent Sidebar (History & Scope tabs) */}
       {isLeftSidebarOpen && (
-        <div className="hidden lg:flex h-full w-80 shrink-0 flex-col border-r border-[var(--rl-border)] bg-white z-10 shadow-xs">
+        <div className="hidden lg:flex h-full w-84 xl:w-88 min-w-0 shrink-0 flex-col border-r border-[var(--rl-border)] bg-white z-10 shadow-xs">
           {/* Top Switcher Tabs */}
           <div className="flex border-b border-slate-200 bg-slate-50/80 p-2 gap-1.5 shrink-0">
             <button
@@ -349,10 +349,10 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                 onDeleteConversation={handleDeleteSession}
                 isDeleting={isDeletingConversation}
                 isUpdating={isUpdatingConversation}
-                className="w-full border-r-0"
+                className="w-full min-w-0 border-r-0"
               />
             ) : (
-              <PaperScopeRail className="w-full border-r-0" />
+              <PaperScopeRail className="w-full min-w-0 border-r-0" />
             )}
           </div>
         </div>
@@ -533,7 +533,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
         </div>
 
         {/* Messages Stream */}
-        <div className="flex-1 overflow-y-auto bg-[var(--rl-canvas)]">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--rl-canvas)]">
           {isLoadingMessages ? (
             <div className="space-y-4 p-6" aria-label="Loading research messages">
               <div className="h-12 w-3/4 rounded-lg bg-slate-100 animate-pulse" />
@@ -542,7 +542,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             </div>
           ) : messages.length === 0 && !sendError ? (
             /* Welcome / New Research Workspace Hero */
-            <div className="flex h-full flex-col items-center justify-center p-6 sm:p-8 text-center text-slate-500 space-y-4 max-w-xl mx-auto">
+            <div className="min-h-full flex flex-col justify-center py-6 px-4 sm:px-6 pb-12 text-center text-slate-500 space-y-4 max-w-xl mx-auto">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--rl-selected)] text-[var(--rl-primary)] shadow-2xs">
                 <Sparkles className="h-7 w-7 text-[var(--rl-primary)]" />
               </div>
@@ -634,7 +634,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             </div>
           ) : (
             /* Rendered Messages Stream */
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
+            <div className="divide-y divide-zinc-100 pb-8 dark:divide-zinc-900">
               {messages.map((msg) =>
                 msg.pending ? (
                   <div key={msg.id}>
@@ -711,8 +711,8 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
           <div
             className={
               mobilePanel === "evidence" || isDrawerOpen
-                ? "ml-auto h-full w-[min(26rem,94vw)] shadow-xl"
-                : "h-full w-[min(22rem,92vw)] shadow-xl"
+                ? "ml-auto h-full w-[min(26rem,94vw)] shadow-xl min-w-0"
+                : "h-full w-[min(24rem,92vw)] shadow-xl min-w-0"
             }
             onClick={(event) => event.stopPropagation()}
           >

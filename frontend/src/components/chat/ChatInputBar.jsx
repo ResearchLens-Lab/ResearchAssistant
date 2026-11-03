@@ -40,7 +40,7 @@ export function ChatInputBar({ onSendMessage, onCancel, isLoading }) {
   ];
 
   return (
-    <div className="border-t border-[var(--rl-border)] bg-white p-3 sm:p-4">
+    <div className="border-t border-[var(--rl-border)] bg-white p-3 sm:p-4 shrink-0 z-10">
       <div className="mx-auto max-w-4xl space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">

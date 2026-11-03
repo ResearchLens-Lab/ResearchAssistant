@@ -93,7 +93,7 @@ export function ResearchHistorySidebar({
     <>
       <aside
         aria-label="Research history"
-        className={`flex h-full w-full shrink-0 flex-col border-r border-[var(--rl-border)] bg-white sm:w-72 md:w-80 ${className}`}
+        className={`flex h-full w-full min-w-0 flex-col border-r border-[var(--rl-border)] bg-white ${className}`}
       >
         {/* Header Bar */}
         <div className="border-b border-slate-200 bg-white p-3 space-y-3">
