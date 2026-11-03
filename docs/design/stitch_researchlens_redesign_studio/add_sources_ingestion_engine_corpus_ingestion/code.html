@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"outline-variant":"#bfc7d2","outline":"#707881","primary-container":"#007bb9","surface-container-high":"#e6e8ea","inverse-primary":"#93ccff","on-secondary-fixed-variant":"#004c6e","on-error":"#ffffff","surface":"#f7f9fb","on-surface":"#191c1e","on-background":"#191c1e","tertiary":"#006387","on-tertiary-container":"#fcfcff","on-tertiary":"#ffffff","surface-container-highest":"#e0e3e5","surface-container":"#eceef0","secondary-fixed":"#c9e6ff","on-secondary":"#ffffff","surface-dim":"#d8dadc","primary-fixed-dim":"#93ccff","error":"#ba1a1a","secondary-fixed-dim":"#89ceff","tertiary-fixed":"#c4e7ff","secondary-container":"#39b8fd","surface-container-low":"#f2f4f6","surface-variant":"#e0e3e5","primary":"#006194","surface-container-lowest":"#ffffff","on-primary-fixed-variant":"#004b73","surface-tint":"#006398","primary-fixed":"#cce5ff","background":"#f7f9fb","on-surface-variant":"#3f4850","inverse-surface":"#2d3133","on-tertiary-fixed-variant":"#004c69","secondary":"#006591","error-container":"#ffdad6","on-error-container":"#93000a","tertiary-fixed-dim":"#7bd0ff","on-secondary-container":"#004666","on-tertiary-fixed":"#001e2c","inverse-on-surface":"#eff1f3","on-primary":"#ffffff","surface-bright":"#f7f9fb","on-primary-fixed":"#001d31","on-primary-container":"#fdfcff","tertiary-container":"#007da9","on-secondary-fixed":"#001e2f"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"margin-mobile":"1rem","gutter":"1.5rem","space-sm":"0.5rem","gutter-mobile":"0.75rem","space-xl":"2.5rem","margin":"2rem","space-xs":"0.25rem","space-lg":"1.5rem","space-md":"1rem"},"fontFamily":{"headline-xl":["Plus Jakarta Sans"],"display-lg-mobile":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"],"body-sm":["Inter"],"body-lg":["Inter"],"label-lg":["Inter"],"headline-md":["Plus Jakarta Sans"],"headline-xl-mobile":["Plus Jakarta Sans"],"body-md":["Inter"],"headline-sm":["Plus Jakarta Sans"],"code-citation":["JetBrains Mono"],"display-lg":["Plus Jakarta Sans"],"label-md":["Inter"]},"fontSize":{"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><div class="fixed top-0 inset-x-0 z-50 pointer-events-none"><header class="pointer-events-auto mx-auto mt-4 px-margin max-w-[1720px]"><div class="h-16 px-space-md rounded-full bg-surface-container-lowest/85 backdrop-blur-2xl shadow-[0_16px_36px_-6px_rgba(0,97,148,0.1),0_2px_10px_rgba(25,28,30,0.04)] flex items-center justify-between gap-space-md ring-1 ring-white/60"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-[0_4px_12px_rgba(0,97,148,0.25)] group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1.5 rounded-full bg-surface-container-low/80 hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[190px] xl:max-w-[260px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low/90 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-surface-container-lowest text-primary shadow-[0_4px_14px_-2px_rgba(0,97,148,0.12)] font-semibold"><a aria-current="page" class="px-space-md py-1.5 rounded-full transition-all bg-surface-container-lowest text-primary shadow-[0_4px_14px_-2px_rgba(0,97,148,0.12)] font-semibold" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="compare-and-reports" href="#">Compare &amp; Reports</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-2 rounded-full bg-surface-container-low/90 text-on-surface-variant hover:text-on-surface hover:bg-surface-container shadow-[0_2px_6px_rgba(0,0,0,0.02)] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_8px_20px_-3px_rgba(0,97,148,0.28)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="hidden xl:flex items-center -space-x-2 pl-1"><div class="w-7 h-7 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">DR</div><div class="w-7 h-7 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">AL</div><div class="h-7 px-1.5 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center font-code-citation text-code-citation ring-2 ring-surface-container-lowest">+2</div></div><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div><div class="mt-2 px-space-md py-2 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-md shadow-[0_4px_16px_rgba(0,97,148,0.04)] flex items-center justify-between gap-space-sm text-body-sm font-body-sm ring-1 ring-white/50"><div class="flex items-center gap-space-sm overflow-x-auto text-on-surface-variant"><span class="flex items-center gap-1 font-label-md text-label-md uppercase tracking-wider text-primary"><span class="material-symbols-outlined text-[16px]">dataset</span> Corpus:</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Vaswani_2017.pdf</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Kaplan_Scaling_2020.pdf</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Chinchilla_2022.pdf</span></div><div class="hidden md:flex items-center gap-space-md flex-shrink-0 font-label-md text-label-md text-on-surface-variant"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span><span>ChromaDB &amp; Neo4j Synced</span></div><div class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-[15px]">verified</span><span>Zero-Hallucination Grounding</span></div></div></div></header></div><main class="w-full max-w-[1720px] mx-auto pt-16 pb-12 px-margin bg-surface"><div class="flex flex-col w-full relative">
+<!-- Underlying Library Screen Backdrop View (Contextual Foundation) -->
+<div class="w-full filter blur-[6px] select-none pointer-events-none opacity-40 transition-all duration-300">
+<div class="flex items-center justify-between pb-8">
+<div>
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container text-primary font-label-md text-label-md mb-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+          Corpus Repository Index
+        </div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface">Knowledge Library &amp; Repositories</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">48 papers, 1,290 extracted vectors across 6 research collections.</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-10 px-4 rounded-full bg-surface-container-low flex items-center gap-2 text-on-surface-variant font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+          Filter Types
+        </div>
+<div class="h-10 px-5 rounded-full bg-primary text-on-primary flex items-center gap-2 font-label-lg text-label-lg shadow-md">
+<span class="material-symbols-outlined text-[18px]">add</span>
+          Add Sources
+        </div>
+</div>
+</div>
+<!-- Mock Grid items underneath blur -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 pb-12">
+<div class="p-6 rounded-3xl bg-surface-container-lowest shadow-sm flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<span class="font-code-citation text-code-citation px-2 py-1 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant">PDF • 1.4 MB</span>
+<span class="material-symbols-outlined text-outline">more_vert</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Attention Is All You Need</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">The dominant sequence transduction models are based on complex recurrent or convolutional neural networks.</div>
+</div>
+<div class="p-6 rounded-3xl bg-surface-container-lowest shadow-sm flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<span class="font-code-citation text-code-citation px-2 py-1 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant">PDF • 2.8 MB</span>
+<span class="material-symbols-outlined text-outline">more_vert</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Scaling Laws for Neural Language Models</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">We study empirical scaling laws for language model performance across model size, dataset size, and compute budget.</div>
+</div>
+<div class="p-6 rounded-3xl bg-surface-container-lowest shadow-sm flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<span class="font-code-citation text-code-citation px-2 py-1 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant">DOCX • 920 KB</span>
+<span class="material-symbols-outlined text-outline">more_vert</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Chinchilla Optimal Scaling Frontiers</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">Revisiting scaling coefficients showing compute-optimal training requires equal proportional scaling of parameters and tokens.</div>
+</div>
+</div>
+</div>
+<!-- Modal Screen Overlay Dim Layer -->
+<div class="fixed inset-0 z-40 bg-on-surface/30 backdrop-blur-md transition-opacity duration-300 flex items-center justify-center p-4 sm:p-6 lg:p-10 overflow-y-auto">
+<!-- Modal Dialog Curved Floating Window -->
+<div class="relative w-full max-w-[940px] my-auto rounded-[32px] bg-surface-container-lowest shadow-[0_25px_70px_-15px_rgba(0,97,148,0.22),0_10px_30px_rgba(25,28,30,0.08)] flex flex-col overflow-hidden transform transition-all duration-300 scale-100">
+<!-- Top Atmospheric Sky Gradient Accent -->
+<div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-secondary-container via-primary to-primary-container"></div>
+<!-- Subtle Decorative Glow Bubble -->
+<div class="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-secondary-fixed/40 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-tertiary-fixed/30 blur-3xl pointer-events-none"></div>
+<!-- Modal Header Section -->
+<div class="p-6 sm:p-8 pb-5 flex flex-col gap-4 relative z-10">
+<div class="flex items-start justify-between gap-4">
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center gap-2.5">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation font-semibold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container animate-ping"></span>
+                Ingestion Engine • Research Desk
+              </span>
+<span class="font-body-sm text-body-sm text-outline-variant">•</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">Session #ING-8941</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface tracking-tight font-bold">
+              Add Sources to Project: <span class="text-primary">Transformer Scaling &amp; Retrieval Dynamics</span>
+</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed max-w-2xl">
+              Supported: PDF, DOCX, TXT, Markdown, LaTeX, and ZIP archives. Full section-aware text layer extraction with verified anchor preservation and vector clustering.
+            </p>
+</div>
+<!-- Close Modal Button -->
+<button aria-label="Close dialog" class="w-10 h-10 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-all flex-shrink-0 group" type="button">
+<span class="material-symbols-outlined text-[20px] group-hover:rotate-90 transition-transform">close</span>
+</button>
+</div>
+<!-- Ingestion Source Tab Navigation Pills -->
+<div class="flex items-center gap-2 pt-2 overflow-x-auto pb-1" id="ingestion-tabs">
+<button class="tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-primary text-on-primary shadow-[0_4px_14px_rgba(0,97,148,0.25)] flex items-center gap-2 transition-all" data-target="upload-view" type="button">
+<span class="material-symbols-outlined text-[18px]">upload_file</span>
+            Upload Files
+          </button>
+<button class="tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container flex items-center gap-2 transition-all" data-target="zip-view" type="button">
+<span class="material-symbols-outlined text-[18px]">folder_zip</span>
+            ZIP Archive
+          </button>
+<button class="tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container flex items-center gap-2 transition-all" data-target="resolver-view" type="button">
+<span class="material-symbols-outlined text-[18px]">link</span>
+            arXiv / DOI Resolver
+          </button>
+<button class="tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container flex items-center gap-2 transition-all" data-target="bibtex-view" type="button">
+<span class="material-symbols-outlined text-[18px]">auto_stories</span>
+            BibTeX Import
+          </button>
+</div>
+</div>
+<!-- Tab Content Area -->
+<div class="px-6 sm:px-8 pb-6 flex flex-col gap-6 relative z-10 overflow-y-auto max-h-[62vh]">
+<!-- Tab Panel 1: Upload Files (Active) -->
+<div class="flex flex-col gap-6" id="tab-panel-upload">
+<!-- Drag and Drop Interactive Card -->
+<div class="relative group cursor-pointer rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center text-center bg-secondary-fixed/15 hover:bg-secondary-fixed/25 transition-all duration-300" id="dropzone">
+<!-- Decorative Dashed Perimeter SVG for crisp rendering -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none rounded-3xl" xmlns="http://www.w3.org/2000/svg">
+<rect class="text-secondary-container/80 transition-colors group-hover:text-primary" fill="none" height="calc(100% - 4px)" rx="24" ry="24" stroke="currentColor" stroke-dasharray="8 8" stroke-width="2" width="calc(100% - 4px)" x="2" y="2"></rect>
+</svg>
+<!-- Floating Upload Cloud Icon Container -->
+<div class="relative mb-4">
+<div class="w-16 h-16 rounded-2xl bg-surface-container-lowest text-primary shadow-[0_8px_20px_rgba(0,97,148,0.12)] flex items-center justify-center group-hover:-translate-y-1 group-hover:scale-105 transition-all duration-300">
+<span class="material-symbols-outlined text-[32px] text-primary">cloud_upload</span>
+</div>
+<span class="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-primary"></span>
+</span>
+</div>
+<div class="flex flex-col items-center gap-1.5 max-w-md">
+<p class="font-headline-sm text-headline-sm text-on-surface">
+                Drag and drop research papers here, or 
+                <span class="text-primary font-bold hover:underline">browse files</span>
+</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                Drop multiple files simultaneously. OCR and math formula rendering enabled automatically.
+              </p>
+</div>
+<!-- Format Badges Pill -->
+<div class="mt-5 inline-flex flex-wrap items-center justify-center gap-1.5 px-4 py-1.5 rounded-full bg-surface-container-lowest text-on-surface-variant shadow-sm font-code-citation text-code-citation">
+<span class="font-semibold text-on-surface">PDF</span>
+<span>•</span>
+<span class="font-semibold text-on-surface">DOCX</span>
+<span>•</span>
+<span class="font-semibold text-on-surface">LaTeX (.tar.gz)</span>
+<span>•</span>
+<span class="font-semibold text-on-surface">BibTeX</span>
+<span>•</span>
+<span class="text-primary font-medium">Max 100 MB per file</span>
+</div>
+<input class="hidden" id="file-input" multiple="" type="file"/>
+</div>
+<!-- Real-Time Processing Pipeline Queue Container -->
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="font-label-lg text-label-lg text-on-surface font-bold uppercase tracking-wider text-[12px]">Processing Pipeline</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation font-semibold">4 Items In Session</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-2.5 py-1 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low font-label-md text-label-md flex items-center gap-1 transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px]">refresh</span>
+                  Retry Failed
+                </button>
+<span class="text-surface-container-high">•</span>
+<button class="px-2.5 py-1 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low font-label-md text-label-md flex items-center gap-1 transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px]">clear_all</span>
+                  Clear Finished
+                </button>
+</div>
+</div>
+<!-- Pipeline Item List -->
+<div class="flex flex-col gap-2.5">
+<!-- Item 1: Ready / Completed State -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low/50 shadow-[0_2px_10px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed/50 text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">picture_as_pdf</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-[15px] font-semibold text-on-surface truncate">Vaswani_2017_Attention.pdf</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant font-code-citation text-code-citation">1.4 MB</span>
+<span class="px-2 py-0.5 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">PDF</span>
+</div>
+<div class="flex items-center gap-1.5 font-body-sm text-body-sm text-primary mt-0.5">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-medium">Ready to use</span>
+<span class="text-outline-variant">•</span>
+<span class="text-on-surface-variant">15 pages indexed</span>
+<span class="text-outline-variant">•</span>
+<span class="text-on-surface-variant">42 citation anchors</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-1.5 self-end sm:self-center flex-shrink-0">
+<button class="px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md flex items-center gap-1 transition-colors" type="button">
+<span class="material-symbols-outlined text-[15px] text-primary">visibility</span>
+                    Preview
+                  </button>
+<button class="w-8 h-8 rounded-full hover:bg-error-container/40 text-on-surface-variant hover:text-error flex items-center justify-center transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">delete_outline</span>
+</button>
+</div>
+</div>
+<!-- Item 2: Active Parsing Chunking State with Striped Progress Bar -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-[0_4px_16px_rgba(0,97,148,0.06)] flex flex-col gap-3 transition-all">
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed/50 text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">article</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-[15px] font-semibold text-on-surface truncate">Devlin_2018_BERT.pdf</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant font-code-citation text-code-citation">2.1 MB</span>
+<span class="px-2 py-0.5 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">PDF</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+<span class="inline-block w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
+<span class="text-on-surface font-medium">Extracting content &amp; section-aware chunking</span>
+<span class="text-outline-variant">•</span>
+<span class="font-code-citation text-code-citation text-primary">Page 11 of 16</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3 self-end sm:self-center flex-shrink-0">
+<span class="font-code-citation text-code-citation font-bold text-primary">68%</span>
+<button class="w-8 h-8 rounded-full hover:bg-surface-container text-on-surface-variant flex items-center justify-center transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Animated Sky-Blue Progress Bar -->
+<div class="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+<div class="bg-gradient-to-r from-primary to-secondary-container h-2 rounded-full transition-all duration-500 relative" style="width: 68%;">
+<div class="absolute inset-0 bg-white/25 [background-image:linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] [background-size:16px_16px] animate-[pulse_2s_infinite]"></div>
+</div>
+</div>
+</div>
+<!-- Item 3: Vector Embedding & Graph Sync State -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest shadow-[0_4px_16px_rgba(0,97,148,0.06)] flex flex-col gap-3 transition-all">
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed/50 text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">dataset</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-[15px] font-semibold text-on-surface truncate">Lewis_2020_RAG_Paper.pdf</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant font-code-citation text-code-citation">3.8 MB</span>
+<span class="px-2 py-0.5 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">PDF</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="text-on-surface font-medium">Embedding generation &amp; Neo4j vector sync</span>
+<span class="text-outline-variant">•</span>
+<span class="font-code-citation text-code-citation text-secondary">Dim: 1536</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3 self-end sm:self-center flex-shrink-0">
+<span class="font-code-citation text-code-citation font-bold text-primary">85%</span>
+<button class="w-8 h-8 rounded-full hover:bg-surface-container text-on-surface-variant flex items-center justify-center transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<!-- Animated Sky-Blue Progress Bar -->
+<div class="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+<div class="bg-gradient-to-r from-primary to-secondary-container h-2 rounded-full transition-all duration-500 relative" style="width: 85%;">
+<div class="absolute inset-0 bg-white/20 [background-image:linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] [background-size:16px_16px]"></div>
+</div>
+</div>
+</div>
+<!-- Item 4: Queued for Parsing State -->
+<div class="p-4 rounded-2xl bg-surface-container-lowest opacity-85 hover:opacity-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-surface-container-low text-on-surface-variant flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[22px]">description</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="font-headline-sm text-[15px] font-semibold text-on-surface truncate">Kaplan_Scaling_Laws_2020.docx</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant font-code-citation text-code-citation">890 KB</span>
+<span class="px-2 py-0.5 rounded-md bg-surface-container-highest text-on-surface-variant font-code-citation text-code-citation">DOCX</span>
+</div>
+<div class="flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+<span>Queued for parsing...</span>
+<span class="text-outline-variant">•</span>
+<span class="font-code-citation text-code-citation">Position #1</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+<span class="px-3 py-1 rounded-full bg-surface-container font-label-md text-label-md text-on-surface-variant">Waiting</span>
+<button class="w-8 h-8 rounded-full hover:bg-surface-container text-on-surface-variant flex items-center justify-center transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Tab Panel 2: ZIP Archive (Hidden by default, switched via JS) -->
+<div class="hidden flex-col gap-5 py-4" id="tab-panel-zip">
+<div class="p-8 rounded-3xl bg-secondary-fixed/15 flex flex-col items-center justify-center text-center gap-3">
+<div class="w-14 h-14 rounded-2xl bg-surface-container-lowest text-primary flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-[30px]">folder_zip</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Bulk Ingestion via ZIP Archive</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-md">
+              Upload an archive containing structured PDF folders, LaTeX sources, or exported Mendeley/Zotero bundles. The engine auto-unpacks hierarchies.
+            </p>
+<button class="mt-2 px-5 py-2.5 rounded-full bg-primary text-on-primary font-label-lg text-label-lg shadow-md hover:bg-primary-container transition-all" type="button">
+              Select .ZIP Archive
+            </button>
+</div>
+</div>
+<!-- Tab Panel 3: arXiv / DOI Resolver (Hidden by default) -->
+<div class="hidden flex-col gap-4 py-4" id="tab-panel-resolver">
+<div class="flex flex-col gap-2">
+<label class="font-label-lg text-label-lg text-on-surface font-semibold" for="doi-input">arXiv Identifier or Digital Object Identifier (DOI)</label>
+<div class="flex gap-2">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">link</span>
+<input class="w-full h-12 pl-11 pr-4 rounded-2xl bg-surface-container-low text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest font-body-md text-body-md shadow-sm transition-all" id="doi-input" placeholder="e.g. 10.48550/arXiv.1706.03762 or 1706.03762" type="text"/>
+</div>
+<button class="px-6 h-12 rounded-2xl bg-primary text-on-primary font-label-lg text-label-lg hover:bg-primary-container transition-all shadow-md flex items-center gap-2" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                Resolve
+              </button>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Instant direct PDF download with metadata resolution from Semantic Scholar &amp; CrossRef APIs.</p>
+</div>
+</div>
+<!-- Tab Panel 4: BibTeX Import (Hidden by default) -->
+<div class="hidden flex-col gap-4 py-4" id="tab-panel-bibtex">
+<div class="flex flex-col gap-2">
+<label class="font-label-lg text-label-lg text-on-surface font-semibold" for="bibtex-area">Paste Raw BibTeX Citations</label>
+<textarea class="w-full p-4 rounded-2xl bg-surface-container-low font-code-inline text-code-inline text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest shadow-sm transition-all" id="bibtex-area" placeholder="@article{vaswani2017attention, title={Attention is all you need}...}" rows="4"></textarea>
+<button class="self-end px-5 py-2.5 rounded-full bg-primary text-on-primary font-label-lg text-label-lg hover:bg-primary-container transition-all shadow-md" type="button">
+              Parse Citations &amp; Match PDFs
+            </button>
+</div>
+</div>
+</div>
+<!-- Provenance Footnote & Action Footer -->
+<div class="p-6 sm:px-8 sm:py-5 bg-surface-container-low/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
+<!-- Document Provenance & Security Verification Note -->
+<div class="flex items-center gap-2.5 text-on-surface-variant font-body-sm text-body-sm max-w-md">
+<div class="w-7 h-7 rounded-full bg-secondary-fixed text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+</div>
+<p class="leading-tight text-[12px]">
+<span class="font-semibold text-on-surface">Strict Zero-Data Leakage SLA</span> • AES-256 in-transit encryption • Project-scoped vector boundary guarantee.
+          </p>
+</div>
+<!-- Footer CTA Action Buttons -->
+<div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+<button class="px-5 py-2.5 rounded-full bg-surface-container-lowest hover:bg-surface-container text-on-surface font-label-lg text-label-lg shadow-sm transition-all" type="button">
+            Cancel
+          </button>
+<button class="px-6 py-2.5 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_8px_20px_-3px_rgba(0,97,148,0.32)] hover:shadow-none hover:scale-[0.98] flex items-center gap-2 group transition-all" type="button">
+<span>Index &amp; Open Research Desk (3 Ready)</span>
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Interactive Logic for Ingestion Tabs & Dropzone -->
+<script>
+    (function initIngestionEngine() {
+      const tabButtons = document.querySelectorAll('#ingestion-tabs .tab-btn');
+      const panels = {
+        'upload-view': document.getElementById('tab-panel-upload'),
+        'zip-view': document.getElementById('tab-panel-zip'),
+        'resolver-view': document.getElementById('tab-panel-resolver'),
+        'bibtex-view': document.getElementById('tab-panel-bibtex')
+      };
+
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-target');
+          
+          tabButtons.forEach(b => {
+            b.className = 'tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container flex items-center gap-2 transition-all';
+          });
+
+          btn.className = 'tab-btn px-4 py-2 rounded-full font-label-lg text-label-lg bg-primary text-on-primary shadow-[0_4px_14px_rgba(0,97,148,0.25)] flex items-center gap-2 transition-all';
+
+          Object.keys(panels).forEach(key => {
+            if (panels[key]) {
+              if (key === target) {
+                panels[key].classList.remove('hidden');
+                panels[key].classList.add('flex');
+              } else {
+                panels[key].classList.add('hidden');
+                panels[key].classList.remove('flex');
+              }
+            }
+          });
+        });
+      });
+
+      // Dropzone interaction feedback
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('file-input');
+
+      if (dropzone && fileInput) {
+        dropzone.addEventListener('click', () => fileInput.click());
+        ['dragenter', 'dragover'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('bg-secondary-fixed/40');
+          });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+          dropzone.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('bg-secondary-fixed/40');
+          });
+        });
+      }
+    })();
+  </script>
+</div></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>

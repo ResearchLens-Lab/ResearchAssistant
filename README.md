@@ -20,7 +20,7 @@
 The RAG engine is isolated in `rag/` and provides:
 1. **Document Ingestion & Normalization**: Extracts PDF/Text pages and detects standard academic sections (Abstract, Methodology, Results, Discussion, etc.).
 2. **Section-Aware Chunking**: Chunks text while strictly tracking start/end page numbers and section boundaries.
-3. **ChromaDB Vector Storage**: Indexes chunks with deterministic, stable IDs (`{paper_id}_c{chunk_index}_p{page_start}-{page_end}`).
+3. **ChromaDB Vector Storage**: Indexes chunks with deterministic, document-scoped IDs (`{paper_id}_c{chunk_index}_d{document_id}_p{page_start}-{page_end}`).
 4. **Grounded Retrieval & Context Assembly**: Supports single and multi-paper filtering, relevance scoring, and token budgeting.
 5. **Grounded Generation & Citation Provenance**: Generates answers with verified inline citation tags (`[S1]`, `[S2]`) pointing to exact chunk IDs and page numbers.
 6. **Paper Summarization & Multi-Paper Comparison**: Structured summaries and side-by-side comparative RAG.

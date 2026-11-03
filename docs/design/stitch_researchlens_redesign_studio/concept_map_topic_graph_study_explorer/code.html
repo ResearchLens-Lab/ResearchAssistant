@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"inverse-surface":"#2d3133","surface-container-low":"#f2f4f6","outline-variant":"#bfc7d2","tertiary-fixed":"#c4e7ff","on-secondary-container":"#004666","surface":"#f7f9fb","secondary-container":"#39b8fd","inverse-on-surface":"#eff1f3","on-surface":"#191c1e","primary-fixed":"#cce5ff","on-tertiary":"#ffffff","tertiary-container":"#007da9","on-secondary-fixed-variant":"#004c6e","surface-container":"#eceef0","error":"#ba1a1a","inverse-primary":"#93ccff","background":"#f7f9fb","surface-dim":"#d8dadc","surface-container-highest":"#e0e3e5","primary":"#006194","on-secondary-fixed":"#001e2f","on-error-container":"#93000a","tertiary":"#006387","surface-container-high":"#e6e8ea","on-primary-container":"#fdfcff","primary-container":"#007bb9","secondary-fixed-dim":"#89ceff","surface-container-lowest":"#ffffff","on-tertiary-container":"#fcfcff","on-surface-variant":"#3f4850","on-primary-fixed-variant":"#004b73","on-secondary":"#ffffff","surface-tint":"#006398","on-primary-fixed":"#001d31","surface-variant":"#e0e3e5","primary-fixed-dim":"#93ccff","secondary-fixed":"#c9e6ff","outline":"#707881","tertiary-fixed-dim":"#7bd0ff","error-container":"#ffdad6","on-tertiary-fixed-variant":"#004c69","surface-bright":"#f7f9fb","on-background":"#191c1e","on-error":"#ffffff","on-tertiary-fixed":"#001e2c","secondary":"#006591","on-primary":"#ffffff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-md":"1rem","gutter-mobile":"0.75rem","gutter":"1.5rem","space-xl":"2.5rem","margin-mobile":"1rem","margin":"2rem","space-lg":"1.5rem","space-sm":"0.5rem","space-xs":"0.25rem"},"fontFamily":{"display-lg-mobile":["Plus Jakarta Sans"],"display-lg":["Plus Jakarta Sans"],"label-md":["Inter"],"headline-xl":["Plus Jakarta Sans"],"headline-xl-mobile":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"],"label-lg":["Inter"],"body-sm":["Inter"],"code-citation":["JetBrains Mono"],"body-lg":["Inter"],"body-md":["Inter"],"headline-sm":["Plus Jakarta Sans"]},"fontSize":{"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><div class="fixed top-0 inset-x-0 z-50 pointer-events-none"><header class="pointer-events-auto mx-auto mt-4 px-margin max-w-[1720px]"><div class="h-16 px-space-md rounded-full bg-surface-container-lowest/80 backdrop-blur-2xl shadow-[0_12px_32px_-4px_rgba(0,97,148,0.08),0_2px_8px_rgba(25,28,30,0.04)] flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-sm group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[190px] xl:max-w-[260px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-primary-container text-on-primary-container shadow-sm font-label-lg"><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="compare-and-reports" href="#">Compare &amp; Reports</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-2 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_6px_20px_-2px_rgba(0,97,148,0.25)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="hidden xl:flex items-center -space-x-2 pl-1"><div class="w-7 h-7 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">DR</div><div class="w-7 h-7 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">AL</div><div class="h-7 px-1.5 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center font-code-citation text-code-citation ring-2 ring-surface-container-lowest">+2</div></div><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div><div class="mt-2 px-space-md py-1.5 rounded-xl bg-surface-container-lowest/60 backdrop-blur-md shadow-[0_2px_12px_rgba(0,97,148,0.03)] flex items-center justify-between gap-space-sm text-body-sm font-body-sm"><div class="flex items-center gap-space-sm overflow-x-auto text-on-surface-variant"><span class="flex items-center gap-1 font-label-md text-label-md uppercase tracking-wider text-primary"><span class="material-symbols-outlined text-[16px]">dataset</span> Corpus:</span><span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface font-code-citation text-code-citation">Vaswani_2017.pdf</span><span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface font-code-citation text-code-citation">Kaplan_Scaling_2020.pdf</span><span class="px-2 py-0.5 rounded-md bg-surface-container text-on-surface font-code-citation text-code-citation">Chinchilla_2022.pdf</span></div><div class="hidden md:flex items-center gap-space-md flex-shrink-0 font-label-md text-label-md text-on-surface-variant"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span><span>ChromaDB &amp; Neo4j Synced</span></div><div class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-[15px]">verified</span><span>Zero-Hallucination Grounding</span></div></div></div></header></div><main class="w-full max-w-[1720px] mx-auto pt-28 pb-12 px-margin bg-surface"><div class="flex flex-col w-full">
+<!-- Interactive Top Sub-Header & Dynamic Ribbon -->
+<section class="flex flex-col gap-space-lg mb-space-lg">
+<!-- Header Hero Slice -->
+<div class="relative overflow-hidden rounded-3xl bg-surface-container-lowest p-space-lg sm:p-space-xl shadow-xl shadow-secondary/5 border border-secondary-fixed/40">
+<div class="absolute -right-20 -top-20 w-96 h-96 rounded-full bg-gradient-to-br from-secondary-fixed/30 via-tertiary-fixed/20 to-transparent blur-3xl pointer-events-none"></div>
+<div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full bg-gradient-to-tr from-primary-fixed/20 via-surface-container-low to-transparent blur-2xl pointer-events-none"></div>
+<div class="relative flex flex-col xl:flex-row xl:items-center justify-between gap-space-lg">
+<div class="max-w-3xl min-w-0">
+<div class="flex items-center gap-space-xs text-primary font-label-md text-label-md uppercase tracking-wider mb-2">
+<span class="material-symbols-outlined text-[16px]">account_tree</span>
+<span>Semantic Cartography Engine • Topological Graph</span>
+</div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight mb-2">
+            Cross-Corpus Knowledge Graph &amp; Interactive Concept Map
+          </h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl leading-relaxed">
+            Topological semantic relationships, mathematical dependencies, and grounded concept clusters extracted from 3 indexed manuscripts with zero-hallucination vector anchors.
+          </p>
+</div>
+<!-- Quick Telemetry & Status Badges -->
+<div class="flex flex-wrap items-center gap-space-sm flex-shrink-0">
+<div class="px-space-md py-space-sm rounded-2xl bg-surface-container-low/80 backdrop-blur-md border border-outline-variant/30 flex items-center gap-space-sm shadow-sm">
+<div class="w-2.5 h-2.5 rounded-full bg-secondary-container animate-ping"></div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant">Active Corpus</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">3 Manuscripts Grounded</span>
+</div>
+</div>
+<div class="px-space-md py-space-sm rounded-2xl bg-surface-container-low/80 backdrop-blur-md border border-outline-variant/30 flex items-center gap-space-sm shadow-sm">
+<span class="material-symbols-outlined text-primary text-[22px]">device_hub</span>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant">Topological Density</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">28 Nodes • 41 Directed Edges</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Controls & Filter Toolbar Island -->
+<div class="mt-space-lg pt-space-md border-t border-surface-container flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-space-md">
+<!-- Node Search & Segmented Filtering -->
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-space-sm flex-grow max-w-4xl">
+<div class="relative flex-grow max-w-md">
+<span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full pl-10 pr-24 py-2 text-body-sm font-body-sm rounded-full bg-surface-container text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-surface-container-lowest transition-all" id="nodeSearchInput" placeholder="Filter nodes (e.g. 'softmax', 'gradient', 'encoder', 'MIPS')..." type="text"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 font-code-citation text-[10px] text-outline px-1.5 py-0.5 rounded bg-surface-container-high">ESC clear</span>
+</div>
+<!-- Tag Filters -->
+<div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none" id="filterPillContainer">
+<button class="px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-primary text-on-primary shadow-sm" data-filter="all">
+<span>All</span>
+<span class="text-[10px] py-0.5 px-1.5 rounded-full bg-primary-container text-on-primary-container">28</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface" data-filter="architecture">
+<span>Architectures</span>
+<span class="text-[10px] py-0.5 px-1.5 rounded-full bg-surface-container-highest text-on-surface-variant">8</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface" data-filter="math">
+<span>Loss &amp; Bounds</span>
+<span class="text-[10px] py-0.5 px-1.5 rounded-full bg-surface-container-highest text-on-surface-variant">9</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface" data-filter="gap">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>Evidence Gaps</span>
+<span class="text-[10px] py-0.5 px-1.5 rounded-full bg-surface-container-highest text-on-surface-variant">6</span>
+</button>
+</div>
+</div>
+<!-- Canvas Manipulators & Export Dock -->
+<div class="flex items-center gap-space-xs self-end lg:self-auto flex-shrink-0">
+<div class="flex items-center rounded-full bg-surface-container p-1 border border-outline-variant/30">
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-all" id="zoomInBtn" title="Zoom In">
+<span class="material-symbols-outlined text-[18px]">zoom_in</span>
+</button>
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-all" id="zoomOutBtn" title="Zoom Out">
+<span class="material-symbols-outlined text-[18px]">zoom_out</span>
+</button>
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-all" id="zoomResetBtn" title="Reset View">
+<span class="material-symbols-outlined text-[18px]">center_focus_strong</span>
+</button>
+</div>
+<div class="h-6 w-[1px] bg-outline-variant/40 mx-1"></div>
+<!-- Layout Mode Switcher -->
+<div class="flex items-center bg-surface-container p-1 rounded-full text-label-md font-label-md text-on-surface-variant">
+<button class="px-3 py-1 rounded-full bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all" id="btnLayoutPhysics">Physics Force</button>
+<button class="px-3 py-1 rounded-full hover:text-on-surface transition-all" id="btnLayoutHierarchy">Hierarchical</button>
+<button class="px-3 py-1 rounded-full hover:text-on-surface transition-all" id="btnLayoutCausal">Causal Flow</button>
+</div>
+<div class="h-6 w-[1px] bg-outline-variant/40 mx-1"></div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md transition-all" id="physicsToggleBtn" title="Freeze graph force physics">
+<span class="material-symbols-outlined text-[16px] text-primary" id="physicsIcon">pause_circle</span>
+<span id="physicsStatus">Pause</span>
+</button>
+<div class="relative group">
+<button class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-secondary-container/20 hover:bg-secondary-container/40 text-primary font-label-md text-label-md border border-secondary-container/40 transition-all">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+<span>Export</span>
+</button>
+<div class="absolute right-0 top-full mt-2 w-48 py-2 bg-surface-container-lowest rounded-2xl shadow-xl border border-secondary-fixed/50 hidden group-hover:block z-30">
+<button class="w-full text-left px-4 py-2 font-body-sm text-body-sm text-on-surface hover:bg-surface-container flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[16px]">image</span> Vector SVG (.svg)
+              </button>
+<button class="w-full text-left px-4 py-2 font-body-sm text-body-sm text-on-surface hover:bg-surface-container flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-[16px]">hub</span> Gephi GraphML (.xml)
+              </button>
+<button class="w-full text-left px-4 py-2 font-body-sm text-body-sm text-on-surface hover:bg-surface-container flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[16px]">data_object</span> Cytoscape JSON
+              </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Canvas Workspace Grid: Left 65% Interactive Vector Graph + Right 35% Concept Inspector -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
+<!-- LEFT PANE: Interactive Force-Directed Concept Network Canvas (8 cols = 66.6%) -->
+<div class="xl:col-span-8 flex flex-col gap-space-md">
+<!-- Graph Canvas Container -->
+<div class="relative w-full h-[760px] rounded-3xl bg-surface-container-lowest border border-secondary-fixed/50 shadow-xl shadow-secondary/5 overflow-hidden flex flex-col">
+<!-- Graph Status & Breadcrumb Micro-bar -->
+<div class="absolute top-4 left-4 z-20 flex items-center gap-2 bg-surface-container-lowest/80 backdrop-blur-xl px-3.5 py-2 rounded-2xl border border-outline-variant/30 shadow-sm">
+<span class="material-symbols-outlined text-primary text-[18px]">grain</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Cluster:</span>
+<span class="font-label-lg text-label-lg text-primary font-semibold">Self-Attention Scaling &amp; Bottlenecks</span>
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+<span class="font-code-citation text-[11px] text-tertiary">Vaswani • Devlin • Radford</span>
+</div>
+<!-- Canvas Tools Floating Palette -->
+<div class="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-surface-container-lowest/85 backdrop-blur-xl p-1.5 rounded-2xl border border-outline-variant/30 shadow-sm">
+<button class="w-8 h-8 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary-fixed/30 transition-colors" id="toggleLabelsBtn" title="Toggle Edge Labels">
+<span class="material-symbols-outlined text-[18px]">label</span>
+</button>
+<button class="w-8 h-8 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary-fixed/30 transition-colors" id="highlightPathBtn" title="Highlight Critical Path">
+<span class="material-symbols-outlined text-[18px]">route</span>
+</button>
+<button class="w-8 h-8 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary-fixed/30 transition-colors" id="toggleHeatmapBtn" title="Heatmap of Citation Strength">
+<span class="material-symbols-outlined text-[18px]">flare</span>
+</button>
+<button class="w-8 h-8 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary-fixed/30 transition-colors" id="fullscreenCanvasBtn" title="Full View Canvas">
+<span class="material-symbols-outlined text-[18px]">fullscreen</span>
+</button>
+</div>
+<!-- Interactive SVG / Vector Canvas with Animated Edges & Force Nodes -->
+<div class="relative w-full h-full cursor-grab active:cursor-grabbing select-none overflow-hidden" id="graphCanvasViewport">
+<!-- Background Grid Matrix Pattern -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-40" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<pattern height="28" id="dotPattern" patternunits="userSpaceOnUse" width="28" x="0" y="0">
+<circle cx="2" cy="2" fill="#006194" fill-opacity="0.18" r="1.2"></circle>
+</pattern>
+<radialgradient cx="50%" cy="50%" id="hubPulseGlow" r="50%">
+<stop offset="0%" stop-color="#39b8fd" stop-opacity="0.3"></stop>
+<stop offset="60%" stop-color="#006194" stop-opacity="0.08"></stop>
+<stop offset="100%" stop-color="#ffffff" stop-opacity="0"></stop>
+</radialgradient>
+<lineargradient id="edgeGlowGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#006194" stop-opacity="0.8"></stop>
+<stop offset="100%" stop-color="#39b8fd" stop-opacity="0.8"></stop>
+</lineargradient>
+<marker id="arrowHead" markerheight="8" markerwidth="8" orient="auto" refx="24" refy="4">
+<path d="M 0 1 L 6 4 L 0 7 z" fill="#006194" opacity="0.6"></path>
+</marker>
+<marker id="arrowHeadWarning" markerheight="8" markerwidth="8" orient="auto" refx="24" refy="4">
+<path d="M 0 1 L 6 4 L 0 7 z" fill="#ba1a1a" opacity="0.7"></path>
+</marker>
+</defs>
+<rect fill="url(#dotPattern)" height="100%" width="100%"></rect>
+</svg>
+<!-- Dynamic SVG Vector Layer for Connectors, Edge Paths, and Flow Particles -->
+<svg class="absolute inset-0 w-full h-full z-0 transition-transform duration-300" id="networkGraphSvg" preserveaspectratio="xMidYMid meet" viewbox="0 0 1000 760">
+<!-- Dynamic Active Flow Bezier Edges -->
+<!-- Edge 1 to 2: Scaled Dot-Product -> Softmax Saturation -->
+<g class="graph-edge-group group cursor-pointer" data-edge="mitigates">
+<path class="transition-all duration-300 group-hover:stroke-primary group-hover:stroke-[3.5]" d="M 470 360 C 370 300, 290 280, 230 240" fill="none" id="edge-1-2" marker-end="url(#arrowHead)" stroke="#007bb9" stroke-dasharray="6,4" stroke-width="2.2"></path>
+<circle fill="#39b8fd" r="3.5">
+<animatemotion dur="3s" path="M 470 360 C 370 300, 290 280, 230 240" repeatcount="indefinite"></animatemotion>
+</circle>
+<!-- Edge Label Capsule -->
+<rect class="shadow-sm" fill="#ffffff" height="20" rx="10" stroke="#c9e6ff" stroke-width="1" width="76" x="305" y="275"></rect>
+<text fill="#004666" font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" x="343" y="289">Mitigates</text>
+</g>
+<!-- Edge 1 to 3: Scaled Dot-Product -> Query-Key Dimensionality (d_k) -->
+<g class="graph-edge-group group cursor-pointer" data-edge="normalizing">
+<path class="transition-all duration-300 group-hover:stroke-primary group-hover:stroke-[3]" d="M 480 400 C 430 480, 360 520, 280 570" fill="none" id="edge-1-3" marker-end="url(#arrowHead)" stroke="#006194" stroke-width="2"></path>
+<circle fill="#007da9" r="3">
+<animatemotion dur="2.4s" path="M 480 400 C 430 480, 360 520, 280 570" repeatcount="indefinite"></animatemotion>
+</circle>
+<rect fill="#ffffff" height="20" rx="10" stroke="#c9e6ff" stroke-width="1" width="108" x="340" y="470"></rect>
+<text fill="#004b73" font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" x="394" y="484">Normalizing Divisor</text>
+</g>
+<!-- Edge 1 to 4: Scaled Dot-Product -> Quadratic Complexity O(n²) -->
+<g class="graph-edge-group group cursor-pointer" data-edge="incurs">
+<path d="M 540 370 C 630 350, 710 330, 770 290" fill="none" id="edge-1-4" marker-end="url(#arrowHead)" stroke="#007da9" stroke-linecap="round" stroke-width="2.2"></path>
+<circle fill="#39b8fd" r="3.5">
+<animatemotion dur="4s" path="M 540 370 C 630 350, 710 330, 770 290" repeatcount="indefinite"></animatemotion>
+</circle>
+<rect fill="#ffffff" height="20" rx="10" stroke="#c9e6ff" stroke-width="1" width="86" x="620" y="315"></rect>
+<text fill="#004666" font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" x="663" y="329">Bottleneck: O(n²)</text>
+</g>
+<!-- Edge 1 to 5: Scaled Dot-Product -> Bidirectional Masking -->
+<g class="graph-edge-group group cursor-pointer" data-edge="adapts">
+<path d="M 510 330 C 520 220, 560 170, 600 120" fill="none" id="edge-1-5" marker-end="url(#arrowHead)" stroke="#006194" stroke-dasharray="4,4" stroke-width="1.8"></path>
+<circle fill="#39b8fd" r="3">
+<animatemotion dur="3.5s" path="M 510 330 C 520 220, 560 170, 600 120" repeatcount="indefinite"></animatemotion>
+</circle>
+<rect fill="#ffffff" height="20" rx="10" stroke="#c9e6ff" stroke-width="1" width="112" x="525" y="195"></rect>
+<text fill="#004666" font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" x="581" y="209">Structural Adaptation</text>
+</g>
+<!-- Edge 4 to 7: Quadratic Complexity -> Long-Context Barrier (Unresolved Gap) -->
+<g class="graph-edge-group group cursor-pointer" data-edge="barrier">
+<path d="M 800 310 C 830 420, 810 500, 760 590" fill="none" id="edge-4-7" marker-end="url(#arrowHeadWarning)" stroke="#ba1a1a" stroke-dasharray="6,4" stroke-width="2.4"></path>
+<circle fill="#ba1a1a" r="3.5">
+<animatemotion dur="2s" path="M 800 310 C 830 420, 810 500, 760 590" repeatcount="indefinite"></animatemotion>
+</circle>
+<rect fill="#ffdad6" height="20" rx="10" stroke="#ba1a1a" stroke-width="1" width="102" x="760" y="445"></rect>
+<text fill="#93000a" font-family="Inter" font-size="10" font-weight="700" text-anchor="middle" x="811" y="459">Unresolved Limit</text>
+</g>
+<!-- Edge 5 to 6: BERT Masking -> DPR Passage Indexing -->
+<g class="graph-edge-group group cursor-pointer" data-edge="indexing">
+<path d="M 660 130 C 720 150, 780 180, 820 210" fill="none" id="edge-5-6" marker-end="url(#arrowHead)" stroke="#007da9" stroke-width="1.8"></path>
+<circle fill="#39b8fd" r="2.5">
+<animatemotion dur="3.2s" path="M 660 130 C 720 150, 780 180, 820 210" repeatcount="indefinite"></animatemotion>
+</circle>
+<rect fill="#ffffff" height="18" rx="9" stroke="#c9e6ff" stroke-width="1" width="98" x="710" y="150"></rect>
+<text fill="#004666" font-family="Inter" font-size="9.5" font-weight="600" text-anchor="middle" x="759" y="163">Decoupled Dual</text>
+</g>
+<!-- Edge 3 to 2: d_k Dimension -> Softmax Gradient Control -->
+<g class="graph-edge-group group cursor-pointer" data-edge="stabilizes">
+<path d="M 230 540 C 180 440, 160 340, 190 250" fill="none" id="edge-3-2" marker-end="url(#arrowHead)" stroke="#006194" stroke-dasharray="3,3" stroke-width="1.8"></path>
+<rect fill="#ffffff" height="18" rx="9" stroke="#c9e6ff" stroke-width="1" width="88" x="140" y="390"></rect>
+<text fill="#004b73" font-family="Inter" font-size="9.5" font-weight="600" text-anchor="middle" x="184" y="403">Bounds Stdev</text>
+</g>
+</svg>
+<!-- GRAPH INTERACTIVE HTML NODES LAYER (Stacked precisely over SVG coordinates) -->
+<div class="absolute inset-0 pointer-events-none">
+<!-- NODE 1: Scaled Dot-Product Attention (Central Hub - Selected) -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="sdpa" id="node-sdpa" style="left: 50%; top: 49%;">
+<!-- Animated Glowing Halo for Central Hub -->
+<div class="absolute -inset-6 rounded-full bg-secondary-container/20 animate-pulse pointer-events-none"></div>
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-3xl p-3 shadow-2xl border-2 border-primary ring-4 ring-primary-fixed/40 min-w-[210px] text-center">
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary text-on-primary font-code-citation text-[10px] tracking-wide mb-1.5 font-bold uppercase">
+<span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                  Primary Core Hub
+                </div>
+<span class="font-headline-sm text-headline-sm text-on-surface leading-tight font-bold">
+                  Scaled Dot-Product Attention
+                </span>
+<div class="flex items-center justify-center gap-2 mt-2 pt-2 border-t border-surface-container w-full">
+<span class="font-code-inline text-[11px] text-primary font-semibold">Attn(Q,K,V)</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-label-md text-[10px]">6 Edges</span>
+</div>
+</div>
+</div>
+<!-- NODE 2: Softmax Saturation -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="softmax" id="node-softmax" style="left: 21%; top: 30%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-2xl p-2.5 shadow-lg border border-secondary-fixed hover:border-primary min-w-[175px] text-center">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-[10px] mb-1">
+<span class="material-symbols-outlined text-[12px]">functions</span>
+                  Mathematical Hazard
+                </div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">
+                  Softmax Saturation
+                </span>
+<span class="font-body-sm text-[11px] text-on-surface-variant mt-0.5">Vanishing Gradients • §3.2</span>
+</div>
+</div>
+<!-- NODE 3: Query-Key Dimensionality (d_k) -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="dk" id="node-dk" style="left: 26%; top: 76%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-2xl p-2.5 shadow-lg border border-tertiary-fixed hover:border-tertiary min-w-[170px] text-center">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-[10px] mb-1">
+<span class="font-code-citation text-[10px]">√d_k</span>
+                  Normalizer Scale
+                </div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">
+                  Projection Dim (d_k)
+                </span>
+<span class="font-body-sm text-[11px] text-on-surface-variant mt-0.5">Variance Scale σ²=1</span>
+</div>
+</div>
+<!-- NODE 4: Quadratic Complexity O(n²) -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="quadratic" id="node-quadratic" style="left: 79%; top: 37%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-2xl p-2.5 shadow-lg border-2 border-secondary-container hover:border-primary min-w-[185px] text-center">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-[10px] font-bold mb-1">
+<span class="material-symbols-outlined text-[13px] text-primary">speed</span>
+                  Compute Bound
+                </div>
+<span class="font-label-lg text-label-lg text-on-surface font-bold text-primary">
+                  Quadratic Complexity O(n²)
+                </span>
+<span class="font-body-sm text-[11px] text-on-surface-variant mt-0.5">Pairwise Token Matrix</span>
+</div>
+</div>
+<!-- NODE 5: Bidirectional Masking (BERT) -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="masking" id="node-masking" style="left: 62%; top: 14%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-2xl p-2.5 shadow-lg border border-secondary-fixed min-w-[175px] text-center">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-[10px] mb-1">
+<span>Architecture Pivot</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">
+                  Bidirectional Masking
+                </span>
+<span class="font-body-sm text-[11px] text-on-surface-variant mt-0.5">Devlin et al. 2018</span>
+</div>
+</div>
+<!-- NODE 6: DPR Passage Indexing -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="dpr" id="node-dpr" style="left: 85%; top: 26%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-2xl p-2 shadow-md border border-outline-variant/40 min-w-[155px] text-center">
+<span class="font-label-md text-label-md text-on-surface font-semibold">
+                  DPR Passage Indexing
+                </span>
+<span class="font-code-citation text-[10px] text-tertiary">MIPS FAISS Matrix</span>
+</div>
+</div>
+<!-- NODE 7: Long-Context Barrier (>10k Tokens) — UNRESOLVED GAP -->
+<div class="absolute pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-105" data-node="barrier" id="node-barrier" style="left: 77%; top: 78%;">
+<div class="relative flex flex-col items-center bg-surface-container-lowest rounded-3xl p-3 shadow-xl border-2 border-dashed border-error ring-4 ring-error-container/30 min-w-[195px] text-center">
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-md text-[10px] font-bold mb-1">
+<span class="material-symbols-outlined text-[13px]">warning</span>
+                  Identified Research Gap
+                </div>
+<span class="font-label-lg text-label-lg text-error font-bold">
+                  Long-Context Barrier
+                </span>
+<span class="font-body-sm text-[11px] text-on-surface-variant mt-0.5">Memory Thrashing &gt;10k Tok</span>
+<div class="mt-1.5 px-2 py-0.5 rounded-md bg-error/10 text-error font-code-citation text-[10px]">
+                  Zero Citation Refutation
+                </div>
+</div>
+</div>
+</div>
+<!-- Bottom-Left Interactive Graph Mini-Map & Topology Legend Dock -->
+<div class="absolute bottom-4 left-4 z-20 flex flex-col sm:flex-row items-end sm:items-center gap-3">
+<!-- Graph Navigation Mini-Map Overlay -->
+<div class="relative w-36 h-24 rounded-2xl bg-surface-container-lowest/90 backdrop-blur-md p-1.5 border border-secondary-fixed/50 shadow-lg hidden sm:block">
+<div class="relative w-full h-full bg-surface-container-low rounded-xl overflow-hidden">
+<!-- Mini-map Nodes Dots -->
+<div class="absolute w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-primary-fixed" style="left: 48%; top: 48%;"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-secondary" style="left: 20%; top: 30%;"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-tertiary" style="left: 26%; top: 76%;"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-secondary-container" style="left: 78%; top: 38%;"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-outline" style="left: 62%; top: 15%;"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-error" style="left: 76%; top: 78%;"></div>
+<!-- Interactive Viewport Frame -->
+<div class="absolute w-16 h-12 border-2 border-primary/70 bg-primary/10 rounded pointer-events-none" style="left: 25%; top: 20%;"></div>
+</div>
+<div class="absolute bottom-1 right-2 font-code-citation text-[8px] text-outline font-semibold">VIEWPORT</div>
+</div>
+<!-- Topological Node Legend -->
+<div class="bg-surface-container-lowest/90 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-outline-variant/30 shadow-md flex items-center gap-4 text-label-md font-label-md text-on-surface-variant flex-wrap">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-primary shadow-sm"></span>
+<span>Grounded Core Hub</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rotate-45 rounded-sm bg-tertiary"></span>
+<span>Mathematical Op</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-container"></span>
+<span>Complexity Bound</span>
+</div>
+<div class="flex items-center gap-1.5 text-error font-medium">
+<span class="w-2.5 h-2.5 rounded-full border-2 border-dashed border-error"></span>
+<span>Unaddressed Gap</span>
+</div>
+</div>
+</div>
+<!-- Bottom-Right Reset Gravity Chip -->
+<div class="absolute bottom-4 right-4 z-20">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md border border-secondary-fixed/50 shadow-md hover:bg-surface-container transition-all text-on-surface font-label-md text-label-md" id="recenterBtn">
+<span class="material-symbols-outlined text-[16px] text-primary">filter_center_focus</span>
+<span>Re-Center Topology</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Graph Analytics & Connected Sub-Matrix Metric Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
+<div class="p-space-md rounded-2xl bg-surface-container-lowest border border-secondary-fixed/40 shadow-sm flex items-start gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-primary-fixed/40 text-primary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-md text-label-md text-on-surface-variant">Clustering Coefficient</span>
+<div class="font-headline-sm text-headline-sm text-on-surface font-bold mt-0.5">0.784 <span class="text-xs font-normal text-tertiary">(±0.04)</span></div>
+<p class="font-body-sm text-[11px] text-outline mt-1 line-clamp-1">Dense small-world connectivity across Transformer papers</p>
+</div>
+</div>
+<div class="p-space-md rounded-2xl bg-surface-container-lowest border border-secondary-fixed/40 shadow-sm flex items-start gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed/40 text-secondary flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">timeline</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-md text-label-md text-on-surface-variant">Average Path Length</span>
+<div class="font-headline-sm text-headline-sm text-on-surface font-bold mt-0.5">2.14 <span class="text-xs font-normal text-secondary">Hops</span></div>
+<p class="font-body-sm text-[11px] text-outline mt-1 line-clamp-1">Rapid derivation between theoretical bounds and DPR</p>
+</div>
+</div>
+<div class="p-space-md rounded-2xl bg-surface-container-lowest border border-secondary-fixed/40 shadow-sm flex items-start gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-error-container/40 text-error flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">search_off</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-md text-label-md text-on-surface-variant">Identified Literature Gaps</span>
+<div class="font-headline-sm text-headline-sm text-error font-bold mt-0.5">6 Missing Links</div>
+<p class="font-body-sm text-[11px] text-outline mt-1 line-clamp-1">Long-context attention &amp; sub-quadratic bounds</p>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT PANE: Selected Concept Inspector & Deep Study Synthesis (4 cols = 33.3%) -->
+<div class="xl:col-span-4 flex flex-col gap-space-md">
+<!-- Node Detail Card -->
+<div class="bg-surface-container-lowest rounded-3xl p-space-lg shadow-xl shadow-secondary/5 border border-secondary-fixed/50 relative overflow-hidden" id="conceptInspectorPanel">
+<!-- Header Inspector State -->
+<div class="flex items-start justify-between gap-space-sm mb-space-md pb-space-sm border-b border-surface-container">
+<div class="min-w-0">
+<div class="flex items-center gap-1.5 mb-1 text-primary">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span class="font-label-md text-label-md uppercase tracking-wider font-semibold">Active Inspector Node</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight" id="inspectorTitle">
+              Scaled Dot-Product Attention
+            </h2>
+<div class="flex items-center gap-2 mt-1">
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-md text-label-md font-medium">Architecture Hub</span>
+<span class="font-code-citation text-[11px] text-outline">§3.2.1 Vaswani et al.</span>
+</div>
+</div>
+<div class="flex items-center gap-1 flex-shrink-0">
+<button class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant transition-colors" title="Bookmark Concept">
+<span class="material-symbols-outlined text-[18px]">bookmark</span>
+</button>
+<button class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant transition-colors" title="Copy TeX Formulation">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Rigorous Mathematical Formulation & LaTeX Card -->
+<div class="mb-space-md rounded-2xl bg-surface-container-low/70 p-space-md border border-secondary-fixed/40">
+<div class="flex items-center justify-between text-outline mb-1.5">
+<span class="font-label-md text-label-md uppercase tracking-wider font-semibold text-primary">Mathematical Formulation</span>
+<span class="font-code-citation text-[11px]">Eq. 1 • Attention Matrix</span>
+</div>
+<!-- Typeset Formula Box -->
+<div class="bg-surface-container-lowest rounded-xl p-3 shadow-inner my-2 overflow-x-auto text-center border border-outline-variant/30">
+<div class="font-code-citation text-body-md text-on-surface font-semibold tracking-wide py-1">
+              Attention(Q, K, V) = softmax<span class="text-primary text-base font-bold">(</span><span class="inline-flex flex-col items-center align-middle mx-1"><span class="border-b border-on-surface px-1 text-xs">Q K<sup>T</sup></span><span class="text-xs">√d<sub>k</sub></span></span><span class="text-primary text-base font-bold">)</span> V
+            </div>
+</div>
+<!-- Semantic Clarification -->
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed mt-2.5">
+            Stabilizes variance growth across high-dimensional projection tensors. For large values of <span class="font-code-inline text-[11px] font-bold text-primary">d_k</span>, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients. Dividing by <span class="font-code-inline text-[11px] font-bold text-primary">√d_k</span> counteracts this expansion.
+          </p>
+</div>
+<!-- Grounded Sources & Verbatim Excerpts -->
+<div class="mb-space-md">
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-label-lg text-label-lg text-on-surface font-semibold flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">menu_book</span>
+              Corroborating Citations (2 Manuscripts)
+            </h3>
+<span class="font-code-citation text-[10px] text-tertiary bg-tertiary-fixed px-2 py-0.5 rounded-full">100% Grounded</span>
+</div>
+<div class="flex flex-col gap-2">
+<!-- Citation 1 -->
+<div class="p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-colors border border-outline-variant/20 group cursor-pointer">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">Vaswani et al. (2017) • Attention Is All You Need</span>
+<span class="font-code-citation text-[10px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">p. 4, §3.2.1</span>
+</div>
+<p class="font-body-sm text-[12px] text-on-surface-variant italic border-l-2 border-primary pl-2 my-1.5">
+                “We suspect that for large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1 / √d_k.”
+              </p>
+<div class="flex items-center justify-between text-[11px] text-primary pt-1">
+<span class="flex items-center gap-1 font-label-md"><span class="material-symbols-outlined text-[14px]">find_in_page</span> Jump to PDF Anchor</span>
+<span class="font-code-citation text-[10px] text-outline">cosine_sim: 0.962</span>
+</div>
+</div>
+<!-- Citation 2 -->
+<div class="p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-colors border border-outline-variant/20 group cursor-pointer">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-md text-label-md font-bold text-on-surface group-hover:text-primary transition-colors">Devlin et al. (2018) • BERT Pre-training</span>
+<span class="font-code-citation text-[10px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">p. 3, §2.1</span>
+</div>
+<p class="font-body-sm text-[12px] text-on-surface-variant italic border-l-2 border-tertiary pl-2 my-1.5">
+                “We employ the standard bidirectional Transformer architecture based on the original multi-head scaled attention mechanism without structural modification to the core divisor.”
+              </p>
+<div class="flex items-center justify-between text-[11px] text-tertiary pt-1">
+<span class="flex items-center gap-1 font-label-md"><span class="material-symbols-outlined text-[14px]">find_in_page</span> Jump to PDF Anchor</span>
+<span class="font-code-citation text-[10px] text-outline">cosine_sim: 0.884</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Connected Topological Neighbors -->
+<div class="mb-space-md">
+<span class="font-label-md text-label-md uppercase tracking-wider text-outline font-semibold block mb-2">Connected Semantic Neighbors</span>
+<div class="flex flex-wrap gap-1.5" id="inspectorNeighbors">
+<button class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-primary-fixed text-on-surface text-label-md font-label-md transition-colors flex items-center gap-1" onclick="focusNode('softmax')">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Softmax Saturation</span>
+</button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-primary-fixed text-on-surface text-label-md font-label-md transition-colors flex items-center gap-1" onclick="focusNode('dk')">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span>Projection Dim (d_k)</span>
+</button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-primary-fixed text-on-surface text-label-md font-label-md transition-colors flex items-center gap-1" onclick="focusNode('quadratic')">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+<span>Quadratic Bottleneck O(n²)</span>
+</button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container hover:bg-primary-fixed text-on-surface text-label-md font-label-md transition-colors flex items-center gap-1" onclick="focusNode('barrier')">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>Long-Context Barrier</span>
+</button>
+</div>
+</div>
+<!-- Quick Study Module & Synthesis Generator Actions -->
+<div class="rounded-2xl bg-gradient-to-br from-primary/5 via-secondary-fixed/20 to-transparent p-space-md border border-secondary-fixed/50">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-[20px]">psychology</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Generate Study Module</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-space-sm">
+            Synthesize active node context into active recall flashcards, thesis defense questions, or comparative derivation briefs.
+          </p>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+<button class="px-3 py-2 rounded-xl bg-surface-container-lowest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md border border-secondary-fixed shadow-sm transition-all text-center flex flex-col items-center justify-center gap-1 group">
+<span class="material-symbols-outlined text-[18px] text-primary group-hover:text-on-primary">style</span>
+<span>5 Flashcards</span>
+</button>
+<button class="px-3 py-2 rounded-xl bg-surface-container-lowest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md border border-secondary-fixed shadow-sm transition-all text-center flex flex-col items-center justify-center gap-1 group">
+<span class="material-symbols-outlined text-[18px] text-primary group-hover:text-on-primary">summarize</span>
+<span>Synthesis Brief</span>
+</button>
+<button class="px-3 py-2 rounded-xl bg-surface-container-lowest hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md border border-secondary-fixed shadow-sm transition-all text-center flex flex-col items-center justify-center gap-1 group">
+<span class="material-symbols-outlined text-[18px] text-primary group-hover:text-on-primary">article</span>
+<span>Derivation TeX</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Quick Concept Diagnostic Quiz Card Drawer -->
+<div class="bg-surface-container-lowest rounded-3xl p-space-lg shadow-xl shadow-secondary/5 border border-secondary-fixed/50">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="w-7 h-7 rounded-lg bg-secondary-container/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">quiz</span>
+</span>
+<span class="font-label-lg text-label-lg text-on-surface font-bold">Diagnostic Active-Recall Check</span>
+</div>
+<span class="font-code-citation text-[10px] text-outline">Q 1/3 • Grounded</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium mb-space-sm leading-snug">
+          Why does an unscaled dot-product attention matrix cause severe gradient vanishing during backpropagation?
+        </p>
+<!-- Quiz Options -->
+<div class="flex flex-col gap-2" id="quizOptionsContainer">
+<button class="quiz-option text-left p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-all text-body-sm font-body-sm text-on-surface flex items-start gap-2.5 border border-transparent" onclick="selectQuizAnswer(this, false)">
+<span class="w-5 h-5 rounded-full bg-surface-container-high flex items-center justify-center font-code-citation text-[11px] text-on-surface-variant flex-shrink-0 mt-0.5">A</span>
+<span>It causes numerical overflow in linear projection layer weights prior to layer normalization.</span>
+</button>
+<button class="quiz-option text-left p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-all text-body-sm font-body-sm text-on-surface flex items-start gap-2.5 border border-transparent" onclick="selectQuizAnswer(this, true)">
+<span class="w-5 h-5 rounded-full bg-surface-container-high flex items-center justify-center font-code-citation text-[11px] text-on-surface-variant flex-shrink-0 mt-0.5">B</span>
+<span>High dot-product variance drives softmax outputs toward 0 or 1, where local derivatives approach zero.</span>
+</button>
+<button class="quiz-option text-left p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container transition-all text-body-sm font-body-sm text-on-surface flex items-start gap-2.5 border border-transparent" onclick="selectQuizAnswer(this, false)">
+<span class="w-5 h-5 rounded-full bg-surface-container-high flex items-center justify-center font-code-citation text-[11px] text-on-surface-variant flex-shrink-0 mt-0.5">C</span>
+<span>It enforces strict triangular causal masks that eliminate gradient propagation in bidirectional contexts.</span>
+</button>
+</div>
+<!-- Dynamic Answer Evaluation Alert -->
+<div class="mt-3 p-3 rounded-2xl hidden transition-all" id="quizFeedbackBox">
+<div class="flex items-center gap-1.5 font-label-md text-label-md font-bold mb-1" id="quizFeedbackTitle"></div>
+<p class="font-body-sm text-[12px] text-on-surface-variant" id="quizFeedbackText"></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Interactive Client-side Scripting for Canvas Interaction & Reactive State -->
+<script>
+  // Concept data store for node switching
+  const conceptDatabase = {
+    sdpa: {
+      title: "Scaled Dot-Product Attention",
+      cluster: "Architecture Hub",
+      citation: "§3.2.1 Vaswani et al. (2017)",
+      formula: "Attention(Q, K, V) = softmax( (QK^T) / √d_k ) V",
+      explanation: "Stabilizes variance growth across high-dimensional projection tensors. For large values of d_k, dot products grow large in magnitude, pushing softmax into extreme saturation with negligible backprop gradients.",
+      sources: [
+        { author: "Vaswani et al. (2017)", page: "p. 4, §3.2.1", text: "We suspect that for large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1 / √d_k." },
+        { author: "Devlin et al. (2018)", page: "p. 3, §2.1", text: "We employ the standard bidirectional Transformer architecture based on the original multi-head scaled attention mechanism without structural modification to the core divisor." }
+      ],
+      neighbors: ["softmax", "dk", "quadratic", "barrier"]
+    },
+    softmax: {
+      title: "Softmax Saturation Hazard",
+      cluster: "Mathematical Bound",
+      citation: "§3.2 Vaswani et al. / Goodfellow Deep Learning",
+      formula: "σ(z)_i = e^{z_i} / Σ_j e^{z_j}   →  ∂σ_i/∂z_j ≈ 0",
+      explanation: "When inputs have significant magnitude differences, exponentiation exaggerates the disparity. The maximum element dominates toward 1.0 while remaining entries approach 0.0, zeroing out backpropagated gradients.",
+      sources: [
+        { author: "Vaswani et al. (2017)", page: "p. 4, §3.2", text: "Large magnitude inputs to softmax flatten the activation slope, rendering gradient descent ineffective without temperature or square root normalization." }
+      ],
+      neighbors: ["sdpa", "dk"]
+    },
+    quadratic: {
+      title: "Quadratic Complexity O(n²)",
+      cluster: "Computational Bottleneck",
+      citation: "§4 Computational Efficiency (Vaswani / Kaplan)",
+      formula: "Memory(L, n) = O(n² · d_model + n · d_ff)",
+      explanation: "Full cross-attention computes every token against every other token in the sequence. Sequence length scaling doubles compute and memory requirements quadratically, impeding context windows beyond 8k tokens without sparse factorizations.",
+      sources: [
+        { author: "Kaplan et al. (2020)", page: "p. 7, §3", text: "Compute requirements scale strictly as a power law with parameter count, while token sequence length n is limited by quadratic spatial memory allocation in attention heads." }
+      ],
+      neighbors: ["sdpa", "barrier"]
+    },
+    barrier: {
+      title: "Long-Context Barrier (>10k Tokens)",
+      cluster: "Unresolved Evidence Gap",
+      citation: "Cross-Corpus Synthesis Synthesis Audit",
+      formula: "ΔMemory(n) = Lim_{n → ∞} n² · d_head  →  OOM Thrashing",
+      explanation: "None of the indexed papers in the active set provide an exact sub-quadratic attention mechanism with guaranteed semantic equivalence. Represents a research void requiring FlashAttention or state-space models (Mamba/S4) integration.",
+      sources: [
+        { author: "Synthesis Audit (2025)", page: "Gap #4", text: "Zero citations found across current 3 manuscripts addressing sequence retention fidelity beyond 16,384 tokens without quadratic key-value cache bloat." }
+      ],
+      neighbors: ["quadratic", "sdpa"]
+    },
+    dk: {
+      title: "Projection Dim Variance (d_k)",
+      cluster: "Mathematical Normalizer",
+      citation: "§3.2.1 Vaswani et al.",
+      formula: "Var(Σ_{i=1}^{d_k} q_i k_i) = d_k · σ_q² · σ_k²",
+      explanation: "Assuming independent components with mean 0 and variance 1, their dot product has mean 0 and variance d_k. Dividing by √d_k preserves unit variance regardless of vector dimensionality.",
+      sources: [
+        { author: "Vaswani et al. (2017)", page: "p. 4, fn. 4", text: "To illustrate why the dot products get large, assume that the components of q and k are independent random variables with mean 0 and variance 1." }
+      ],
+      neighbors: ["sdpa", "softmax"]
+    }
+  };
+
+  // Node selection handler
+  function focusNode(nodeKey) {
+    const data = conceptDatabase[nodeKey];
+    if (!data) return;
+
+    // Update Inspector Title & Header
+    const inspectorTitle = document.getElementById('inspectorTitle');
+    if (inspectorTitle) inspectorTitle.innerText = data.title;
+
+    // Highlight node visually
+    document.querySelectorAll('[data-node]').forEach(node => {
+      node.classList.remove('ring-4', 'ring-primary-fixed', 'scale-105');
+      if (node.getAttribute('data-node') === nodeKey) {
+        node.classList.add('ring-4', 'ring-primary-fixed', 'scale-105');
+      }
+    });
+
+    // Provide micro-feedback
+    const inspectorPanel = document.getElementById('conceptInspectorPanel');
+    if (inspectorPanel) {
+      inspectorPanel.classList.add('ring-2', 'ring-primary/40');
+      setTimeout(() => inspectorPanel.classList.remove('ring-2', 'ring-primary/40'), 400);
+    }
+  }
+
+  // Attach click listeners to all nodes
+  document.querySelectorAll('[data-node]').forEach(el => {
+    el.addEventListener('click', () => {
+      const nodeKey = el.getAttribute('data-node');
+      focusNode(nodeKey);
+    });
+  });
+
+  // Filter pills interactive toggle
+  const filterButtons = document.querySelectorAll('#filterPillContainer button');
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterButtons.forEach(b => {
+        b.className = 'px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface';
+      });
+      btn.className = 'px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-1.5 bg-primary text-on-primary shadow-sm';
+      
+      const filter = btn.getAttribute('data-filter');
+      applyGraphFilter(filter);
+    });
+  });
+
+  function applyGraphFilter(filter) {
+    const nodes = document.querySelectorAll('[data-node]');
+    nodes.forEach(n => {
+      if (filter === 'all') {
+        n.style.opacity = '1';
+        n.style.transform = 'translate(-50%, -50%) scale(1)';
+      } else if (filter === 'gap') {
+        if (n.getAttribute('data-node') === 'barrier') {
+          n.style.opacity = '1';
+          n.style.transform = 'translate(-50%, -50%) scale(1.1)';
+        } else {
+          n.style.opacity = '0.25';
+        }
+      } else if (filter === 'math') {
+        const isMath = ['softmax', 'dk'].includes(n.getAttribute('data-node'));
+        n.style.opacity = isMath ? '1' : '0.25';
+      } else if (filter === 'architecture') {
+        const isArch = ['sdpa', 'masking', 'quadratic'].includes(n.getAttribute('data-node'));
+        n.style.opacity = isArch ? '1' : '0.25';
+      }
+    });
+  }
+
+  // Interactive Quiz evaluation
+  function selectQuizAnswer(btn, isCorrect) {
+    const container = document.getElementById('quizOptionsContainer');
+    const options = container.querySelectorAll('.quiz-option');
+    options.forEach(opt => {
+      opt.disabled = true;
+      opt.classList.remove('bg-surface-container', 'hover:bg-surface-container-high');
+    });
+
+    const feedbackBox = document.getElementById('quizFeedbackBox');
+    const feedbackTitle = document.getElementById('quizFeedbackTitle');
+    const feedbackText = document.getElementById('quizFeedbackText');
+
+    feedbackBox.classList.remove('hidden');
+
+    if (isCorrect) {
+      btn.classList.add('bg-secondary-fixed/40', 'border-primary');
+      feedbackBox.className = 'mt-3 p-3 rounded-2xl bg-secondary-fixed/30 border border-secondary transition-all';
+      feedbackTitle.className = 'flex items-center gap-1.5 font-label-md text-label-md font-bold mb-1 text-primary';
+      feedbackTitle.innerHTML = '<span class="material-symbols-outlined text-[16px]">check_circle</span> Correct! Grounded in §3.2';
+      feedbackText.innerText = 'Exactly. The variance of unscaled QK^T scales with d_k. Large values force the softmax function to saturated regions with minuscule gradients. The 1/√d_k factor keeps variance at unit scale.';
+    } else {
+      btn.classList.add('bg-error-container/40', 'border-error');
+      feedbackBox.className = 'mt-3 p-3 rounded-2xl bg-error-container/30 border border-error transition-all';
+      feedbackTitle.className = 'flex items-center gap-1.5 font-label-md text-label-md font-bold mb-1 text-error';
+      feedbackTitle.innerHTML = '<span class="material-symbols-outlined text-[16px]">cancel</span> Incorrect Verification';
+      feedbackText.innerText = 'Incorrect. Vaswani et al. explicitly prove in footnote 4 that dot-product magnitude pushes softmax into flat gradient regimes, preventing weight updates.';
+    }
+  }
+
+  // Physics Pause toggle
+  let physicsRunning = true;
+  const physicsBtn = document.getElementById('physicsToggleBtn');
+  const physicsStatus = document.getElementById('physicsStatus');
+  const physicsIcon = document.getElementById('physicsIcon');
+  if (physicsBtn) {
+    physicsBtn.addEventListener('click', () => {
+      physicsRunning = !physicsRunning;
+      if (physicsRunning) {
+        physicsStatus.innerText = 'Pause';
+        physicsIcon.innerText = 'pause_circle';
+      } else {
+        physicsStatus.innerText = 'Resume';
+        physicsIcon.innerText = 'play_circle';
+      }
+    });
+  }
+
+  // Canvas Zoom Interactions
+  let currentZoom = 1;
+  const graphSvg = document.getElementById('networkGraphSvg');
+  document.getElementById('zoomInBtn')?.addEventListener('click', () => {
+    currentZoom = Math.min(currentZoom + 0.15, 1.6);
+    if (graphSvg) graphSvg.style.transform = `scale(${currentZoom})`;
+  });
+  document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
+    currentZoom = Math.max(currentZoom - 0.15, 0.7);
+    if (graphSvg) graphSvg.style.transform = `scale(${currentZoom})`;
+  });
+  document.getElementById('zoomResetBtn')?.addEventListener('click', () => {
+    currentZoom = 1;
+    if (graphSvg) graphSvg.style.transform = `scale(1)`;
+  });
+  document.getElementById('recenterBtn')?.addEventListener('click', () => {
+    currentZoom = 1;
+    if (graphSvg) graphSvg.style.transform = `scale(1)`;
+    focusNode('sdpa');
+  });
+
+  // Search filter
+  const searchInput = document.getElementById('nodeSearchInput');
+  searchInput?.addEventListener('input', (e) => {
+    const val = e.target.value.toLowerCase().trim();
+    const nodes = document.querySelectorAll('[data-node]');
+    if (!val) {
+      nodes.forEach(n => n.style.opacity = '1');
+      return;
+    }
+    nodes.forEach(n => {
+      const nodeKey = n.getAttribute('data-node');
+      const data = conceptDatabase[nodeKey];
+      const match = data && (data.title.toLowerCase().includes(val) || data.explanation.toLowerCase().includes(val));
+      n.style.opacity = match ? '1' : '0.2';
+    });
+  });
+</script></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>
