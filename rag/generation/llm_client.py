@@ -6,6 +6,8 @@ and OpenAILLMClient as the standard real LLM provider.
 
 import re
 import logging
+import atexit
+import threading
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 import httpx
@@ -15,6 +17,11 @@ from rag.generation.provider_errors import classify_provider_error
 from rag.generation.provider_errors import LLMProviderError
 
 logger = logging.getLogger(__name__)
+
+# One pooled HTTP connection manager is reused across local model requests.
+_OLLAMA_HTTP = httpx.Client()
+_OLLAMA_REQUEST_SLOT = threading.BoundedSemaphore(1)
+atexit.register(_OLLAMA_HTTP.close)
 
 
 class BaseLLMClient(ABC):
@@ -133,7 +140,7 @@ class OpenAILLMClient(BaseLLMClient):
         timeout: Optional[float] = None,
     ):
         self.api_key = api_key or settings.llm_api_key
-        self.model = model or settings.llm_model
+        self.model = model or (settings.llm_model if "gpt" in getattr(settings, "llm_model", "") else "gpt-4o-mini")
         self.temperature = temperature if temperature is not None else settings.llm_temperature
         self.max_tokens = max_tokens or settings.llm_max_tokens
         self.timeout = timeout or settings.llm_timeout_seconds
@@ -216,7 +223,7 @@ class GeminiLLMClient(BaseLLMClient):
 
     def __init__(self, api_key=None, model=None, temperature=None, max_tokens=None, timeout=None, client=None):
         self.api_key = api_key or settings.gemini_api_key
-        self.model = model or settings.llm_model
+        self.model = model or (settings.llm_model if "gemini" in getattr(settings, "llm_model", "") else "gemini-3.8-flash")
         self.temperature = settings.llm_temperature if temperature is None else temperature
         self.max_tokens = max_tokens or settings.llm_max_tokens
         self.timeout = timeout or settings.llm_timeout_seconds
@@ -293,7 +300,9 @@ class OllamaLLMClient(BaseLLMClient):
     Local generation provider via Ollama's HTTP API (http://localhost:11434).
     Uses strict source grounding with zero external network access and zero paid APIs.
     """
-    supports_streaming = True
+    # Qwen thinking is never streamed to the UI; complete responses are verified
+    # before they are returned to the application.
+    supports_streaming = False
 
     def __init__(
         self,
@@ -304,7 +313,7 @@ class OllamaLLMClient(BaseLLMClient):
         timeout: Optional[float] = None,
     ):
         self.base_url = (base_url or getattr(settings, "ollama_base_url", "http://localhost:11434")).rstrip("/")
-        self.model = model or getattr(settings, "ollama_model", "qwen2.5:1.5b")
+        self.model = model or getattr(settings, "ollama_model", "qwen3.5:0.8b")
         self.temperature = settings.llm_temperature if temperature is None else temperature
         self.max_tokens = max_tokens or settings.llm_max_tokens
         self.timeout = timeout or settings.llm_timeout_seconds
@@ -334,12 +343,15 @@ class OllamaLLMClient(BaseLLMClient):
             "options": {
                 "temperature": self.temperature if temperature is None else temperature,
                 "num_predict": max_tokens or self.max_tokens,
+                "num_ctx": 4096,
             },
+            "think": False,
+            "keep_alive": "10m",
             "stream": False,
         }
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(f"{self.base_url}/api/chat", json=payload)
+            with _OLLAMA_REQUEST_SLOT:
+                resp = _OLLAMA_HTTP.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
                 if resp.status_code == 404:
                     raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed. Run 'ollama pull {self.model}'.")
                 resp.raise_for_status()
@@ -367,12 +379,15 @@ class OllamaLLMClient(BaseLLMClient):
             "options": {
                 "temperature": self.temperature if temperature is None else temperature,
                 "num_predict": max_tokens or self.max_tokens,
+                "num_ctx": 4096,
             },
+            "think": False,
+            "keep_alive": "10m",
             "stream": True,
         }
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+            with _OLLAMA_REQUEST_SLOT:
+                with _OLLAMA_HTTP.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=self.timeout) as response:
                     if response.status_code == 404:
                         raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed.")
                     response.raise_for_status()
@@ -420,7 +435,7 @@ class LLMClientFactory:
             return OpenAILLMClient(api_key=key, model=model)
         elif prov in ("ollama", "qwen", "local_qwen"):
             base_url = getattr(settings, "ollama_base_url", "http://localhost:11434")
-            model = model_name or getattr(settings, "ollama_model", "qwen2.5:1.5b")
+            model = model_name or getattr(settings, "ollama_model", "qwen3.5:0.8b")
             logger.info("Initializing OllamaLLMClient (model: %s, url: %s)", model, base_url)
             return OllamaLLMClient(base_url=base_url, model=model)
         elif prov == "mock":

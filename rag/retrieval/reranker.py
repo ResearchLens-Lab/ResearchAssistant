@@ -82,6 +82,8 @@ class IntentAwareReranker(BaseReranker):
         is_def = intent == "definition" or any(q_lower.startswith(p) for p in ["what is an ", "what is a ", "define ", "definition of "])
         is_author = intent == "author_entity" or any(w in q_lower for w in ["author", "wrote", "written by", "who is the author"])
         is_method = intent in ("method_algorithm", "how_to") or any(w in q_lower for w in ["algorithm", "method", "procedure", "how to"])
+        is_reference_request = bool(re.search(r"\b(references?|bibliography|works cited|citation list|index|acknowledgments?|dedication)\b", q_lower))
+        is_summary = intent == "summary"
 
         scored: list[tuple[float, RetrievedSource]] = []
         for src in sources:
@@ -103,6 +105,18 @@ class IntentAwareReranker(BaseReranker):
                 # Boost if "computational procedure" or "input" and "output" are in the text
                 if "computational procedure" in text_lower or ("input" in text_lower and "output" in text_lower):
                     score += 0.35
+
+            # Short contextual follow-ups otherwise match bibliography prose
+            # too easily. Keep reference pages only when the user asks for them.
+            if (intent == "follow_up" and not is_reference_request
+                    and self.BOILERPLATE_SECTIONS.search(section_lower)):
+                score -= 0.65
+
+            # A source summary should represent the actual content, not the
+            # bibliography or index that happens to share the book's keywords.
+            if (is_summary and not is_reference_request
+                    and re.search(r"\b(?:references?|bibliography|works cited|index|acknowledgments?|dedication)\b", section_lower)):
+                score -= 0.85
 
             # Signal 2: Author questions
             elif is_author:

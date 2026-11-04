@@ -44,17 +44,17 @@ class RAGSettings(BaseSettings):
 
     # LLM Settings
     # Answer Generation Mode (EXTRACTIVE or LOCAL_QWEN)
-    rag_answer_mode: Literal["EXTRACTIVE", "LOCAL_QWEN"] = "EXTRACTIVE"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:1.5b"
+    rag_answer_mode: Literal["EXTRACTIVE", "LOCAL_QWEN"] = "LOCAL_QWEN"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3.5:0.8b"
 
     # LLM Settings
-    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai"] = "gemini"
-    llm_model: str = "gemini-3.8-flash"
+    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai"] = "ollama"
+    llm_model: str = "qwen3.5:0.8b"
     llm_api_key: str = Field(default="", repr=False)
     llm_temperature: float = 0.1
-    llm_max_tokens: int = 1024
-    llm_timeout_seconds: float = 30.0
+    llm_max_tokens: int = 512
+    llm_timeout_seconds: float = 180.0
     # Per-provider outbound generation requests, reset at 00:00 UTC.
     llm_daily_call_budget: int = Field(default=25, ge=0)
     claim_verification_use_llm: bool = False
@@ -69,7 +69,7 @@ class RAGSettings(BaseSettings):
     # Retrieval & Context Settings
     retrieval_top_k: int = 5
     retrieval_min_score: float = 0.0
-    context_max_tokens: int = 3500
+    context_max_tokens: int = 3000
     enable_reranking: bool = False
 
     # Bounded research orchestration

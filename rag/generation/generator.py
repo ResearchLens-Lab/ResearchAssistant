@@ -74,6 +74,14 @@ class GroundedGenerator:
             format_instruction = "\nSeparate directly reported findings, disagreements, and information absent from the retrieved passages. Do not call absence in retrieval a contradiction."
         elif intent == "multi_hop":
             format_instruction = "\nShow each reasoning step separately and cite the passage supporting that step. Identify any unsupported link."
+        elif intent == "follow_up":
+            format_instruction = (
+                "\nThis is a continuation of the immediately preceding answer. Resolve the topic from the question, "
+                "then stay strictly on that topic. Give a genuinely deeper explanation: define the key idea, explain "
+                "how its parts relate, and use only details supported by the supplied passages. Cite each factual "
+                "paragraph. Do not output a list of loosely related terms, chapter headings, or other algorithms. "
+                "If the passages do not support more depth, say exactly what is and is not supported."
+            )
         user_prompt = RESEARCH_QA_USER_TEMPLATE.format(
             context=context.formatted_context,
             question=question + format_instruction,
@@ -110,14 +118,16 @@ class GroundedGenerator:
     def generate_summary(
         self,
         context: AssembledContext,
+        focus: str = "Summarize the main ideas supported by these passages.",
         temperature: Optional[float] = None,
         on_token=None,
     ) -> GenerationResult:
         """
-        Generates structured research paper summary.
+        Generates a concise, source-grounded summary matched to the supplied evidence.
         """
         system_prompt = SUMMARIZATION_SYSTEM_PROMPT
         user_prompt = SUMMARIZATION_USER_TEMPLATE.format(
+            focus=focus,
             context=context.formatted_context,
         )
 

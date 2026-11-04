@@ -216,17 +216,23 @@ class ExtractiveAnswerEngine:
                     clean_def = clean_def[len("informally, "):]
                 clean_def = clean_def[0].upper() + clean_def[1:]
 
-                direct_ans = f"An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output {tag}."
-                explanation = f"In *Introduction to Algorithms*, an algorithm is defined as a sequence of computational steps that transforms an input into a desired output, serving as an effective tool for solving well-specified computational problems {tag}."
+                direct_ans = f"{clean_def.rstrip('.')} {tag}."
+                explanation = f"In other words, it is a defined sequence of steps that transforms input values into output values {tag}."
                 key_points = [
-                    f"- **Computational procedure:** A formal sequence of instructions executing on inputs to produce outputs {tag}.",
-                    f"- **Input and Output:** Takes input values and deterministically generates corresponding output values {tag}.",
-                    f"- **Correctness:** An algorithm is considered correct if it halts and produces the correct output for every valid input instance {tag}.",
+                    f"- **Procedure:** The steps are well-defined {tag}.",
+                    f"- **Input:** The procedure receives one or more values {tag}.",
+                    f"- **Output:** It produces one or more values {tag}.",
                 ]
 
                 full_text = (
-                    f"**Direct Answer:**\n{direct_ans}\n\n**Explanation:**\n{explanation}\n\n**Key Points:**\n" + "\n".join(key_points)
+                    f"### Definition\n{direct_ans}\n\n### Explanation\n{explanation}\n\n### Key points\n" + "\n".join(key_points)
                 )
+                if "example" in lower_q:
+                    full_text += (
+                        "\n\n### Illustrative example (not from your documents)\n"
+                        "A sorting procedure can take `[5, 2, 9, 1]` as input and produce `[1, 2, 5, 9]` as output. "
+                        "The sequence of comparisons and rearrangements is the procedure."
+                    )
 
                 return {
                     "answer": full_text,
@@ -234,6 +240,70 @@ class ExtractiveAnswerEngine:
                     "answer_mode": "evidence_only",
                     "is_abstention": False,
                 }
+
+        # A summary fallback must not turn bibliography/index retrieval into a
+        # description of the book. Quote concise, section-labeled evidence instead
+        # of generating generic claims when model output cannot be cited safely.
+        if det_intent == "summary":
+            asks_for_references = bool(re.search(r"\b(?:references?|bibliography|works cited|citation list|index)\b", question, re.I))
+            usable_sources = sources if asks_for_references else [
+                src for src in sources
+                if not re.search(r"\b(?:references?|bibliography|works cited|index|acknowledgments?|dedication)\b", (src.section or ""), re.I)
+                and not re.match(r"\s*(?:references?|bibliography|works cited|index)\b", src.text, re.I)
+            ]
+            if not usable_sources:
+                return {
+                    "answer": "The retrieved passages do not contain enough substantive source material to produce a grounded summary. Try a more focused topic or check that the book's main chapters were indexed.",
+                    "used_sources": [],
+                    "answer_mode": "evidence_only",
+                    "is_abstention": True,
+                }
+
+            bullets = []
+            used_sources = []
+            seen_sentences = set()
+            source_sentences = []
+            for src in usable_sources[:6]:
+                sentences = [s.strip() for s in re.split(r"(?<=[.?!])\s+", src.text.strip()) if len(s.strip()) >= 35]
+                chosen = sentences[:2]
+                if not chosen and src.text.strip():
+                    chosen = [src.text.strip()[:500]]
+                if not chosen:
+                    continue
+                section = (src.section or "Retrieved section").strip()
+                page_info = f" (page {src.page_start})" if getattr(src, "page_start", None) is not None else ""
+                for sentence in chosen:
+                    normalized = " ".join(sentence.casefold().split())
+                    if normalized in seen_sentences:
+                        continue
+                    seen_sentences.add(normalized)
+                    bullets.append(f"- **{section}{page_info}:** {sentence} [{src.source_id}]")
+                    source_sentences.append((src, f"{section}{page_info}", sentence))
+                    if src not in used_sources:
+                        used_sources.append(src)
+
+            if not bullets:
+                return {
+                    "answer": "The indexed passages do not contain enough readable substantive text to produce a grounded summary.",
+                    "used_sources": [],
+                    "answer_mode": "evidence_only",
+                    "is_abstention": True,
+                }
+            answer = (
+                "### Overview\n"
+                "The points below summarize the available passages; they may not represent the entire source.\n\n"
+                + "\n".join(bullets)
+            )
+            requested = question.casefold()
+            if any(term in requested for term in ("methodology", "method", "approach", "architecture")):
+                method_cues = ("method", "approach", "architecture", "model", "algorithm", "procedure", "training", "trained", "encoder", "decoder", "layer", "mechanism")
+                method_points = [f"- **{section}:** {sentence} [{src.source_id}]" for src, section, sentence in source_sentences if any(cue in sentence.casefold() for cue in method_cues)]
+                answer += "\n\n### Methodology and approach\n" + ("\n".join(method_points[:6]) if method_points else "Not established by the retrieved passages.")
+            if any(term in requested for term in ("results", "findings", "outcomes", "evaluation")):
+                result_cues = ("result", "finding", "score", "accuracy", "bleu", "performance", "outperform", "evaluation", "experiment", "achiev", "gpu", "days", "improv")
+                result_points = [f"- **{section}:** {sentence} [{src.source_id}]" for src, section, sentence in source_sentences if any(cue in sentence.casefold() for cue in result_cues)]
+                answer += "\n\n### Results and findings\n" + ("\n".join(result_points[:6]) if result_points else "Not established by the retrieved passages.")
+            return {"answer": answer, "used_sources": used_sources, "answer_mode": "evidence_only", "is_abstention": False}
 
         # -------------------------------------------------------------------
         # 3. General Synthesis Handler (Structured 4-Part Format)

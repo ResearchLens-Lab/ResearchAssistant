@@ -19,6 +19,7 @@ Intent = Literal[
 
 class ResearchPlan(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+    resolved_question: Optional[str] = Field(default=None, max_length=4000)
     source_ids: list[str] = Field(default_factory=list, max_length=100)
     intent: Intent
     subquestions: list[str] = Field(default_factory=list, max_length=3)
@@ -40,6 +41,30 @@ class QueryPlanner:
     """Use explicit rules for common research intents; never asks an LLM for tools or scope."""
 
     MAX_SUBQUESTIONS = settings.research_max_subquestions
+
+    @staticmethod
+    def _last_user_question(retrieval_scope: Optional[str]) -> Optional[str]:
+        if not retrieval_scope:
+            return None
+        matches = list(re.finditer(
+            r"(?im)^user:\s*(.*?)(?=^(?:user|assistant):|\Z)", retrieval_scope, re.S
+        ))
+        if not matches:
+            return None
+        question = matches[-1].group(1).strip()
+        return question[-1200:] if question else None
+
+    @staticmethod
+    def _last_assistant_answer(retrieval_scope: Optional[str]) -> Optional[str]:
+        if not retrieval_scope:
+            return None
+        matches = list(re.finditer(
+            r"(?im)^assistant:\s*(.*?)(?=^(?:user|assistant):|\Z)", retrieval_scope, re.S
+        ))
+        if not matches:
+            return None
+        answer = matches[-1].group(1).strip()
+        return answer[-1600:] if answer else None
 
     def plan(self, question: str, source_ids: Optional[list[str]] = None, retrieval_scope: Optional[str] = None) -> ResearchPlan:
         q = question.strip()
@@ -96,9 +121,12 @@ class QueryPlanner:
         # 5. Summaries
         elif re.search(r"\b(summarize|summary|overview|brief summary)\b", lower):
             intent = "summary"
-            subquestions = ["research objective and problem statement", "methodology and experimental design",
-                            "datasets, findings, reported limitations, and conclusions"]
-            desired = "source-aware structured summary"
+            subquestions = [
+                "main subject and key ideas explained in the substantive chapters",
+                "chapter themes and how the concepts build on one another",
+                "important algorithms, methods, examples, and analysis covered in the source",
+            ]
+            desired = "concise source-grounded overview with section-level coverage and citations"
 
         # 6. Advantages & Disadvantages
         elif re.search(r"\b(advantages?\s+and\s+disadvantages?|pros\s+and\s+cons|benefits\s+and\s+drawbacks|strengths\s+and\s+weaknesses|limitations?\s+of)\b", lower):
@@ -164,9 +192,27 @@ class QueryPlanner:
             intent, subquestions, desired = "direct", [], "direct answer with supporting evidence"
 
         subquestions = subquestions[: self.MAX_SUBQUESTIONS]
-        queries = [q, *subquestions]
-        if retrieval_scope:
-            # Prior dialogue can refine reference resolution but cannot expand source scope.
+        resolved_question = None
+        if intent == "follow_up" and (previous_question := self._last_user_question(retrieval_scope)):
+            previous_answer = self._last_assistant_answer(retrieval_scope)
+            subject = previous_question.strip()
+            action = "Explain the topic in more depth" if "depth" in lower or "in-depth" in lower else q
+            resolved_question = (
+                f"{action}: {subject}. Continue from this prior answer without changing topics. "
+                f"Prior answer for reference resolution only: {previous_answer or '(none)'}"
+            )[:4000]
+            queries = [
+                subject,
+                f"{subject} definition explanation properties and supporting details",
+                f"{subject} examples procedure and applications",
+            ]
+            subquestions = queries[1:]
+        else:
+            queries = [q, *subquestions]
+        if retrieval_scope and intent not in ("follow_up", "summary"):
+            # Use earlier dialogue only to resolve likely references in normal questions.
+            # Summary requests must retrieve from the selected documents themselves; a
+            # preceding author question can otherwise bias the result toward references.
             queries[0] = f"{retrieval_scope[:400]}\nCurrent question: {q}"
 
         evidence = {
@@ -193,7 +239,8 @@ class QueryPlanner:
         max_queries = settings.research_max_queries
         queries = queries[:max_queries]
         return ResearchPlan(
-            question=q, source_ids=list(dict.fromkeys(source_ids or [])), intent=intent,
+            question=q, resolved_question=resolved_question,
+            source_ids=list(dict.fromkeys(source_ids or [])), intent=intent,
             subquestions=subquestions, search_queries=queries, required_evidence=evidence,
             desired_format=desired, max_retrieval_rounds=settings.research_max_retrieval_rounds,
         )

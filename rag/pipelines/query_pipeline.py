@@ -28,7 +28,7 @@ from rag.generation.provider_errors import LLMProviderError
 from rag.generation.budgeted_client import start_call_tracking, stop_call_tracking
 
 logger = logging.getLogger(__name__)
-GENERATION_PROMPT_VERSION = "researchlens-generation-v2"
+GENERATION_PROMPT_VERSION = "researchlens-generation-v3"
 
 
 def generate_follow_up_suggestions(question: str, intent: str, answer: str) -> list[str]:
@@ -109,6 +109,7 @@ class QueryPipeline:
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
         user_id: Optional[str] = None,
+        answer_mode: Optional[str] = None,
     ) -> RAGResult:
         """
         Answers a research question grounded in indexed papers with verified citations.
@@ -131,6 +132,7 @@ class QueryPipeline:
                              sources=[], paper_ids=[], metadata={"error": "scope_conflict", "total_retrieved": 0})
         plan_started = time.perf_counter()
         plan = self.planner.plan(question, selected_ids, conversation_context)
+        research_question = getattr(plan, "resolved_question", None) or question
         planning_seconds = time.perf_counter() - plan_started
         emit = progress_callback or (lambda _event: None)
         emit({"type": "planning_completed", "intent": plan.intent, "query_count": len(plan.search_queries)})
@@ -151,15 +153,32 @@ class QueryPipeline:
                 if source.chunk_id not in found and len(found) < settings.research_max_total_candidates:
                     found[source.chunk_id] = source
         retrieved_sources = list(found.values())
+        if (plan.intent == "summary"
+                and not re.search(r"\b(?:references?|bibliography|works cited|citation list|index|acknowledgments?|dedication)\b", question, re.I)):
+            # A whole-source overview should summarize instructional/content
+            # passages. Bibliography and index chunks can score highly for broad
+            # book queries, but are not evidence for the book's subject matter.
+            retrieved_sources = [source for source in retrieved_sources if not (
+                re.search(r"\b(?:references?|bibliography|works cited|index|acknowledgments?|dedication)\b", source.section or "", re.I)
+                or re.match(r"\s*(?:references?|bibliography|works cited|index)\b", source.text, re.I)
+            )]
         emit({"type": "sources_found", "count": len(retrieved_sources), "round": 1})
         for index, source in enumerate(retrieved_sources, start=1):
             source.source_id = f"S{index}"
 
         try:
-            assessment = self.sufficiency_checker.assess(question, retrieved_sources, intent=plan.intent)
+            assessment = self.sufficiency_checker.assess(research_question, retrieved_sources, intent=plan.intent)
         except TypeError:
-            assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+            assessment = self.sufficiency_checker.assess(research_question, retrieved_sources)
         def require_complete_direct_evidence(value):
+            if plan.intent == "summary" and value.status == "insufficient" and retrieved_sources:
+                # Broad summaries naturally have low exact query-term overlap;
+                # with selected content passages present, treat that as partial
+                # coverage and require a qualified, cited answer.
+                return value.model_copy(update={
+                    "status": "partial",
+                    "method": "broad-summary retrieval coverage heuristic; low term overlap means the overview may be partial, not that every passage is irrelevant",
+                })
             # If intent is author_entity or definition and status is adequate, keep it
             if plan.intent in ("author_entity", "definition") and value.status == "adequate":
                 return value
@@ -185,9 +204,9 @@ class QueryPipeline:
             for index, source in enumerate(retrieved_sources, start=1):
                 source.source_id = f"S{index}"
             try:
-                assessment = self.sufficiency_checker.assess(question, retrieved_sources, intent=plan.intent)
+                assessment = self.sufficiency_checker.assess(research_question, retrieved_sources, intent=plan.intent)
             except TypeError:
-                assessment = self.sufficiency_checker.assess(question, retrieved_sources)
+                assessment = self.sufficiency_checker.assess(research_question, retrieved_sources)
             assessment = require_complete_direct_evidence(assessment)
             emit({"type": "sources_found", "count": len(retrieved_sources), "round": 2})
         retrieval_seconds = time.perf_counter() - retrieval_started
@@ -202,10 +221,49 @@ class QueryPipeline:
         ledger = EvidenceLedger.from_sources(retrieved_sources, queries)
         mapper = CitationMapper(tracker)
 
+        def general_knowledge_result(reason: str) -> RAGResult | None:
+            if answer_mode != "DOCUMENTS_GENERAL":
+                return None
+            emit({"type": "generation_started", "answer_mode": "general_knowledge"})
+            try:
+                client = OllamaLLMClient()
+                if not client.is_available():
+                    raise LLMProviderError("provider_unavailable", "Ollama is unavailable")
+                context_hint = f"\nRecent conversation for resolving references only:\n{conversation_context[-2000:]}" if conversation_context else ""
+                general = client.generate(
+                    "You are a careful general-knowledge assistant. Answer only when you are reasonably confident from established knowledge. If uncertain or the question requires current/live information, say you cannot reliably determine it. Use concise, useful Markdown headings/lists as appropriate. Do not mention or invent document citations.",
+                    f"QUESTION: {research_question}{context_hint}\n\nThis is general pretrained knowledge; no selected-document passages support an answer.",
+                    temperature=0.1,
+                    max_tokens=min(settings.llm_max_tokens, 384),
+                ).strip()
+                if not general:
+                    raise LLMProviderError("empty_response", "Ollama returned an empty response")
+                answer = "Not found in your selected documents.\n\n### General knowledge (not from your documents)\n" + general
+                return RAGResult(answer=answer, sources=[], paper_ids=selected_ids, metadata={
+                    "answer_mode": "general_knowledge", "generation_provider": "ollama",
+                    "llm_model": client.model, "generation_reason": reason,
+                    "model_calls": 1, "total_retrieved": len(retrieved_sources),
+                    "follow_up_suggestions": generate_follow_up_suggestions(research_question, plan.intent, answer),
+                    "research": {"intent": plan.intent, "sufficiency": assessment.model_dump(),
+                                 "citation_verification": {"valid_source_ids": [], "invalid_source_ids": []}},
+                })
+            except Exception as exc:
+                logger.info("General knowledge response unavailable (%s)", type(exc).__name__)
+                return RAGResult(answer="Not found in your selected documents.\n\nGeneral knowledge is unavailable right now. Please check that local Ollama is running.",
+                                 sources=[], paper_ids=selected_ids, metadata={
+                    "answer_mode": "general_knowledge_unavailable", "generation_provider": "ollama",
+                    "generation_reason": reason, "model_calls": 0,
+                    "follow_up_suggestions": ["Try again when Ollama is available"],
+                    "research": {"intent": plan.intent, "sufficiency": assessment.model_dump(),
+                                 "citation_verification": {"valid_source_ids": [], "invalid_source_ids": []}},
+                })
+
         def evidence_result(reason: str, mode: str = "evidence_only", lead: str = "",
                             model_calls: int = 0, measured_usage: Optional[list] = None) -> RAGResult:
-            if not retrieved_sources or assessment.status == "insufficient":
+            if not retrieved_sources or (assessment.status == "insufficient" and reason != "verified_definition_passage"):
                 clean = "There is insufficient evidence in the selected documents to answer this question."
+                if answer_mode == "DOCUMENTS_ONLY":
+                    clean = "Not found in your selected documents.\n\nI can’t answer this from the selected sources alone."
                 return RAGResult(
                     answer=clean,
                     sources=[],
@@ -241,7 +299,7 @@ class QueryPipeline:
 
             # Generate structured 4-part extractive answer
             ext_res = self.extractive_engine.generate_extractive_answer(
-                question=question,
+                question=research_question,
                 sources=retrieved_sources,
                 selected_paper_ids=selected_ids,
                 tracker=tracker,
@@ -293,9 +351,14 @@ class QueryPipeline:
             )
 
         if not retrieved_sources:
+            fallback = general_knowledge_result("no_retrieved_evidence")
+            if fallback is not None:
+                return fallback
             elapsed = time.time() - start_time
             return RAGResult(
-                answer="There is insufficient evidence in the selected documents to answer this question.",
+                answer=("Not found in your selected documents.\n\nI can’t answer this from the selected sources alone."
+                        if answer_mode == "DOCUMENTS_ONLY" else
+                        "There is insufficient evidence in the selected documents to answer this question."),
                 sources=[],
                 paper_ids=selected_ids,
                 metadata={
@@ -316,7 +379,24 @@ class QueryPipeline:
                 },
             )
 
+        # A direct textbook definition is faster and more faithful as an
+        # extractive answer than asking a small CPU model to paraphrase it.
+        asks_algorithm_definition = bool(re.match(
+            r"\s*what\s+is\s+an?\s+algorithm(?:\s*\?|\s+(?:explain|with|and\s+give|give|show)\b|$)",
+            question, re.I,
+        ))
+        if (plan.intent == "definition" or asks_algorithm_definition) and any(
+            "computational procedure" in source.text.casefold()
+            or ("algorithm is" in source.text.casefold() and "input" in source.text.casefold())
+            for source in retrieved_sources
+        ):
+            emit({"type": "generation_skipped", "reason": "verified_definition_passage"})
+            return evidence_result("verified_definition_passage", mode="evidence_only")
+
         if assessment.status == "insufficient":
+            fallback = general_knowledge_result("insufficient_document_evidence")
+            if fallback is not None:
+                return fallback
             return evidence_result("insufficient_evidence", mode="evidence_only")
 
         # Direct factual lookup (only if not running under automated mock generation test)
@@ -325,10 +405,14 @@ class QueryPipeline:
             return evidence_result("direct_factual_lookup", mode="evidence_only")
 
         # Local Qwen via Ollama
-        if settings.rag_answer_mode == "LOCAL_QWEN" or settings.llm_provider in ("ollama", "qwen", "local_qwen"):
+        is_ollama_requested = (
+            settings.llm_provider in ("ollama", "qwen", "local_qwen")
+            or (settings.rag_answer_mode == "LOCAL_QWEN" and settings.llm_provider not in ("gemini", "openai", "mock", "local"))
+        )
+        if is_ollama_requested:
             ollama_client = OllamaLLMClient(
-                base_url=getattr(settings, "ollama_base_url", "http://localhost:11434"),
-                model=getattr(settings, "ollama_model", "qwen2.5:1.5b"),
+                base_url=getattr(settings, "ollama_base_url", "http://127.0.0.1:11434"),
+                model=getattr(settings, "ollama_model", "qwen3.5:0.8b"),
             )
             if not ollama_client.is_available():
                 logger.info("Ollama is not running at %s; falling back to EXTRACTIVE mode", ollama_client.base_url)
@@ -338,22 +422,40 @@ class QueryPipeline:
             try:
                 qwen_generator = GroundedGenerator(llm_client=ollama_client)
                 emit({"type": "evidence_ready", "count": len(retrieved_sources)})
-                emit({"type": "generation_started"})
+                emit({"type": "generation_started", "provider": "ollama"})
                 generation_started = time.perf_counter()
                 call_token, call_counter = start_call_tracking()
                 try:
                     if plan.intent == "comparison":
-                        gen_result = qwen_generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
+                        gen_result = qwen_generator.generate_comparison(focus_area=question, context=assembled_context)
                     elif plan.intent == "summary":
-                        gen_result = qwen_generator.generate_summary(context=assembled_context, on_token=emit)
+                        gen_result = qwen_generator.generate_summary(context=assembled_context, focus=research_question)
                     else:
-                        gen_result = qwen_generator.generate_answer(question=question, context=assembled_context, intent=plan.intent, on_token=emit)
+                        gen_result = qwen_generator.generate_answer(question=research_question, context=assembled_context, intent=plan.intent)
                 finally:
                     stop_call_tracking(call_token)
                 generation_seconds = time.perf_counter() - generation_started
 
-                clean_answer, verification = CitationVerifier().verify(gen_result.answer, retrieved_sources, selected_ids)
+                clean_answer, _ = CitationVerifier().verify(gen_result.answer, retrieved_sources, selected_ids)
+                claim_report = ClaimEvidenceVerifier().verify(clean_answer, retrieved_sources, selected_ids)
+                clean_answer = claim_report.verified_answer.strip()
+                clean_answer, verification = CitationVerifier().verify(clean_answer, retrieved_sources, selected_ids)
                 citations = mapper.map_citations(verification.valid_source_ids, fallback_all_retrieved=False)
+                if not clean_answer:
+                    return evidence_result("unsupported_model_claims", mode="evidence_fallback")
+                if plan.intent == "summary" and not verification.valid_source_ids:
+                    # A summary with no valid source links is not a grounded summary.
+                    # Fall back to cited excerpts rather than present unsupported prose.
+                    return evidence_result("summary_without_valid_citations", mode="evidence_fallback")
+                if (plan.intent in ("definition", "conceptual")
+                        and re.search(r"\balgorithm\b", question, re.I)
+                        and re.search(r"\bexample\b", question, re.I)
+                        and not re.search(r"\bexample\b", clean_answer, re.I)):
+                    clean_answer += (
+                        "\n\n### Illustrative example (not from your documents)\n"
+                        "A sorting procedure can take `[5, 2, 9, 1]` as input and produce `[1, 2, 5, 9]` as output. "
+                        "The input and output are the values; the ordered series of comparisons and rearrangements is the procedure."
+                    )
                 follow_ups = generate_follow_up_suggestions(question, plan.intent, clean_answer)
 
                 return RAGResult(
@@ -386,6 +488,7 @@ class QueryPipeline:
                             "sufficiency": assessment.model_dump(),
                             "evidence_count": len(ledger.items),
                             "citation_verification": verification.model_dump(),
+                            "claim_verification": claim_report.model_dump(),
                         },
                     },
                 )
@@ -443,9 +546,9 @@ class QueryPipeline:
             if plan.intent == "comparison":
                 gen_result = generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
             elif plan.intent == "summary":
-                gen_result = generator.generate_summary(context=assembled_context, on_token=emit)
+                gen_result = generator.generate_summary(context=assembled_context, focus=research_question, on_token=emit)
             else:
-                gen_result = generator.generate_answer(question=question, context=assembled_context, intent=plan.intent, on_token=emit)
+                gen_result = generator.generate_answer(question=research_question, context=assembled_context, intent=plan.intent, on_token=emit)
         except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
             reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
             return evidence_result(reason, "evidence_fallback", "Synthesis is unavailable. Retrieved evidence:",
@@ -479,7 +582,7 @@ class QueryPipeline:
             issues = [f"{item.status}: {item.claim_text}; {item.reason or 'review against evidence'}" for item in claim_report.items if item.status in repair_statuses]
             repair_token, repair_counter = start_call_tracking()
             try:
-                repaired = generator.repair_answer(question, gen_result.answer, issues, assembled_context)
+                repaired = generator.repair_answer(research_question, gen_result.answer, issues, assembled_context)
             except (LLMProviderError, LLMUsageBudgetExceeded) as exc:
                 reason = exc.kind if isinstance(exc, LLMProviderError) else "daily_budget_exhausted"
                 calls = call_counter[0] + judge_counter[0] + repair_counter[0]
@@ -516,6 +619,11 @@ class QueryPipeline:
             cited_source_ids=inspectable_source_ids,
             fallback_all_retrieved=False,
         )
+        if plan.intent == "summary" and not citations:
+            # Keep summary output source-grounded even when a model returns prose
+            # without a usable citation. The extractive fallback links every point
+            # to the passages that actually support it.
+            return evidence_result("summary_without_inspectable_citations", mode="evidence_fallback")
         serializable_ids = {source.source_id.upper() for source in citations}
         clean_answer = CitationVerifier.TAG.sub(
             lambda match: "[" + ", ".join(
