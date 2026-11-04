@@ -315,3 +315,25 @@ def test_scenario_15_deeper_explanations_intent(seeded_pipeline, monkeypatch):
     )
     assert result.metadata["research"]["intent"] in ("follow_up", "explanation", "definition")
     assert len(result.sources) > 0
+
+
+def test_scenario_16_short_follow_up_retrieves_the_previous_book_topic(seeded_pipeline, monkeypatch):
+    """A short follow-up must stay on the immediate topic, not bibliography matches."""
+    _, query_p = seeded_pipeline
+    monkeypatch.setattr(settings, "rag_answer_mode", "EXTRACTIVE")
+    monkeypatch.setattr(settings, "llm_provider", "local")
+    context = (
+        "user: What is an algorithm?\n"
+        "assistant: An algorithm is a well-defined computational procedure that transforms input into output [S1]."
+    )
+
+    result = query_p.answer_question(
+        question="Explain in more depth",
+        paper_ids=["book_clrs_algorithms"],
+        conversation_context=context,
+    )
+
+    assert "algorithm" in result.metadata["research"]["plan"]["resolved_question"].casefold()
+    assert result.sources
+    assert all("references" not in (source.section or "").casefold() for source in result.sources)
+    assert any("algorithm" in source.text.casefold() for source in result.sources)
