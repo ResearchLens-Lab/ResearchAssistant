@@ -108,6 +108,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   const [mobilePanel, setMobilePanel] = useState(null); // null | "history" | "scope" | "evidence"
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [inlineTitle, setInlineTitle] = useState("");
+  const [answerMode, setAnswerMode] = useState("DOCUMENTS_GENERAL");
 
   const messagesEndRef = useRef(null);
   const lastSyncedMsgIdRef = useRef(null);
@@ -183,6 +184,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
         question,
         paper_ids: selectedPaperIds,
         conversation_id: conversationId || null,
+        answer_mode: answerMode,
       });
 
       if (!conversationId && res.conversation_id) {
@@ -680,6 +682,8 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
           onSendMessage={handleSendMessage}
           onCancel={cancelMessage}
           isLoading={isSendingMessage}
+          answerMode={answerMode}
+          onAnswerModeChange={setAnswerMode}
         />
       </div>
 

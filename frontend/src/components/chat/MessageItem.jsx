@@ -71,8 +71,14 @@ export function MessageItem({ message, onFollowUp }) {
               const reason = message.meta?.generation_reason || message.metadata?.generation_reason;
               let label = "Extractive Mode";
               let badgeVariant = "outline";
-              if (mode === "LOCAL_QWEN" || provider === "ollama") {
-                label = "Local Qwen (qwen2.5:1.5b)";
+              if (mode === "general_knowledge") {
+                label = "General knowledge · not from documents";
+                badgeVariant = "outline";
+              } else if (mode === "general_knowledge_unavailable") {
+                label = "Documents checked · local model unavailable";
+                badgeVariant = "outline";
+              } else if (mode === "LOCAL_QWEN" || provider === "ollama") {
+                label = "Local Qwen (qwen3.5:0.8b)";
                 badgeVariant = "secondary";
               } else if (mode === "generated" || provider === "gemini") {
                 label = "Gemini synthesis";

@@ -8,7 +8,7 @@ import rehypeKatex from "rehype-katex";
 import { CitationBadge } from "@/components/citations/CitationBadge";
 import { parseTextWithCitations } from "@/utils/citationParser";
 
-export function GroundedAnswer({ content, sources }) {
+export function GroundedAnswer({ content, sources, compact = false }) {
   const renderTextWithCitations = (text) => {
     const segments = parseTextWithCitations(text);
     return segments.map((seg, i) => {
@@ -26,11 +26,13 @@ export function GroundedAnswer({ content, sources }) {
   };
 
   return (
-    <div className="prose prose-zinc prose-sm max-w-none text-zinc-900 leading-relaxed dark:prose-invert dark:text-zinc-100 font-sans">
+    <div className={`prose prose-zinc prose-sm max-w-none text-zinc-900 leading-relaxed dark:prose-invert dark:text-zinc-100 font-sans ${compact ? "prose-h1:mb-4 prose-h1:mt-0 prose-h1:text-2xl prose-h1:leading-tight prose-h2:mb-2 prose-h2:mt-5 prose-h2:text-lg prose-h2:leading-snug prose-h3:mb-2 prose-h3:mt-4 prose-h3:text-base prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:border prose-pre:border-slate-200 prose-pre:bg-slate-50 prose-pre:text-slate-800 prose-code:text-inherit" : ""}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          pre: ({ children }) => compact ? <pre className="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-3 font-sans text-xs leading-5 text-slate-800">{children}</pre> : <pre>{children}</pre>,
+          code: ({ children }) => compact ? <code className="rounded bg-slate-100 px-1 font-mono text-inherit before:content-none after:content-none">{children}</code> : <code>{children}</code>,
           p: ({ children }) => {
             if (typeof children === "string") {
               return <p className="mb-2.5">{renderTextWithCitations(children)}</p>;

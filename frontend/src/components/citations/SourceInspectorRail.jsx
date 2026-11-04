@@ -39,7 +39,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
   const uncitedSources = sources.filter((s) => !s.source_id);
 
   return (
-    <aside aria-label="Evidence inspector" className={`flex h-full w-full min-w-0 flex-col border-l border-[var(--rl-border)] bg-[var(--rl-canvas)] ${className}`}>
+    <aside aria-label="Evidence inspector" className={`flex h-full w-full min-w-0 max-w-full flex-col overflow-hidden border-l border-[var(--rl-border)] bg-[var(--rl-canvas)] ${className}`}>
       {/* Inspector Header Tabs */}
       <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
         <Tabs
@@ -81,9 +81,9 @@ export function SourceInspectorRail({ className = "", onClose }) {
               </Badge>
             </div>
 
-            <ScrollArea className="flex-1 p-3">
-              {documentError && <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">{documentError}</div>}
-              <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
+            <ScrollArea className="min-h-0 w-full min-w-0 max-w-full flex-1 p-3">
+              {documentError && <div role="alert" className="mb-3 min-w-0 break-words rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">{documentError}</div>}
+              <div className="mb-3 min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-3">
                 <h3 className="text-[11px] font-semibold text-slate-800">Claim support</h3>
                 {claimSummary.available ? (
                   <>
@@ -95,11 +95,11 @@ export function SourceInspectorRail({ className = "", onClose }) {
                         ? "Lexical/numeric check only; this does not establish semantic entailment."
                         : "Provider support assessment is fallible; citation identity is checked separately."}
                     </p>
-                    <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto border-t border-slate-100 pt-2">
-                      {claimChecks.map((item, index) => <li key={`${item.claim_text}-${index}`} className="text-[10px] leading-relaxed">
+                    <ul className="mt-2 min-w-0 space-y-1.5 border-t border-slate-100 pt-2">
+                      {claimChecks.map((item, index) => <li key={`${item.claim_text}-${index}`} className="min-w-0 break-words text-[10px] leading-relaxed [overflow-wrap:anywhere]">
                         <span className={`mr-1 rounded px-1 py-0.5 font-medium ${item.status === "supported" ? "bg-emerald-50 text-emerald-800" : item.status === "partial" ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-800"}`}>{item.status.replaceAll("_", " ")}</span>
                         <span className="text-slate-700">{item.claim_text}</span>
-                        {item.reason && <span className="mt-0.5 block text-slate-400">{item.reason}</span>}
+                        {item.reason && <span className="mt-0.5 block break-words text-slate-400 [overflow-wrap:anywhere]">{item.reason}</span>}
                       </li>)}
                     </ul>
                   </>
@@ -116,7 +116,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5 pb-4">
+                <div className="min-w-0 max-w-full space-y-2.5 pb-4">
                   {citedSources.map((source, index) => (
                     <SourceCard
                       key={source.source_id || source.chunk_id || `${source.title || "source"}-${index}`}
@@ -164,7 +164,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
         )}
 
         {activeTab === "library" && (
-          <div className="p-4 text-xs text-zinc-500 space-y-3">
+            <div className="min-w-0 break-words p-4 text-xs text-zinc-500 space-y-3 [overflow-wrap:anywhere]">
             <div className="flex items-center gap-2 text-zinc-800 font-semibold">
               <Layers className="h-4 w-4 text-blue-600" />
               <span>Scope & Collection Index</span>
@@ -176,7 +176,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
         )}
 
         {activeTab === "notes" && (
-          <div className="p-4 text-xs text-zinc-500 space-y-3">
+            <div className="min-w-0 break-words p-4 text-xs text-zinc-500 space-y-3 [overflow-wrap:anywhere]">
             <div className="flex items-center gap-2 text-zinc-800 font-semibold">
               <Sparkles className="h-4 w-4 text-[var(--rl-primary)]" />
               <span>RAG Execution Trace</span>

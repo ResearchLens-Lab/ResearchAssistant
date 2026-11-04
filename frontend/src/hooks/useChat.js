@@ -90,7 +90,7 @@ export function useChat(conversationId = null, searchQuery = "") {
           sources_found: `Found ${event.data?.count ?? 0} evidence passages`,
           evidence_ready: "Evidence collected; preparing an answer…",
           generation_skipped: "Answering with a directly retrieved passage…",
-          generation_started: "Drafting an evidence-based answer…",
+          generation_started: event.data?.provider === "ollama" ? "Generating with local Qwen; CPU answers can take a little longer…" : "Drafting an evidence-based answer…",
           verification_started: "Checking claims and citations…",
           verification_completed: "Evidence check complete",
         };

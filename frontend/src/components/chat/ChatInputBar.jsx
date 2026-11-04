@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUp, GitCompareArrows, ListChecks, Table as TableIcon } from "lucide-react";
 import { useChatScopeStore } from "@/store/chatScopeStore";
 
-export function ChatInputBar({ onSendMessage, onCancel, isLoading }) {
+export function ChatInputBar({ onSendMessage, onCancel, isLoading, answerMode = "DOCUMENTS_GENERAL", onAnswerModeChange }) {
   const [input, setInput] = useState("");
   const textareaRef = useRef(null);
   const { selectedPaperIds } = useChatScopeStore();
@@ -43,6 +43,13 @@ export function ChatInputBar({ onSendMessage, onCancel, isLoading }) {
     <div className="border-t border-[var(--rl-border)] bg-white p-3 sm:p-4 shrink-0 z-10">
       <div className="mx-auto max-w-4xl space-y-2">
         <div className="flex items-center justify-between gap-3">
+          <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--rl-muted)]">
+            Answer mode
+            <select aria-label="Answer mode" value={answerMode} onChange={(event) => onAnswerModeChange?.(event.target.value)} disabled={isLoading} className="h-8 rounded-lg border border-[var(--rl-border)] bg-white px-2 text-xs font-medium text-[var(--rl-ink)]">
+              <option value="DOCUMENTS_GENERAL">Documents + general knowledge</option>
+              <option value="DOCUMENTS_ONLY">Documents only</option>
+            </select>
+          </label>
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {promptActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" onClick={() => addPrompt(prompt)} disabled={selectedPaperIds.length === 0 || isLoading} className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--rl-tint)] px-3 text-xs font-medium text-[var(--rl-muted)] transition-colors hover:bg-[var(--rl-selected)] hover:text-[var(--rl-primary)] disabled:cursor-not-allowed disabled:opacity-50"><Icon className="h-3.5 w-3.5" aria-hidden="true" />{label}</button>)}
           </div>
