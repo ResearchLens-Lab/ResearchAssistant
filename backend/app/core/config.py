@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     rag_service_url: str = ""
-    rag_timeout_seconds: float = 60
+    rag_timeout_seconds: float = 240
     rag_ingest_timeout_seconds: float = 600
 
     knowledge_graph_url: str = ""
@@ -52,9 +52,9 @@ class Settings(BaseSettings):
     rag_mode: str = "local"
     llm_enabled: bool = False
     retrieval_mode: str = "hybrid"
-    rag_answer_mode: str = "EXTRACTIVE"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:1.5b"
+    rag_answer_mode: str = "LOCAL_QWEN"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3.5:0.8b"
 
     @property
     def cors_origin_list(self) -> list[str]:

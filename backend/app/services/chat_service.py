@@ -19,6 +19,7 @@ from backend.app.models.user import User
 from backend.app.repositories.conversation_repository import ConversationRepository
 from backend.app.repositories.message_repository import MessageRepository
 from backend.app.schemas.chat import ChatRequest, ChatStreamEvent
+from backend.app.core.exceptions import RAGUnavailableError
 from backend.app.services.conversation_service import ConversationService
 from backend.app.services.paper_service import PaperService
 
@@ -65,18 +66,21 @@ class ChatService:
         if latest_time and user_message.created_at <= latest_time:
             user_message.created_at = latest_time + timedelta(microseconds=1)
 
-        # Keep recent turns for reference resolution. They are passed as a hint
-        # to deterministic query planning; only retrieved passages are evidence.
-        prior_turns = prior_messages[-6:]
+        # Keep the immediate question/answer pair. Older turns can hijack a
+        # short follow-up such as "Explain in more depth" during retrieval.
+        prior_turns = prior_messages[-2:]
         conversation_context = "\n".join(
             f"{message.role}: {message.content[:1200]}" for message in prior_turns
         ) or None
 
         # A RAG failure raises before the commit below, so the failed request
         # persists nothing and the client receives a structured 503.
-        rag_kwargs = {"question": payload.question, "paper_ids": paper_ids}
+        rag_kwargs = {"question": payload.question, "paper_ids": paper_ids,
+                      "answer_mode": payload.answer_mode}
         if "user_id" in inspect.signature(self.rag.ask_question).parameters:
             rag_kwargs["user_id"] = str(user.id)
+        if "answer_mode" not in inspect.signature(self.rag.ask_question).parameters:
+            rag_kwargs.pop("answer_mode", None)
         if conversation_context and "conversation_context" in inspect.signature(self.rag.ask_question).parameters:
             rag_kwargs["conversation_context"] = conversation_context
         if progress_callback and "progress_callback" in inspect.signature(self.rag.ask_question).parameters:
@@ -95,6 +99,7 @@ class ChatService:
             meta={"paper_ids": result.get("paper_ids", paper_ids),
                   "research": result.get("metadata", {}).get("research", {}),
                   "answer_mode": result.get("metadata", {}).get("answer_mode", "unknown"),
+                  "follow_up_suggestions": result.get("metadata", {}).get("follow_up_suggestions", []),
                   "generation_reason": result.get("metadata", {}).get("generation_reason"),
                   "generation_provider": result.get("metadata", {}).get("generation_provider"),
                   "cache_hit": result.get("metadata", {}).get("cache_hit", False),
@@ -158,4 +163,5 @@ class ChatService:
             raise
         except Exception as exc:
             logger.error("chat stream failed request_id=%s exception_type=%s", request_id, type(exc).__name__)
-            yield event("error", {"message": "The research request could not be completed."})
+            message = str(exc) if isinstance(exc, RAGUnavailableError) else "The research request could not be completed. Please retry."
+            yield event("error", {"message": message})

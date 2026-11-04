@@ -135,9 +135,11 @@ class RAGGateway:
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
         user_id: Optional[str] = None,
+        answer_mode: str = "DOCUMENTS_GENERAL",
     ) -> dict[str, Any]:
         return await self._call(
             "ask_question", question=question, paper_ids=paper_ids, top_k=top_k,
+            answer_mode=answer_mode,
             **({"conversation_context": conversation_context} if conversation_context else {}),
             **({"progress_callback": progress_callback} if progress_callback else {}),
             **({"user_id": user_id} if user_id else {}),

@@ -146,6 +146,7 @@ class RAGClient:
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
         user_id: Optional[str] = None,
+        answer_mode: str = "DOCUMENTS_GENERAL",
     ) -> Dict[str, Any]:
         """
         Answers a question grounded in target papers.
@@ -178,6 +179,7 @@ class RAGClient:
             conversation_context=conversation_context,
             progress_callback=progress_callback,
             user_id=user_id,
+            answer_mode=answer_mode,
         )
         return result.to_api_dict()
 
