@@ -6,6 +6,7 @@ RAG pipeline — `get_db` and `get_rag_gateway` are overridden per test.
 
 import os
 import sys
+import asyncio
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -16,7 +17,12 @@ if str(REPO_ROOT) not in sys.path:
 os.environ["APP_ENV"] = "testing"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-0123456789abcdef0123456789abcdef"
 os.environ["MAX_UPLOAD_SIZE_MB"] = "1"
+os.environ["MAX_UPLOAD_BATCH_SIZE_MB"] = "2"
 os.environ["RAG_TIMEOUT_SECONDS"] = "5"
+os.environ["EMBEDDING_PROVIDER"] = "mock"
+os.environ["EMBEDDING_MODEL"] = "mock-dense-384"
+os.environ["EMBEDDING_DIMENSION"] = "384"
+os.environ["LLM_PROVIDER"] = "mock"
 
 import pytest
 import pytest_asyncio
@@ -43,6 +49,9 @@ class FakeRAGGateway:
         self.mode = "ok"
         self.calls = []
         self.answer = "The paper proposes a novel method [S1]."
+        self.indexed_chunks = {}
+        self.ingest_started = None
+        self.ingest_release = None
 
     def _source(self, paper_id, document_id=None):
         return {
@@ -63,11 +72,22 @@ class FakeRAGGateway:
         if self.mode == "unavailable":
             raise RAGUnavailableError()
 
-    async def ingest_document(self, file_path, paper_id, metadata=None):
+    async def ingest_document(self, file_path, paper_id, metadata=None, progress_callback=None):
         self.calls.append(("ingest_document", paper_id))
+        if self.mode == "timeout":
+            raise RAGUnavailableError("The RAG service timed out. Cancellation was requested.")
         self._check_available()
         document_id = (metadata or {}).get("document_id", "doc_unknown")
+        if progress_callback:
+            for event in (
+                {"stage": "extracting_text", "progress": 10, "completed_pages": 1, "total_pages": 3},
+                {"stage": "chunking", "progress": 25, "completed_pages": 3, "total_pages": 3},
+                {"stage": "generating_embeddings", "progress": 50, "completed_chunks": 0, "total_chunks": 7},
+                {"stage": "indexing", "progress": 90, "completed_chunks": 7, "total_chunks": 7},
+            ):
+                await asyncio.to_thread(progress_callback, event)
         if self.mode == "ingest_failed":
+            self.indexed_chunks[document_id] = 0
             return {
                 "success": False,
                 "status": "failed",
@@ -77,6 +97,10 @@ class FakeRAGGateway:
                 "total_pages": 0,
                 "error": "No text chunks could be extracted from the document.",
             }
+        if self.mode == "blocking":
+            self.ingest_started.set()
+            await self.ingest_release.wait()
+        self.indexed_chunks[document_id] = 6 if self.mode == "inconsistent" else 7
         return {
             "success": True,
             "status": "indexed",
@@ -87,9 +111,20 @@ class FakeRAGGateway:
             "error": None,
         }
 
-    async def ask_question(self, question, paper_ids=None, top_k=None):
+    async def delete_document_chunks(self, document_id):
+        self.indexed_chunks[document_id] = 0
+        return 0
+
+    async def get_document_index_counts(self, document_id):
+        count = self.indexed_chunks.get(document_id, 0)
+        return {"chroma_count": count, "fts_count": count, "ids_match": True}
+
+    async def ask_question(self, question, paper_ids=None, top_k=None, progress_callback=None):
         self.calls.append(("ask_question", tuple(paper_ids or [])))
         self._check_available()
+        if progress_callback:
+            progress_callback({"type": "retrieval_started", "round": 1})
+            progress_callback({"type": "sources_found", "count": 1, "round": 1})
         pids = list(paper_ids or [])
         return {
             "answer": self.answer,
@@ -111,10 +146,12 @@ class FakeRAGGateway:
             "answer": "Comparison result.",
             "sources": [self._source(pid) for pid in paper_ids],
             "paper_ids": list(paper_ids),
+            "metadata": {"research": {"sufficiency": {"status": "conflicting"}}},
         }
 
     async def delete_paper(self, paper_id):
         self.calls.append(("delete_paper", paper_id))
+        self._check_available()
         return 0
 
 
@@ -162,13 +199,15 @@ async def client(db_engine, rag_gateway):
 
 USER_CREDENTIALS = {
     "email": "abhay@example.com",
-    "password": "strongpassword123",
+    "username": "abhay_kumar",
+    "password": "StrongPassword123!",
     "full_name": "Abhay Kumar Singh",
 }
 
 SECOND_USER_CREDENTIALS = {
     "email": "other@example.com",
-    "password": "anotherpassword123",
+    "username": "other_user",
+    "password": "AnotherPassword123!",
     "full_name": "Other User",
 }
 

@@ -2,17 +2,18 @@
 # `list` in signature annotations.
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.exceptions import NotFoundError
+from backend.app.database.base import utcnow
 from backend.app.models.conversation import Conversation
 from backend.app.models.message import Message
 from backend.app.models.user import User
 from backend.app.repositories.conversation_repository import ConversationRepository
 from backend.app.repositories.message_repository import MessageRepository
-from backend.app.schemas.chat import ConversationCreate
+from backend.app.schemas.chat import ConversationCreate, ConversationUpdate
 from backend.app.services.paper_service import PaperService
 from backend.app.utils.pagination import PageParams, page_payload
 
@@ -38,11 +39,27 @@ class ConversationService:
             raise NotFoundError("Conversation was not found.")
         return conversation
 
-    async def list(self, user: User, params: PageParams) -> dict[str, Any]:
+    async def list(
+        self, user: User, params: PageParams, query: Optional[str] = None
+    ) -> dict[str, Any]:
         items, total = await self.conversations.list_by_user(
-            user.id, params.offset, params.page_size
+            user.id, params.offset, params.page_size, query=query
         )
         return page_payload(items, total, params)
+
+    async def update(
+        self, user: User, conversation_id: str, payload: ConversationUpdate
+    ) -> Conversation:
+        conversation = await self.get_owned(user, conversation_id)
+        if payload.paper_ids is not None:
+            await PaperService(self.db).validate_owned_papers(user, payload.paper_ids)
+        updated = await self.conversations.update(
+            conversation,
+            title=payload.title.strip() if payload.title is not None else None,
+            paper_ids=payload.paper_ids,
+        )
+        await self.db.commit()
+        return updated
 
     async def list_messages(self, user: User, conversation_id: str) -> list[Message]:
         await self.get_owned(user, conversation_id)

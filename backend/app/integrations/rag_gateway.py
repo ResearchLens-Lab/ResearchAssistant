@@ -8,12 +8,23 @@ maps failures onto the API error contract. It never inspects RAG internals.
 
 import asyncio
 import logging
+import threading
+from typing import Callable
 from typing import Any, Optional
 
 from backend.app.core.config import get_settings
-from backend.app.core.exceptions import RAGUnavailableError
+from backend.app.core.exceptions import RAGIngestionTimeoutError, RAGUnavailableError
 
 logger = logging.getLogger("backend.rag")
+
+
+def _gemini_configuration_error(exc: Exception) -> Optional[str]:
+    message = str(exc)
+    if ("GEMINI_API_KEY" in message or "Gemini" in message
+            or "Unsupported LLM provider" in message
+            or "No generation provider" in message):
+        return message
+    return None
 
 
 class RAGGateway:
@@ -37,46 +48,101 @@ class RAGGateway:
             self._client = rag_client
         return self._client
 
-    async def _call(self, method_name: str, /, *args: Any, **kwargs: Any) -> Any:
+    async def _call(
+        self, method_name: str, /, *args: Any, timeout_seconds: Optional[float] = None,
+        cooperative_cancel: bool = False, **kwargs: Any,
+    ) -> Any:
         try:
             client = self._get_client()
         except Exception as exc:
-            logger.error("RAG client unavailable: %s", exc)
+            logger.error("RAG client unavailable exception_type=%s", type(exc).__name__)
+            if (message := _gemini_configuration_error(exc)):
+                raise RAGUnavailableError(message) from exc
             raise RAGUnavailableError() from exc
         method = getattr(client, method_name)
+        timeout = timeout_seconds or self._timeout
+        cancel_event = threading.Event() if cooperative_cancel else None
+        if cancel_event is not None:
+            kwargs["cancel_event"] = cancel_event
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(method, *args, **kwargs), timeout=self._timeout
-            )
+            if cancel_event is None:
+                return await asyncio.wait_for(asyncio.to_thread(method, *args, **kwargs), timeout=timeout)
+            worker = asyncio.create_task(asyncio.to_thread(method, *args, **kwargs))
+            try:
+                done, _ = await asyncio.wait({worker}, timeout=timeout)
+            except asyncio.CancelledError:
+                cancel_event.set()
+                worker.add_done_callback(self._observe_worker_result)
+                raise
+            if worker in done:
+                return worker.result()
+            # wait_for() around to_thread() cancels only the awaitable. Keep the
+            # worker and RAGClient's per-document lock alive while it cooperatively
+            # stops and cleans up at a safe pipeline boundary.
+            cancel_event.set()
+            worker.add_done_callback(self._observe_worker_result)
+            raise asyncio.TimeoutError
         except asyncio.TimeoutError as exc:
             logger.error(
-                "RAG query failed: '%s' timed out after %ss", method_name, self._timeout
+                "RAG call timed out method=%s timeout_seconds=%s cooperative_cancel=%s",
+                method_name, timeout, cooperative_cancel,
             )
-            raise RAGUnavailableError("The RAG service timed out.") from exc
+            message = "The RAG service timed out."
+            if cooperative_cancel:
+                message += " Cancellation was requested; a same-document retry remains locked until cleanup finishes."
+            if cooperative_cancel:
+                raise RAGIngestionTimeoutError(message) from exc
+            raise RAGUnavailableError(message) from exc
         except RAGUnavailableError:
             raise
         except Exception as exc:
-            logger.error("RAG query failed: '%s' raised %s", method_name, exc)
+            logger.error("RAG query failed method=%s exception_type=%s", method_name, type(exc).__name__)
+            if (message := _gemini_configuration_error(exc)):
+                raise RAGUnavailableError(message) from exc
             raise RAGUnavailableError() from exc
+
+    @staticmethod
+    def _observe_worker_result(worker: asyncio.Task) -> None:
+        """Retrieve background worker exceptions after the HTTP call timed out."""
+        if not worker.cancelled():
+            try:
+                worker.exception()
+            except Exception:
+                logger.exception("Timed-out RAG worker raised after request completion")
 
     async def ingest_document(
         self,
         file_path: str,
         paper_id: str,
         metadata: Optional[dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[dict], None]] = None,
     ) -> dict[str, Any]:
         return await self._call(
-            "ingest_document", file_path=file_path, paper_id=paper_id, metadata=metadata
+            "ingest_document", file_path=file_path, paper_id=paper_id, metadata=metadata,
+            **({"progress_callback": progress_callback} if progress_callback else {}),
+            cooperative_cancel=True,
+            timeout_seconds=get_settings().rag_ingest_timeout_seconds,
         )
+
+    async def cancel_ingest(self, document_id: str) -> bool:
+        return await self._call("cancel_ingest", document_id)
 
     async def ask_question(
         self,
         question: str,
         paper_ids: Optional[list[str]] = None,
         top_k: Optional[int] = None,
+        conversation_context: Optional[str] = None,
+        progress_callback: Optional[Callable[[dict], None]] = None,
+        user_id: Optional[str] = None,
+        answer_mode: str = "DOCUMENTS_GENERAL",
     ) -> dict[str, Any]:
         return await self._call(
-            "ask_question", question=question, paper_ids=paper_ids, top_k=top_k
+            "ask_question", question=question, paper_ids=paper_ids, top_k=top_k,
+            answer_mode=answer_mode,
+            **({"conversation_context": conversation_context} if conversation_context else {}),
+            **({"progress_callback": progress_callback} if progress_callback else {}),
+            **({"user_id": user_id} if user_id else {}),
         )
 
     async def summarize_paper(self, paper_id: str, top_k: int = 8) -> dict[str, Any]:
@@ -94,3 +160,9 @@ class RAGGateway:
 
     async def delete_paper(self, paper_id: str) -> int:
         return await self._call("delete_paper", paper_id)
+
+    async def delete_document_chunks(self, document_id: str) -> int:
+        return await self._call("delete_document_chunks", document_id)
+
+    async def get_document_index_counts(self, document_id: str) -> dict[str, Any]:
+        return await self._call("get_document_index_counts", document_id)

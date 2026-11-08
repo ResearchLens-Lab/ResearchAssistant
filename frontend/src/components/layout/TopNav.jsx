@@ -2,49 +2,70 @@
 
 import React from "react";
 import Link from "next/link";
-import { Breadcrumbs } from "./Breadcrumbs";
+import { usePathname } from "next/navigation";
+import { BookOpen, FlaskConical, GitCompareArrows, Plus, Sparkles } from "lucide-react";
 import { UserDropdown } from "./UserDropdown";
-import { Button } from "@/components/ui/button";
-import { UploadCloud, GitCompare } from "lucide-react";
+import { cn } from "@/utils/cn";
+
+const PRIMARY_DESTINATIONS = [
+  { label: "Library", href: "/papers", icon: BookOpen },
+  { label: "Research Desk", href: "/chat", icon: FlaskConical },
+  { label: "Compare & Reports", href: "/compare", icon: GitCompareArrows },
+];
 
 export function TopNav() {
+  const pathname = usePathname();
+
   return (
-    <header className="flex h-14 w-full items-center justify-between border-b border-zinc-200 bg-white px-5 dark:border-zinc-800 dark:bg-zinc-950 shrink-0">
-      {/* Left: Breadcrumb Navigation */}
-      <div className="flex items-center gap-3">
-        <Breadcrumbs />
-      </div>
+    <header className="sticky top-0 z-30 shrink-0 border-b border-[var(--rl-border)] bg-white/95 px-3 backdrop-blur-sm sm:px-5">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-3 sm:gap-6">
+        <Link href="/papers" className="flex shrink-0 items-center gap-2.5 rounded-lg" aria-label="ResearchLens Library">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]">
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="hidden flex-col leading-tight sm:flex">
+            <span className="text-[15px] font-semibold tracking-tight text-[var(--rl-ink)]">ResearchLens</span>
+            <span className="text-[10px] font-medium tracking-wide text-[var(--rl-muted)]">EVIDENCE-FIRST RESEARCH</span>
+          </span>
+        </Link>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-3">
-        {/* Quick Compare CTA */}
-        <Button
-          variant="outline"
-          size="sm"
-          asChild
-          className="hidden sm:inline-flex gap-1.5"
-        >
-          <Link href="/compare">
-            <GitCompare className="h-3.5 w-3.5 text-zinc-500" />
-            <span>Compare</span>
-          </Link>
-        </Button>
+        <nav aria-label="Main navigation" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto">
+          {PRIMARY_DESTINATIONS.map(({ label, href, icon: Icon }) => {
+            const active = href === "/papers"
+              ? pathname === "/papers" || pathname.startsWith("/papers/") || pathname === "/dashboard"
+              : pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-medium transition-colors sm:px-4 sm:text-sm",
+                  active
+                    ? "bg-[var(--rl-selected)] text-[var(--rl-primary)]"
+                    : "text-[var(--rl-muted)] hover:bg-[var(--rl-tint)] hover:text-[var(--rl-ink)]"
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden md:inline">{label}</span>
+                <span className="md:hidden">{label === "Research Desk" ? "Desk" : label === "Compare & Reports" ? "Compare" : label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-        {/* Ingest Action CTA */}
-        <Button
-          variant="workbench"
-          size="sm"
-          asChild
-          className="gap-1.5 bg-zinc-900 text-white hover:bg-zinc-800"
-        >
-          <Link href="/papers/upload">
-            <UploadCloud className="h-3.5 w-3.5" />
-            <span>Upload Paper</span>
-          </Link>
-        </Button>
-
-        {/* User Profile */}
-        <UserDropdown />
+        <div className="flex shrink-0 items-center gap-2">
+          {!pathname.startsWith("/papers") && <Link
+            href="/papers/upload"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--rl-primary)] text-white transition-colors hover:bg-[#1f659c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)] focus-visible:ring-offset-2 sm:w-auto sm:gap-2 sm:px-4"
+            aria-label="Add sources"
+            title="Add sources"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden text-sm font-medium md:inline">Add sources</span>
+          </Link>}
+          <UserDropdown />
+        </div>
       </div>
     </header>
   );

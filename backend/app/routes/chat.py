@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
 from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
 from backend.app.schemas.chat import (
     ChatRequest,
     ChatResponse,
     ConversationCreate,
+    ConversationUpdate,
     ConversationResponse,
     MessageResponse,
 )
@@ -32,6 +36,19 @@ async def chat(
     return await ChatService(db, rag).send_message(current_user, payload)
 
 
+@router.post("/chat/stream", summary="Stream authenticated research progress and final response")
+async def chat_stream(
+    payload: ChatRequest, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    async def body():
+        async for frame in ChatService(db, rag).stream_message(current_user, payload):
+            yield frame
+
+    return StreamingResponse(body(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
+    })
+
+
 @router.post(
     "/conversations",
     response_model=ConversationResponse,
@@ -50,9 +67,12 @@ async def create_conversation(
     summary="List own conversations",
 )
 async def list_conversations(
-    current_user: CurrentUser, db: DBSession, params: PageParams = Depends()
+    current_user: CurrentUser,
+    db: DBSession,
+    params: PageParams = Depends(),
+    q: Optional[str] = Query(default=None, description="Filter conversations by title query"),
 ):
-    return await ConversationService(db).list(current_user, params)
+    return await ConversationService(db).list(current_user, params, query=q)
 
 
 @router.get(
@@ -64,6 +84,20 @@ async def get_conversation(
     conversation_id: str, current_user: CurrentUser, db: DBSession
 ):
     return await ConversationService(db).get_owned(current_user, conversation_id)
+
+
+@router.patch(
+    "/conversations/{conversation_id}",
+    response_model=ConversationResponse,
+    summary="Update conversation title or source scope",
+)
+async def update_conversation(
+    conversation_id: str,
+    payload: ConversationUpdate,
+    current_user: CurrentUser,
+    db: DBSession,
+):
+    return await ConversationService(db).update(current_user, conversation_id, payload)
 
 
 @router.get(

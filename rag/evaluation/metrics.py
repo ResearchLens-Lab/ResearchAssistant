@@ -23,6 +23,21 @@ class EvaluationItemResult(BaseModel):
     citation_correctness: float
     retrieved_count: int
     cited_count: int
+    source_coverage: Optional[float] = None
+    reciprocal_rank: Optional[float] = None
+    unsupported_handling: Optional[float] = None
+    latency_seconds: float = 0.0
+    category: str = "uncategorized"
+    claim_support_rate: Optional[float] = None
+    invalid_citation_frequency: Optional[float] = None
+    locator_validity: Optional[float] = None
+    expected_fact_coverage: Optional[float] = None
+    numerical_correctness: Optional[float] = None
+    contradiction_handling: Optional[float] = None
+    missing_evidence_detection: Optional[float] = None
+    retrieval_rounds: int = 0
+    model_calls: int = 0
+    stage_timings: Dict[str, float] = Field(default_factory=dict)
     notes: List[str] = Field(default_factory=list)
 
 
@@ -32,7 +47,12 @@ class EvaluationSummary(BaseModel):
     mean_source_relevance: float
     mean_answer_grounding: float
     mean_citation_correctness: float
+    mean_source_coverage: float = 0.0
+    mean_reciprocal_rank: float = 0.0
+    mean_unsupported_handling: float = 0.0
+    mean_latency_seconds: float = 0.0
     item_results: List[EvaluationItemResult] = Field(default_factory=list)
+    by_category: Dict[str, Dict[str, float]] = Field(default_factory=dict)
 
 
 class EvaluationMetrics:
@@ -71,8 +91,10 @@ class EvaluationMetrics:
         """
         Calculates recall of expected keywords across all retrieved sources.
         """
-        if not expected_keywords:
+        if expected_keywords is None:
             return 1.0
+        if not expected_keywords:
+            return 0.0
         if not sources:
             return 0.0
 
@@ -120,11 +142,13 @@ class EvaluationMetrics:
         """
         Verifies that citations in answer point to real retrieved sources.
         """
-        if not rag_result.sources and not rag_result.answer:
+        if not rag_result.sources and (not rag_result.answer or "insufficient evidence" in rag_result.answer.lower()):
             return 1.0
 
         # Extract citation tags in answer e.g. [S1]
-        cited_tags = re.findall(r"\[(S\d+)\]", rag_result.answer, re.IGNORECASE)
+        cited_tags = []
+        for tag_group in re.findall(r"\[((?:S\d+\s*,\s*)*S\d+)\]", rag_result.answer, re.IGNORECASE):
+            cited_tags.extend(re.findall(r"S\d+", tag_group, re.IGNORECASE))
         if not cited_tags:
             # If answer didn't explicitly use [S1] tags, check if sources were returned
             return 1.0 if rag_result.sources else 0.5

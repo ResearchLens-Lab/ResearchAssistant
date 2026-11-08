@@ -5,7 +5,7 @@ Registry and factory for embedding models.
 import logging
 from typing import Optional
 from rag.config.settings import settings
-from rag.embeddings.embedder import BaseEmbedder, DeterministicMockEmbedder, OpenAIEmbedder
+from rag.embeddings.embedder import BaseEmbedder, DeterministicMockEmbedder, FastEmbedder, GeminiEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +25,20 @@ class EmbeddingModelRegistry:
         prov = (provider or settings.embedding_provider).lower()
         dim = dimension or settings.embedding_dimension
 
-        if prov == "openai":
-            key = api_key or settings.embedding_api_key or settings.llm_api_key
-            model = model_name or settings.embedding_model or "text-embedding-3-small"
-            # OpenAI text-embedding-3-small default is 1536
-            out_dim = dim if dim != 384 else 1536
-            logger.info("Initializing OpenAIEmbedder (model: %s, dim: %d)", model, out_dim)
-            return OpenAIEmbedder(api_key=key, model=model, dimension=out_dim)
+        if prov == "gemini":
+            model = model_name or settings.embedding_model
+            if model != "gemini-embedding-001":
+                raise ValueError(f"Unsupported Gemini embedding model '{model}'.")
+            return GeminiEmbedder(api_key=api_key or settings.gemini_api_key, model=model, dimension=dim)
+        elif prov in {"fastembed", "local"}:
+            model = model_name or settings.embedding_model
+            if model != "BAAI/bge-small-en-v1.5":
+                raise ValueError(f"Unsupported local embedding model '{model}'.")
+            if dim != 384:
+                raise ValueError("BAAI/bge-small-en-v1.5 requires EMBEDDING_DIMENSION=384.")
+            return FastEmbedder(model=model, dimension=dim)
         elif prov == "mock":
             logger.info("Initializing DeterministicMockEmbedder (dim: %d)", dim)
             return DeterministicMockEmbedder(dimension=dim)
         else:
-            logger.warning("Unknown embedding provider '%s', defaulting to DeterministicMockEmbedder", prov)
-            return DeterministicMockEmbedder(dimension=dim)
+            raise ValueError(f"Unsupported embedding provider '{prov}'. Choose 'fastembed'/'local', 'gemini' or 'mock'.")

@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, MessageSquare } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 export function PaperMetadataHeader({ paper, onOpenChat }) {
@@ -37,17 +37,6 @@ export function PaperMetadataHeader({ paper, onOpenChat }) {
             </Button>
           )}
 
-          <Button
-            variant="workbench"
-            size="sm"
-            asChild
-            className="h-7 text-xs gap-1.5 bg-zinc-900 text-white"
-          >
-            <Link href={`/chat`}>
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span>Ask AI in Chat</span>
-            </Link>
-          </Button>
         </div>
       </div>
 

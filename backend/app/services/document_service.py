@@ -1,14 +1,26 @@
 import logging
+import asyncio
+import zipfile
+import stat
+import tempfile
+import zlib
+import time
+from pathlib import Path, PurePosixPath
 from typing import Optional
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from fastapi import UploadFile
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.config import get_settings
 from backend.app.core.exceptions import (
     DocumentNotFoundError,
     PaperNotFoundError,
+    RAGIngestionTimeoutError,
     RAGUnavailableError,
+    RequestValidationAppError,
 )
 from backend.app.integrations.rag_gateway import RAGGateway
 from backend.app.models.document import Document, DocumentStatus
@@ -16,7 +28,7 @@ from backend.app.models.paper import Paper
 from backend.app.models.user import User
 from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.services.paper_service import PaperService
-from backend.app.utils.validators import validate_pdf_upload
+from backend.app.utils.validators import validate_document_file
 
 logger = logging.getLogger("backend.documents")
 
@@ -30,34 +42,124 @@ class DocumentService:
 
     async def upload(self, user: User, paper_id: str, upload: UploadFile) -> Document:
         settings = get_settings()
+        upload_started = time.perf_counter()
         paper = await self.paper_service.get_owned(user, paper_id)
+        # A prior file in this batch may have rolled back this session; reload
+        # the owner row before using its identifier in subsequent inserts.
+        await self.db.refresh(paper)
 
-        content = await upload.read()
-        validate_pdf_upload(
-            upload.filename, upload.content_type, content, settings.max_upload_size_bytes
-        )
-
-        document = await self.documents.create(
-            paper_id=paper.id,
-            filename=upload.filename or "document.pdf",
-            storage_path="",
-            content_type=upload.content_type or "application/pdf",
-            file_size=len(content),
-        )
-        # Files are stored under a generated id — user filenames never become
-        # filesystem paths (no traversal).
         upload_dir = settings.upload_path
         upload_dir.mkdir(parents=True, exist_ok=True)
-        storage_path = upload_dir / f"{document.id}.pdf"
-        storage_path.write_bytes(content)
-        document.storage_path = str(storage_path)
-        document.processing_status = DocumentStatus.PROCESSING.value
-        await self.db.flush()
-        await self.db.commit()
+        staged = None
+        storage_path = None
+        db_touched = False
+        try:
+            with tempfile.NamedTemporaryFile(prefix=".upload-", dir=upload_dir, delete=False) as target:
+                staged = Path(target.name)
+                size = 0
+                while chunk := await upload.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > settings.max_upload_size_bytes:
+                        raise RequestValidationAppError(f"File exceeds the maximum allowed size of {settings.max_upload_size_mb} MB.")
+                    await asyncio.to_thread(target.write, chunk)
+            validate_document_file(upload.filename, upload.content_type, staged, size, settings.max_upload_size_bytes)
+            filename = upload.filename or "document.txt"
+            db_touched = True
+            document = await self.documents.create(
+                paper_id=paper.id,
+                filename=filename,
+                storage_path="",
+                content_type=upload.content_type or "application/octet-stream",
+                file_size=size,
+            )
+        # Files are stored under a generated id — user filenames never become
+        # filesystem paths (no traversal).
+            storage_path = upload_dir / f"{document.id}{Path(filename).suffix.lower()}"
+            staged.replace(storage_path)
+            staged = None
+            document.storage_path = str(storage_path)
+            document.processing_status = DocumentStatus.PROCESSING.value
+            document.processing_stage = "extracting_text"
+            document.processing_progress = 0
+            document.processing_progress_type = "estimated"
+            document.processing_completed_units = 0
+            document.processing_total_units = None
+            document.processing_unit = None
+            document.processing_started_at = datetime.utcnow()
+            document.processing_heartbeat_at = document.processing_started_at
+            await self.db.flush()
+            await self.db.commit()
+            logger.info(
+                "Document stored document_id=%s bytes=%d duration_seconds=%.3f",
+                document.id, size, time.perf_counter() - upload_started,
+            )
+        except Exception:
+            if staged is not None:
+                staged.unlink(missing_ok=True)
+            if storage_path is not None:
+                storage_path.unlink(missing_ok=True)
+            if db_touched:
+                await self.db.rollback()
+            raise
         logger.info("document uploaded document_id=%s paper_id=%s", document.id, paper.id)
 
         await self._process(document, paper)
         return document
+
+    async def upload_batch(self, user: User, paper_id: str, uploads: list[UploadFile]) -> dict:
+        """Upload documents and bounded ZIP members into one existing paper."""
+        await self.paper_service.get_owned(user, paper_id)
+        settings = get_settings()
+        if len(uploads) > settings.max_upload_batch_files:
+            raise RequestValidationAppError(f"At most {settings.max_upload_batch_files} files may be uploaded per batch.")
+        declared_total = sum(upload.size or 0 for upload in uploads)
+        if declared_total > settings.max_upload_batch_size_bytes:
+            raise RequestValidationAppError(f"Batch exceeds the {settings.max_upload_batch_size_mb} MB total upload limit.")
+        results, failures = [], []
+        for upload in uploads:
+            if (upload.filename or "").lower().endswith(".zip"):
+                if (upload.size or 0) > settings.max_upload_size_bytes:
+                    failures.append({"filename": upload.filename, "error": "Archive exceeds upload size limit."})
+                    continue
+                try:
+                    upload.file.seek(0)
+                    with zipfile.ZipFile(upload.file) as archive:
+                        entries = archive.infolist()
+                        if len(entries) > settings.max_zip_entries:
+                            raise ValueError(f"Archive contains more than {settings.max_zip_entries} files.")
+                        total = 0
+                        for member in entries:
+                            name = member.filename.replace("\\", "/")
+                            path = PurePosixPath(name)
+                            mode = member.external_attr >> 16
+                            kind = stat.S_IFMT(mode)
+                            if path.is_absolute() or (path.parts and ":" in path.parts[0]) or ".." in path.parts or stat.S_ISLNK(mode) or (kind not in (0, stat.S_IFREG, stat.S_IFDIR)):
+                                failures.append({"filename": upload.filename, "member": name, "error": "Unsafe archive member path or type."})
+                                continue
+                            if member.is_dir():
+                                continue
+                            total += member.file_size
+                            if member.file_size > settings.max_zip_entry_size_bytes:
+                                raise ValueError("An archive entry exceeds the per-file size limit.")
+                            if total > settings.max_zip_expanded_size_bytes or (member.compress_size and member.file_size / member.compress_size > settings.max_zip_compression_ratio):
+                                raise ValueError("Archive expanded size or compression ratio exceeds safety limits.")
+                            try:
+                                with archive.open(member) as member_stream:
+                                    member_upload = UploadFile(filename=path.as_posix(), file=member_stream, headers=upload.headers)
+                                    results.append(await self.upload(user, paper_id, member_upload))
+                            except Exception as exc:
+                                message = exc.message if isinstance(exc, RequestValidationAppError) else "Member could not be stored or indexed."
+                                failures.append({"filename": upload.filename, "member": path.as_posix(), "error": message})
+                except (zipfile.BadZipFile, ValueError, RuntimeError, NotImplementedError, OSError, zlib.error) as exc:
+                    failures.append({"filename": upload.filename, "error": f"Invalid or unsafe ZIP archive: {exc}"})
+                continue
+            try:
+                results.append(await self.upload(user, paper_id, upload))
+            except Exception as exc:
+                logger.warning("Batch file upload failed exception_type=%s", type(exc).__name__)
+                message = exc.message if isinstance(exc, RequestValidationAppError) else "File could not be stored or indexed."
+                failures.append({"filename": upload.filename, "error": message})
+        return {"documents": results, "failures": failures, "success_count": len(results), "failure_count": len(failures)}
 
     async def _process(self, document: Document, paper: Paper) -> None:
         """Synchronous RAG ingestion, acceptable for the prototype; the status
@@ -66,37 +168,154 @@ class DocumentService:
         logger.info("RAG ingestion started document_id=%s", document.id)
         metadata = {
             "document_id": document.id,  # shared ID passed through to RAG/ChromaDB
+            "filename": document.filename,
             "title": paper.title,
             "authors": ", ".join(paper.authors or []),
             "year": paper.publication_year,
         }
+        loop = asyncio.get_running_loop()
+
+        last_persisted = {"stage": "extracting_text", "progress": 0, "at": time.monotonic()}
+        progress_commit_stats = {"count": 0, "seconds": 0.0}
+
+        async def persist_progress(event: dict) -> None:
+            stage = str(event.get("stage", ""))
+            if not stage or document.processing_status != DocumentStatus.PROCESSING.value:
+                return
+            progress = max(document.processing_progress or 0, min(100, max(0, int(event.get("progress", 0)))))
+            now = time.monotonic()
+            stage_changed = stage != last_persisted["stage"]
+            progress_changed = progress != last_persisted["progress"]
+            # Avoid a SELECT+COMMIT for every batch callback. Persist phase changes
+            # and meaningful progress changes at most once per 750 ms.
+            if not (event.get("force") or stage_changed or (progress_changed and now - last_persisted["at"] >= 0.75) or stage == "ready"):
+                return
+            document.processing_stage = stage
+            document.processing_progress = progress
+            document.processing_progress_type = str(event.get("progress_type") or "estimated")
+            if "completed_pages" in event:
+                document.processing_completed_units = int(event.get("completed_pages") or 0)
+                document.processing_total_units = int(event.get("total_pages") or 0) or None
+                document.processing_unit = "pages"
+            elif "completed_chunks" in event:
+                document.processing_completed_units = int(event.get("completed_chunks") or 0)
+                document.processing_total_units = int(event.get("total_chunks") or 0) or None
+                document.processing_unit = "chunks"
+            document.processing_heartbeat_at = datetime.utcnow()
+            commit_started = time.perf_counter()
+            await self.db.commit()
+            progress_commit_stats["count"] += 1
+            progress_commit_stats["seconds"] += time.perf_counter() - commit_started
+            logger.debug(
+                "Ingestion progress persisted document_id=%s stage=%s progress=%d commit_seconds=%.4f",
+                document.id, stage, progress, time.perf_counter() - commit_started,
+            )
+            last_persisted.update(stage=stage, progress=progress, at=time.monotonic())
+
+        def progress_callback(event: dict) -> None:
+            if event.get("stage"):
+                try:
+                    asyncio.run_coroutine_threadsafe(persist_progress(event), loop).result(timeout=2.0)
+                except Exception as exc:
+                    logger.debug('Progress callback dispatch note: %s', exc)
+
+        await self.db.refresh(document)
+        if document.processing_status == DocumentStatus.CANCELLED.value:
+            logger.info("Ingestion already cancelled before RAG call document_id=%s", document.id)
+            return
+
+        rag_started = time.perf_counter()
         try:
             result = await self.rag.ingest_document(
                 file_path=document.storage_path,
                 paper_id=document.paper_id,
                 metadata=metadata,
+                progress_callback=progress_callback,
+            )
+            logger.info(
+                "RAG ingestion returned document_id=%s roundtrip_seconds=%.3f pipeline_seconds=%s chunks=%s",
+                document.id, time.perf_counter() - rag_started,
+                result.get("execution_time_seconds"), result.get("chunk_count"),
             )
         except RAGUnavailableError as exc:
             document.processing_status = DocumentStatus.FAILED.value
             document.processing_error = exc.message
+            document.processing_stage = "failed"
+            document.processing_progress = min(document.processing_progress or 0, 99)
+            document.processing_progress_type = "actual"
+            document.chunk_count = 0
+            document.processing_heartbeat_at = datetime.utcnow()
+            if not isinstance(exc, RAGIngestionTimeoutError):
+                document.processing_error = await self._cleanup_failed_index(document, exc.message)
+            status_commit_started = time.perf_counter()
             await self.db.commit()
+            status_commit_seconds = time.perf_counter() - status_commit_started
             logger.warning(
-                "RAG ingestion failed document_id=%s error=%s", document.id, exc.message
+                "RAG ingestion failed document_id=%s error=%s progress_commits=%d progress_commit_seconds=%.4f final_status_commit_seconds=%.4f",
+                document.id, exc.message, progress_commit_stats["count"],
+                progress_commit_stats["seconds"], status_commit_seconds,
             )
             return
 
-        if result.get("success") and result.get("status") == "indexed":
+        await self.db.refresh(document)
+        if document.processing_status == DocumentStatus.CANCELLED.value:
+            logger.info("Ingestion was cancelled during processing document_id=%s", document.id)
+            return
+
+        success = result.get("success") and result.get("status") == "indexed"
+        error = str(result.get("error") or "Indexing did not complete.")
+        cleanup_safe = True
+        if success:
+            expected_count = int(result.get("chunk_count") or 0)
+            try:
+                counts = await self.rag.get_document_index_counts(document.id)
+                consistent = (
+                    expected_count > 0
+                    and counts.get("ids_match") is True
+                    and counts.get("chroma_count") == expected_count
+                    and counts.get("fts_count") == expected_count
+                )
+                if not consistent:
+                    success = False
+                    error = (
+                        "Index consistency check failed "
+                        f"(reported={expected_count}, Chroma={counts.get('chroma_count')}, "
+                        f"FTS5={counts.get('fts_count')}, ids_match={counts.get('ids_match')})."
+                    )
+            except RAGUnavailableError as exc:
+                success = False
+                cleanup_safe = False
+                error = f"Index consistency could not be verified: {exc.message}"
+        if success:
             document.processing_status = DocumentStatus.INDEXED.value
+            document.processing_stage = "ready"
+            document.processing_progress = 100
+            document.processing_progress_type = "actual"
+            document.processing_heartbeat_at = datetime.utcnow()
             document.chunk_count = result.get("chunk_count")
             document.processing_error = None
         else:
             document.processing_status = DocumentStatus.FAILED.value
-            document.processing_error = result.get("error") or "Document ingestion failed."
+            document.processing_stage = "failed"
+            document.processing_progress = min(document.processing_progress or 0, 99)
+            document.processing_progress_type = "actual"
+            document.processing_heartbeat_at = datetime.utcnow()
+            document.chunk_count = 0
+            if cleanup_safe and not result.get("active_attempt"):
+                error = await self._cleanup_failed_index(document, error)
+            # IngestResult errors contain parser/provider diagnostics, but never
+            # expose internal storage paths in the API response.
+            document.processing_error = error.replace(document.storage_path, document.filename)
+        status_commit_started = time.perf_counter()
         await self.db.commit()
+        status_commit_seconds = time.perf_counter() - status_commit_started
         logger.info(
-            "RAG ingestion completed document_id=%s status=%s",
+            "RAG ingestion completed document_id=%s status=%s progress_commits=%d progress_commit_seconds=%.4f final_status_commit_seconds=%.4f",
             document.id,
             document.processing_status,
+            progress_commit_stats["count"],
+            progress_commit_stats["seconds"],
+            status_commit_seconds,
         )
 
     async def get_owned(self, user: User, document_id: str) -> Document:
@@ -107,8 +326,141 @@ class DocumentService:
             await self.paper_service.get_owned(user, document.paper_id)
         except PaperNotFoundError as exc:
             raise DocumentNotFoundError() from exc
+        await self._mark_stalled_documents([document])
+        return document
+
+    async def cancel(self, user: User, document_id: str) -> Document:
+        document = await self.get_owned(user, document_id)
+        if document.processing_status == DocumentStatus.CANCELLED.value:
+            return document
+        if document.processing_status not in (DocumentStatus.PROCESSING.value, DocumentStatus.UPLOADED.value):
+            raise RequestValidationAppError("Only active or queued documents can be cancelled.")
+
+        # Signal RAG pipeline to stop
+        if self.rag:
+            try:
+                await self.rag.cancel_ingest(document.id)
+            except Exception as e:
+                logger.warning("Could not signal RAG cancel document_id=%s: %s", document.id, e)
+            try:
+                await self.rag.delete_document_chunks(document.id)
+            except Exception as e:
+                logger.warning("Could not delete partial chunks on cancel document_id=%s: %s", document.id, e)
+
+        # Remove temporary storage file
+        if document.storage_path and Path(document.storage_path).is_file():
+            try:
+                Path(document.storage_path).unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning("Could not unlink cancelled file: %s", e)
+
+        document.processing_status = DocumentStatus.CANCELLED.value
+        document.processing_stage = "cancelled"
+        document.processing_progress = 0
+        document.processing_progress_type = "actual"
+        document.processing_error = "Ingestion was cancelled by user."
+        document.chunk_count = 0
+        document.processing_heartbeat_at = datetime.utcnow()
+        await self.db.commit()
+        logger.info("Document cancelled document_id=%s", document.id)
+        return document
+
+    async def retry(self, user: User, document_id: str) -> Document:
+        document = await self.get_owned(user, document_id)
+        if document.processing_status == DocumentStatus.PROCESSING.value:
+            raise RequestValidationAppError("This source is already being processed.")
+        if document.processing_status != DocumentStatus.FAILED.value:
+            raise RequestValidationAppError("Only failed sources can be retried.")
+        if not Path(document.storage_path).is_file():
+            raise RequestValidationAppError("The stored source file is missing and cannot be retried.")
+        paper = await self.paper_service.get_owned(user, document.paper_id)
+        started_at = datetime.utcnow()
+        claim = await self.db.execute(
+            update(Document)
+            .where(Document.id == document.id, Document.processing_status == DocumentStatus.FAILED.value)
+            .values(
+                processing_status=DocumentStatus.PROCESSING.value,
+                processing_stage="extracting_text", processing_progress=0,
+                processing_progress_type="estimated", processing_completed_units=0,
+                processing_total_units=None, processing_unit=None,
+                processing_started_at=started_at, processing_heartbeat_at=started_at,
+                processing_error=None, chunk_count=0,
+            )
+        )
+        if claim.rowcount != 1:
+            await self.db.rollback()
+            await self.db.refresh(document)
+            if document.processing_status == DocumentStatus.PROCESSING.value:
+                raise RequestValidationAppError("This source is already being processed.")
+            raise RequestValidationAppError("This source changed state; refresh it before retrying.")
+        document.processing_status = DocumentStatus.PROCESSING.value
+        document.processing_stage = "extracting_text"
+        document.processing_progress = 0
+        document.processing_progress_type = "estimated"
+        document.processing_completed_units = 0
+        document.processing_total_units = None
+        document.processing_unit = None
+        document.processing_started_at = started_at
+        document.processing_heartbeat_at = started_at
+        document.processing_error = None
+        document.chunk_count = 0
+        await self.db.commit()
+        await self._process(document, paper)
         return document
 
     async def list_for_paper(self, user: User, paper_id: str) -> list[Document]:
         await self.paper_service.get_owned(user, paper_id)
-        return await self.documents.list_by_paper(paper_id)
+        documents = await self.documents.list_by_paper(paper_id)
+        await self._mark_stalled_documents(documents)
+        return documents
+
+    async def list_for_papers(self, user: User, paper_ids: list[str]) -> dict[str, list[Document]]:
+        ids = list(dict.fromkeys(paper_ids))
+        owned_rows = await self.db.execute(
+            select(Paper.id).where(Paper.owner_id == user.id, Paper.id.in_(ids))
+        )
+        owned_ids = set(owned_rows.scalars().all())
+        if owned_ids != set(ids):
+            raise PaperNotFoundError()
+        grouped: dict[str, list[Document]] = defaultdict(list)
+        documents = await self.documents.list_by_papers(ids)
+        await self._mark_stalled_documents(documents)
+        for document in documents:
+            grouped[document.paper_id].append(document)
+        return {paper_id: grouped[paper_id] for paper_id in ids}
+
+    async def _mark_stalled_documents(self, documents: list[Document]) -> None:
+        """Turn orphaned PROCESSING rows into a visible, retryable failure."""
+        timeout = get_settings().rag_ingest_timeout_seconds
+        stale_after = timedelta(seconds=max(900, timeout + 60))
+        cutoff = datetime.utcnow() - stale_after
+        stale = [
+            document for document in documents
+            if document.processing_status == DocumentStatus.PROCESSING.value
+            and (document.processing_heartbeat_at or document.updated_at) < cutoff
+        ]
+        for document in stale:
+            document.processing_status = DocumentStatus.FAILED.value
+            document.processing_stage = "failed"
+            document.processing_progress_type = "actual"
+            document.processing_error = "Processing stopped before indexing completed. Retry this source."
+            document.processing_progress = 0
+            document.processing_completed_units = 0
+            document.processing_total_units = None
+            document.processing_unit = None
+            document.chunk_count = 0
+            document.processing_heartbeat_at = datetime.utcnow()
+        if stale:
+            await self.db.commit()
+
+    async def _cleanup_failed_index(self, document: Document, primary_error: str) -> str:
+        """Clean a finished failed attempt, retaining its root error if cleanup fails."""
+        try:
+            await self.rag.delete_document_chunks(document.id)
+            counts = await self.rag.get_document_index_counts(document.id)
+            if counts.get("chroma_count") or counts.get("fts_count") or not counts.get("ids_match"):
+                return f"{primary_error}; index cleanup incomplete: Chroma={counts.get('chroma_count')}, FTS5={counts.get('fts_count')}, ids_match={counts.get('ids_match')}"
+        except Exception as cleanup_error:
+            detail = cleanup_error.message if isinstance(cleanup_error, RAGUnavailableError) else str(cleanup_error)
+            return f"{primary_error}; index cleanup failed: {type(cleanup_error).__name__}: {detail}"
+        return primary_error

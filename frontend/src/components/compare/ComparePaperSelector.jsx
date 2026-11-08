@@ -10,6 +10,10 @@ export function ComparePaperSelector({
   selectedIds,
   onToggle,
   onClear,
+  documentsByPaper = {},
+  checkedPaperIds = [],
+  loadingPaperIds = [],
+  errorPaperIds = [],
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 space-y-3 dark:border-zinc-800 dark:bg-zinc-900 shadow-2xs">
@@ -35,24 +39,32 @@ export function ComparePaperSelector({
         <div className="space-y-1.5 pr-2">
           {papers.map((paper) => {
             const isSelected = selectedIds.includes(paper.id);
+            const documents = documentsByPaper[paper.id] || [];
+            const indexed = documents.filter((document) => document.processing_status === "indexed").length;
+            const checked = checkedPaperIds.includes(paper.id);
+            const isChecking = loadingPaperIds.includes(paper.id);
+            const hasLoadError = errorPaperIds.includes(paper.id);
+            const disabled = checked && indexed === 0 && !isSelected && !hasLoadError;
             return (
               <div
                 key={paper.id}
-                onClick={() => onToggle(paper.id)}
-                className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer transition-colors ${
+                className={`flex items-center justify-between p-2 rounded-md border text-xs transition-colors ${
                   isSelected
                     ? "border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-800"
-                    : "border-zinc-100 hover:bg-zinc-50/75 dark:border-zinc-800"
+                    : disabled ? "border-zinc-100 opacity-55 dark:border-zinc-800" : "border-zinc-100 hover:bg-zinc-50/75 dark:border-zinc-800"
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Checkbox
+                    aria-label={`Select ${paper.title} for comparison`}
                     checked={isSelected}
+                    disabled={disabled}
                     onCheckedChange={() => onToggle(paper.id)}
                   />
-                  <span className="font-medium text-zinc-800 truncate dark:text-zinc-200">
-                    {paper.title}
-                  </span>
+                  <button type="button" disabled={disabled} onClick={() => onToggle(paper.id)} className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
+                    <span className="block truncate font-medium text-zinc-800 dark:text-zinc-200">{paper.title}</span>
+                    <span className="mt-0.5 block text-[10px] text-zinc-500">{isChecking ? "Checking indexed sources…" : hasLoadError ? "Could not check sources; select to retry" : checked ? `${indexed} indexed file${indexed === 1 ? "" : "s"}` : "Select to check indexed sources"}</span>
+                  </button>
                 </div>
 
                 {paper.publication_year && (

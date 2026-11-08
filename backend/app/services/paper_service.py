@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.exceptions import PaperNotFoundError, RAGUnavailableError
+from backend.app.core.exceptions import PaperNotFoundError
 from backend.app.integrations.rag_gateway import RAGGateway
 from backend.app.models.paper import Paper
 from backend.app.models.user import User
@@ -69,21 +69,19 @@ class PaperService:
         paper = await self.get_owned(user, paper_id)
         documents = await DocumentRepository(self.db).list_by_paper(paper.id)
         storage_paths = [doc.storage_path for doc in documents if doc.storage_path]
+        # Do not remove the DB row or original files when index cleanup fails.
+        # RAGClient also rejects deletion while a local ingestion is active.
+        if self.rag is not None:
+            await self.rag.delete_paper(paper_id)
         await self.papers.delete(paper)
         await self.db.commit()
 
-        # Best-effort cleanup outside the transaction: stored files and
-        # indexed vectors. Failures are logged, never surfaced.
+        # Originals are removed only after vector/lexical cleanup and DB delete.
         for path in storage_paths:
             try:
                 Path(path).unlink(missing_ok=True)
             except OSError:
-                logger.warning("could not remove stored file path=%s", path)
-        if self.rag is not None:
-            try:
-                await self.rag.delete_paper(paper_id)
-            except RAGUnavailableError:
-                logger.warning("RAG vector cleanup failed paper_id=%s", paper_id)
+                logger.warning("could not remove stored paper file")
 
     async def validate_owned_papers(
         self, user: User, paper_ids: list[str]
@@ -110,4 +108,5 @@ class PaperService:
             "paper_ids": paper_ids,
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
+            "metadata": result.get("metadata", {}),
         }

@@ -1,0 +1,23 @@
+# Stitch redesign implementation map
+
+Reviewed all 15 `code.html` prototypes and matching `screen.png` references in `stitch_researchlens_redesign_studio/`, plus `fluent_scholar_glass/DESIGN.md`. The shipped page composition and palette are references; prototype corpus names, counts, support scores, collaborators, quotations, and verification labels are not application data and are not reused.
+
+| Reference screen | Route / state | Existing implementation and real API | Implementation status / verification |
+|---|---|---|---|
+| Evidence-first homepage | `/` | Public landing page with real capability descriptions and auth entry points | Sky-blue responsive homepage explains source ingestion, cited research, and comparison without sample corpus statistics or unverifiable performance claims. |
+| Scholar registration | `/register` | `RegisterForm`; `/auth/register`, `/auth/login` | Sky-themed accessible forms, show/hide password, server-matched 8-character minimum, existing post-registration sign-in. No institutional SSO. |
+| Create Research Project | Library create dialog; `/papers/{id}` | `CreatePaperModal`; `POST /papers` | Creates the existing owned paper record used as the source collection and opens it. No separate Project entity or template system exists. |
+| Research Library | `/papers` | Paper grid/table; `GET /papers`, `GET /papers/{id}/documents` | Sky workspace shell, real list/count, create flow, source actions. Search currently filters the loaded page; shared-project views are unsupported. |
+| Add Sources ingestion | `/papers/upload`, optionally `?paper_id=…` | `IngestDropzone`; `/documents/upload/batch`, `/papers`, `/papers/{id}/documents` | Multiple supported files and ZIP, per-file outcomes, retryable failures, real processing states. Can add files to an existing project. |
+| Research Desk | `/chat`, `/chat/{conversationId}` | `ThreePaneChatWorkbench`, `useChat`; `/chat/stream`, conversations/messages | Persistent question/answer stream, selected source scope, optimistic user question, progress events, cancellation, retry with input restored, Markdown and citations. |
+| Evidence Trail / original manuscript | Chat citation drawer; paper summary drawer | `SourceInspectorRail`, `SourceCard`, `CitationBadge`; authorized `GET /documents/{id}/file` | Citation click opens contextual evidence; PDF page navigation uses returned locator and auth. No invented facsimile or highlight coordinates. |
+| Mobile Research Desk | Chat at narrow viewport | Shared desk and drawers | Single-column canvas; source/evidence panels open as drawers; citation drawer preserves the answer. Viewport browser testing is not configured. |
+| Comparison Builder / Matrix | `/compare` | Selector and matrix renderer; `POST /papers/compare` | Requires at least two indexed projects; uses generated API answer/citations and metadata, responsive horizontal matrix. Dimensions are prompted in natural language; there is no persisted dimension editor or save endpoint. |
+| Research Brief Builder | Export action in Desk and comparison result | `buildResearchBrief` | Exports generated content and citation locators as Markdown. Backend has no saved-brief persistence or reopen API. |
+| Research Map / Question Board | `/graph` | Conversation/message APIs; stored `meta.research` | Shows persisted user questions, generated subquestions, sufficiency metadata, evidence ledger, and claim-check statuses. It does not treat subquestions as authored questions or heuristic checks as proof. |
+| Concept map / topic graph | `/graph/knowledge` | Research graph API boundary | Backend knowledge-graph integration reports unavailable (503); no fabricated graph is rendered. |
+| Research Tools / structured extraction | Research Desk query | RAG query planner and answer pipeline | Structured extraction is available through natural-language questions and cited-table prompts. Flashcards, audio, and persisted study guides are not implemented. |
+| Project collaboration / access governance | None | No invitation or membership endpoints/models | Not surfaced as working controls. Backend currently enforces owner-scoped records. |
+| Epistemology / privacy settings | `/settings` | Profile and health/readiness APIs | Existing profile update and service status retained. No unimplemented retrieval tuning or privacy controls are implied. |
+
+No database migration was added. The existing project-like collection is the owned paper record; implementing a distinct project hierarchy, saved reports, collaborators, or a graph store requires backend persistence and authorization work beyond the available contracts.

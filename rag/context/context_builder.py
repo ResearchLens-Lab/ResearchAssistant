@@ -59,7 +59,7 @@ class ContextBuilder:
             header = f"[{src.source_id}] (Paper: {src.paper_id}, {src.page_display}, Section: {src.section})"
             if src.title:
                 header = f"[{src.source_id}] (Paper: {src.paper_id} - '{src.title}', {src.page_display}, Section: {src.section})"
-            blocks.append(f"{header}\n{src.text.strip()}")
+            blocks.append(f"{header}\n<untrusted_source_evidence>\n{src.text.strip()}\n</untrusted_source_evidence>")
 
         formatted_text = "\n\n---\n\n".join(blocks)
         total_tokens = self.limit_manager.estimate_tokens(formatted_text)

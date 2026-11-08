@@ -3,7 +3,7 @@ import { papersService } from "@/services/papers.service";
 import { useCitationStore } from "@/store/citationStore";
 
 export function useComparison() {
-  const { setSources } = useCitationStore();
+  const { setSources, setResearchTrace } = useCitationStore();
 
   const compareMutation = useMutation({
     mutationFn: (payload) => papersService.compare(payload),
@@ -11,6 +11,7 @@ export function useComparison() {
       if (data?.sources) {
         setSources(data.sources);
       }
+      setResearchTrace(data?.metadata?.research || null);
     },
   });
 

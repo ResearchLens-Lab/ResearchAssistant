@@ -2,6 +2,23 @@ import { tokenStorage } from "@/utils/tokenStorage";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+export async function refreshAccessToken() {
+  const refreshToken = tokenStorage.getRefreshToken();
+  if (!refreshToken) return null;
+  const response = await fetch(`${BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!response.ok) {
+    tokenStorage.clear();
+    return null;
+  }
+  const values = await response.json();
+  tokenStorage.setTokens(values.access_token, values.refresh_token);
+  return values.access_token;
+}
+
 export class AppApiError extends Error {
   constructor(message, code, statusCode, requestId = null, details = null) {
     super(message);

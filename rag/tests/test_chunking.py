@@ -62,6 +62,23 @@ def test_chunker_preserves_page_numbers_and_sections(sample_document):
         assert chunk.section != ""
 
 
+def test_chunk_ids_are_unique_per_document_even_within_one_paper(sample_document):
+    first = sample_document.model_copy(deep=True)
+    first.document_id = "doc_first"
+    first.metadata.document_id = "doc_first"
+    second = sample_document.model_copy(deep=True)
+    second.document_id = "doc_second"
+    second.metadata.document_id = "doc_second"
+
+    first_chunks = DocumentChunker(chunk_size=100, chunk_overlap=20).chunk_document(first)
+    second_chunks = DocumentChunker(chunk_size=100, chunk_overlap=20).chunk_document(second)
+
+    assert first_chunks and second_chunks
+    assert {chunk.chunk_id for chunk in first_chunks}.isdisjoint(
+        {chunk.chunk_id for chunk in second_chunks}
+    )
+
+
 def test_chunk_metadata_chroma_serialization():
     meta = ChunkMetadata(
         chunk_id="paper_1_c0001_p1-2",

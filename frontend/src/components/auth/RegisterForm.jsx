@@ -1,157 +1,110 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, AlertCircle, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, Circle, CircleCheck } from "lucide-react";
+import { isStrongPassword, normalizeUsername, passwordRequirements, validateUsername } from "@/utils/authValidation.mjs";
+
+function registrationError(error) {
+  if (error?.code === "USERNAME_ALREADY_TAKEN") return "That username is already taken. Try another.";
+  if (error?.code === "EMAIL_ALREADY_REGISTERED") return "An account may already use this email. Sign in or use password recovery if available.";
+  if (error?.statusCode === 429) return "Too many account creation attempts. Please wait before trying again.";
+  if (error?.statusCode === 422) return "Check your email, username, and password requirements.";
+  if (!error?.statusCode) return "We couldn't connect to ResearchLens. Check your connection and try again.";
+  return "ResearchLens is temporarily unavailable. Please try again shortly.";
+}
 
 export function RegisterForm() {
   const router = useRouter();
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [formError, setFormError] = useState("");
+  const [createdUsername, setCreatedUsername] = useState("");
+  const { register, isRegistering } = useAuth();
+  const usernameError = useMemo(() => validateUsername(username), [username]);
+  const requirements = useMemo(() => passwordRequirements(password), [password]);
+  const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
-  const { register, login, isRegistering } = useAuth();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setFormError("");
-
-    if (!email || !password) {
-      setFormError("Email and password are required.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setFormError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setFormError("Passwords do not match.");
-      return;
-    }
-
+    if (usernameError) { setFormError(usernameError); return; }
+    if (!email.trim()) { setFormError("Enter your email address."); return; }
+    if (!isStrongPassword(password)) { setFormError("Meet all five password requirements before continuing."); return; }
+    if (password !== confirmPassword) { setFormError("Passwords don't match."); return; }
     try {
-      await register({
-        email,
-        password,
-        full_name: fullName.trim() || undefined,
-      });
-
-      // Automatically sign in upon registration
-      await login({ email, password });
-      router.replace("/dashboard");
-    } catch (err) {
-      setFormError(err.message || "Failed to register account.");
+      const canonicalUsername = normalizeUsername(username);
+      await register({ username: canonicalUsername, email: email.trim(), password });
+      setCreatedUsername(canonicalUsername);
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      setFormError(registrationError(error));
     }
   };
 
-  return (
-    <Card className="w-full max-w-md border-zinc-200 shadow-md dark:border-zinc-800">
-      <CardHeader className="space-y-2 text-center pb-4">
-        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 shadow-2xs">
-          <Sparkles className="h-5 w-5" />
-        </div>
-        <CardTitle className="text-xl font-bold tracking-tight">
-          Create Researcher Account
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Join ResearchLens to index literature and run grounded RAG analysis
-        </CardDescription>
+  if (createdUsername) {
+    return <Card role="status" aria-live="polite" className="w-full max-w-md rounded-2xl border-[var(--rl-border)] shadow-[0_18px_48px_-24px_rgba(38,120,184,0.28)]">
+      <CardHeader className="items-center space-y-3 pb-4 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--rl-selected)] text-[var(--rl-primary)] motion-safe:animate-in motion-safe:zoom-in-75"><CircleCheck className="h-8 w-8" aria-hidden="true" /></span>
+        <CardTitle className="text-2xl font-semibold text-[var(--rl-ink)]">Your account is ready.</CardTitle>
+        <CardDescription className="text-sm leading-6 text-[var(--rl-muted)]">Your ResearchLens account has been created successfully. Sign in to start your first Research Project.</CardDescription>
       </CardHeader>
+      <CardContent className="text-center text-sm text-[var(--rl-muted)]">Username: <span className="font-semibold text-[var(--rl-ink)]">{createdUsername}</span></CardContent>
+      <CardFooter className="flex-col pt-2">
+        <Button type="button" variant="workbench" className="h-11 w-full gap-2 font-semibold" onClick={() => router.push("/login")}>
+          Continue to sign in <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </CardFooter>
+    </Card>;
+  }
 
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-3">
-          {formError && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-2.5 text-xs text-red-700 border border-red-200">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{formError}</span>
-            </div>
-          )}
-
-          <div className="space-y-1 text-left">
-            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Full Name (Optional)
-            </label>
-            <Input
-              type="text"
-              placeholder="Dr. Jane Doe"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="text-xs"
-            />
+  return (
+    <Card className="w-full max-w-md rounded-2xl border-[var(--rl-border)] shadow-[0_18px_48px_-24px_rgba(38,120,184,0.28)]">
+      <CardHeader className="min-w-0 space-y-1.5 px-4 pb-2 pt-4 text-left sm:px-5">
+        <CardTitle className="text-2xl font-semibold tracking-tight text-[var(--rl-ink)]">Create your account</CardTitle>
+        <CardDescription className="text-sm leading-5 text-[var(--rl-muted)]">Set up a private workspace for your research documents.</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit} noValidate>
+        <CardContent className="min-w-0 space-y-2 px-4 pb-2 pt-0 sm:px-5">
+          {formError && <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{formError}</span></div>}
+          <div className="space-y-1">
+            <label htmlFor="register-username" className="text-sm font-medium text-[var(--rl-ink)]">Username</label>
+            <Input id="register-username" value={username} onChange={(event) => { setUsername(event.target.value); setFormError(""); }} autoComplete="username" autoCapitalize="none" spellCheck="false" required aria-describedby="username-help username-status" aria-invalid={!!username && !!usernameError} />
+            <p id="username-help" className="text-[11px] leading-4 text-[var(--rl-muted)]">3–24 characters · letters, numbers, dots, underscores, hyphens.</p>
+            <p id="username-status" aria-live="polite" className={`min-h-4 text-xs leading-4 ${username && usernameError ? "text-red-700" : "text-[var(--rl-muted)]"}`}>{username ? usernameError || "Format looks good. Availability is checked on submit." : " "}</p>
           </div>
-
-          <div className="space-y-1 text-left">
-            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Email address <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="email"
-              placeholder="researcher@university.edu"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="text-xs"
-            />
+          <div className="space-y-1">
+            <label htmlFor="register-email" className="text-sm font-medium text-[var(--rl-ink)]">Email address</label>
+            <Input id="register-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); setFormError(""); }} autoComplete="email" required />
           </div>
-
-          <div className="space-y-1 text-left">
-            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Password (min 8 chars) <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="text-xs"
-            />
+          <div className="space-y-1">
+            <label htmlFor="register-password" className="text-sm font-medium text-[var(--rl-ink)]">Password</label>
+            <PasswordInput id="register-password" value={password} onChange={(event) => { setPassword(event.target.value); setFormError(""); }} autoComplete="new-password" minLength={12} />
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-0.5 text-[11px] leading-4 text-[var(--rl-muted)] sm:text-xs" aria-label="Password requirements">
+              {requirements.map(({ label, valid }) => <li key={label} className="flex items-center gap-1.5"><span className={valid ? "text-[var(--rl-primary)]" : "text-[var(--rl-muted)]"}>{valid ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Circle className="h-3 w-3" aria-hidden="true" />}</span><span>{label}</span></li>)}
+            </ul>
+            <p className="sr-only" aria-live="polite">{requirements.filter((item) => item.valid).length} of 5 password requirements met.</p>
           </div>
-
-          <div className="space-y-1 text-left">
-            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Confirm Password <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="password"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="text-xs"
-            />
+          <div className="space-y-1">
+            <label htmlFor="register-confirm-password" className="text-sm font-medium text-[var(--rl-ink)]">Confirm password</label>
+            <PasswordInput id="register-confirm-password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setFormError(""); }} autoComplete="new-password" minLength={12} aria-invalid={mismatch} aria-describedby="confirm-password-status" />
+            <p id="confirm-password-status" aria-live="polite" className="min-h-4 text-xs text-red-700">{mismatch ? "Passwords don't match." : " "}</p>
           </div>
         </CardContent>
-
-        <CardFooter className="flex flex-col space-y-3 pt-2">
-          <Button
-            type="submit"
-            variant="workbench"
-            className="w-full h-9 text-xs font-semibold gap-1.5"
-            disabled={isRegistering}
-          >
-            {isRegistering ? "Creating Account..." : "Create Account & Enter Workbench"}
-            <ArrowRight className="h-3.5 w-3.5" />
+        <CardFooter className="min-w-0 flex-col space-y-2 px-4 pb-4 pt-1 sm:px-5">
+          <Button type="submit" variant="workbench" className="h-11 w-full gap-2 text-sm font-semibold" disabled={isRegistering}>
+            {isRegistering ? "Creating account…" : "Create account"}<ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Button>
-
-          <p className="text-center text-xs text-zinc-500">
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-semibold text-zinc-900 underline hover:text-zinc-700 dark:text-zinc-100"
-            >
-              Sign In
-            </Link>
-          </p>
+          <p className="text-center text-sm text-[var(--rl-muted)]">Already have an account? <Link href="/login" className="font-semibold text-[var(--rl-primary)] underline underline-offset-4">Sign in</Link></p>
         </CardFooter>
       </form>
     </Card>

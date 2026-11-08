@@ -27,8 +27,11 @@ class BatchEmbeddingGenerator:
         if not chunks:
             return []
 
-        texts = [chunk.text for chunk in chunks]
-        return self.embed_texts(texts)
+        vectors: List[List[float]] = []
+        for start_idx in range(0, len(chunks), self.batch_size):
+            batch = chunks[start_idx:start_idx + self.batch_size]
+            vectors.extend(self.embedder.embed_documents([chunk.text for chunk in batch]))
+        return vectors
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """
@@ -46,6 +49,8 @@ class BatchEmbeddingGenerator:
 
             logger.debug("Generating embeddings for batch %d-%d of %d", start_idx + 1, end_idx, total)
             batch_vectors = self.embedder.embed_documents(batch)
+            if len(batch_vectors) != len(batch):
+                raise RuntimeError(f"Embedding provider returned {len(batch_vectors)} vectors for {len(batch)} chunks.")
             all_embeddings.extend(batch_vectors)
 
         logger.info("Generated embeddings for %d items using %s", len(all_embeddings), self.embedder.__class__.__name__)

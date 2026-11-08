@@ -26,7 +26,19 @@ class CollectionManager:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Collection:
         coll_name = name or settings.chroma_collection_name
-        meta = metadata or {"hnsw:space": "cosine"}
+        embedding_model = settings.embedding_model
+        embedding_provider = settings.embedding_provider
+        if embedding_provider == "fastembed":
+            import fastembed
+            embedding_model = f"{embedding_model}@fastembed-{fastembed.__version__}"
+        if name is None and settings.chroma_namespace_by_embedding:
+            safe_model = "".join(c if c.isalnum() or c in "_-" else "_" for c in f"{embedding_provider}_{embedding_model}_chunkidv2")
+            suffix = f"_{safe_model}_{settings.embedding_dimension}"[-58:]
+            coll_name = f"{coll_name[:63-len(suffix)]}{suffix}"
+        meta = metadata or {"hnsw:space": "cosine", "embedding_model": embedding_model,
+                            "embedding_provider": embedding_provider,
+                            "embedding_dimension": settings.embedding_dimension,
+                            "chunk_id_schema": "document-scoped-v2"}
 
         logger.debug("Getting or creating collection '%s'", coll_name)
         return self.client.get_or_create_collection(
@@ -45,7 +57,7 @@ class CollectionManager:
             logger.info("Deleted collection '%s'", coll_name)
             return True
         except Exception as e:
-            logger.warning("Could not delete collection '%s': %s", coll_name, e)
+            logger.warning("Could not delete collection exception_type=%s", type(e).__name__)
             return False
 
     def list_collections(self):

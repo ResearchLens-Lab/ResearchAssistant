@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"tertiary-fixed-dim":"#7bd0ff","on-secondary-container":"#004666","surface-container-highest":"#e0e3e5","secondary-container":"#39b8fd","secondary-fixed":"#c9e6ff","primary":"#006194","on-primary":"#ffffff","on-primary-container":"#fdfcff","tertiary-fixed":"#c4e7ff","on-surface-variant":"#3f4850","on-error":"#ffffff","on-tertiary-fixed":"#001e2c","on-secondary-fixed-variant":"#004c6e","surface-bright":"#f7f9fb","on-primary-fixed":"#001d31","on-secondary-fixed":"#001e2f","on-secondary":"#ffffff","outline-variant":"#bfc7d2","inverse-surface":"#2d3133","background":"#f7f9fb","surface-container":"#eceef0","on-tertiary-fixed-variant":"#004c69","tertiary":"#006387","secondary":"#006591","surface-dim":"#d8dadc","outline":"#707881","primary-container":"#007bb9","primary-fixed-dim":"#93ccff","primary-fixed":"#cce5ff","surface-container-high":"#e6e8ea","on-primary-fixed-variant":"#004b73","surface-variant":"#e0e3e5","surface":"#f7f9fb","on-tertiary":"#ffffff","secondary-fixed-dim":"#89ceff","surface-tint":"#006398","error-container":"#ffdad6","surface-container-low":"#f2f4f6","error":"#ba1a1a","on-surface":"#191c1e","inverse-primary":"#93ccff","inverse-on-surface":"#eff1f3","on-error-container":"#93000a","on-background":"#191c1e","on-tertiary-container":"#fcfcff","surface-container-lowest":"#ffffff","tertiary-container":"#007da9"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-xl":"2.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xs":"0.25rem","gutter":"1.5rem","space-md":"1rem","space-lg":"1.5rem","margin":"2rem","space-sm":"0.5rem"},"fontFamily":{"body-lg":["Inter"],"label-md":["Inter"],"display-lg-mobile":["Plus Jakarta Sans"],"code-citation":["JetBrains Mono"],"body-md":["Inter"],"label-lg":["Inter"],"headline-sm":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"body-sm":["Inter"],"headline-xl-mobile":["Plus Jakarta Sans"],"headline-xl":["Plus Jakarta Sans"],"display-lg":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"]},"fontSize":{"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_4px_24px_-2px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.04)]"><div class="h-16 max-w-[1720px] mx-auto px-margin flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-sm group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[180px] xl:max-w-[240px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-primary-container text-on-primary-container shadow-sm font-label-lg"><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="compare-and-reports" href="#">Compare &amp; Reports</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-briefs" href="#">Research Briefs</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-tools" href="#">Research Tools</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-1.5 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_4px_16px_-2px_rgba(0,97,148,0.25)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div></header><main class="w-full max-w-[1720px] mx-auto pt-16 pb-12 px-margin bg-surface"><div class="flex flex-col w-full">
+<!-- Subtle ambient decorative glow rings -->
+<div class="relative w-full">
+<div class="absolute -top-10 left-1/3 w-96 h-96 bg-secondary-fixed/30 rounded-full blur-3xl pointer-events-none -z-10"></div>
+<div class="absolute top-72 right-10 w-[420px] h-[420px] bg-tertiary-fixed/20 rounded-full blur-3xl pointer-events-none -z-10"></div>
+<!-- Page Header & Meta Badges -->
+<section class="mb-10">
+<div class="flex flex-wrap items-center gap-2 mb-3 font-code-citation text-code-citation text-on-surface-variant">
+<span class="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[15px]">school</span>
+          Academic Workspace
+        </span>
+<span class="text-outline-variant">/</span>
+<span class="text-primary font-medium">Scholar Dossier &amp; Epistemology Settings</span>
+</div>
+<div class="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-6">
+<div class="max-w-4xl space-y-2">
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">
+            Account, Epistemology &amp; Zero-Leakage Privacy Safeguards
+          </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl">
+            Configure researcher profile, fine-tune grounding granularity, citation precision thresholds, cryptographic hardware keys, and air-gapped data retention boundaries.
+          </p>
+</div>
+<div class="flex flex-wrap items-center gap-2.5">
+<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface shadow-sm font-code-citation text-code-citation">
+<span class="w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
+            ORCID: <span class="font-medium">0000-0002-1825-0097</span>
+</span>
+<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[15px]">cloud_sync</span>
+            Cambridge Vault Synced
+          </span>
+<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[15px]">verified_user</span>
+            Zero Data Training Guarantee
+          </span>
+</div>
+</div>
+</section>
+<!-- Main Workspace Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+<!-- COLUMN A: 5 Cols (Left Rail) -->
+<div class="lg:col-span-5 flex flex-col gap-6">
+<!-- Scholar Identity Dossier Card -->
+<div class="p-space-lg rounded-[24px] bg-surface-container-lowest shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-4px_rgba(0,97,148,0.08)] transition-all hover:translate-y-[-2px]">
+<div class="flex items-start justify-between gap-4 mb-6">
+<div class="relative">
+<div class="w-20 h-20 rounded-full bg-gradient-to-tr from-primary to-secondary-container p-0.5 shadow-md">
+<div class="w-full h-full rounded-full bg-surface-container-low overflow-hidden flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="Close-up professional portrait of Dr. Gorav Gumber, male computer science academic with spectacles, well-lit university studio photography, clean white and sky-blue collegiate backdrop" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPcD9B-C3HlVLbsjs5VqS0wpRmRTY_d04Vt5P6J_RbXy92PuKmqBZaGGxVuc4h670qxuJCBDdIxOpFtUXVeD5Szap3vXtjBfZ4J7rGli6go2ZHZToPARRKnyMP3SKfzZQsVf5XWxEYc1SZzvdLpMBTAbXii-RuQcuYYg9YggaiFwOU0dbY0qANaMhPn4xA209mAsZHXkYZuyR0B8pUsO0tnv6JEDEnMydeeNRFPl_jzXxiW09Gf_8d"/>
+</div>
+</div>
+<button class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary hover:bg-primary-container text-on-primary flex items-center justify-center shadow-md transition-transform hover:scale-110" title="Upload new researcher portrait" type="button">
+<span class="material-symbols-outlined text-[15px]">photo_camera</span>
+</button>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-2.5 py-1 rounded-full bg-surface-container-low text-primary font-label-md text-label-md">Principal Investigator</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant mt-1">Ref ID: CAM-88219</span>
+</div>
+</div>
+<div class="space-y-3">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Dr. Gorav Gumber</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Dept. of Computer Science &amp; Technology</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[16px] text-primary">account_balance</span>
+                University of Cambridge, Trinity College
+              </p>
+</div>
+<!-- Identity Attribute Badges -->
+<div class="pt-2 pb-1 space-y-2">
+<div class="p-3 rounded-xl bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-primary text-[18px]">mail</span>
+<span class="font-code-citation text-code-citation text-on-surface truncate">gorav.gumber@cambridge.ac.uk</span>
+</div>
+<span class="material-symbols-outlined text-[#10b981] text-[18px]" title="Institutional domain verified">check_circle</span>
+</div>
+<div class="p-3 rounded-xl bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">vpn_key</span>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Single Sign-On (SSO)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">JANET UK Fed • Enterprise Tier</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation">Active</span>
+</div>
+</div>
+<!-- Corpus Quick Metrics -->
+<div class="grid grid-cols-2 gap-3 pt-1">
+<div class="p-3.5 rounded-xl bg-surface-container text-on-surface">
+<div class="font-code-citation text-code-citation text-on-surface-variant uppercase">Corpus Depth</div>
+<div class="font-headline-sm text-headline-sm text-primary font-bold mt-0.5">4,120 Works</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Preprints &amp; journals</div>
+</div>
+<div class="p-3.5 rounded-xl bg-surface-container text-on-surface">
+<div class="font-code-citation text-code-citation text-on-surface-variant uppercase">Grounding Tier</div>
+<div class="font-headline-sm text-headline-sm text-tertiary font-bold mt-0.5">99.98%</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Exact citation lock</div>
+</div>
+</div>
+<div class="pt-2 flex gap-2">
+<button class="flex-1 py-2.5 px-4 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2" type="button">
+<span class="material-symbols-outlined text-[18px]">badge</span>
+                Edit Scholar Profile
+              </button>
+<button class="p-2.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors" title="Manage credentials" type="button">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Active Cryptographic Sessions & Hardware Enclaves -->
+<div class="p-space-lg rounded-[24px] bg-surface-container-lowest shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-4px_rgba(0,97,148,0.08)]">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">security</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Cryptographic Enclaves</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant font-code-citation text-code-citation">2 Terminals</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
+            Authorized hardware environments authenticated with FIDO2 WebAuthn tokens.
+          </p>
+<div class="space-y-3">
+<!-- Active Session 1 -->
+<div class="p-3.5 rounded-xl bg-secondary-fixed/20 flex flex-col gap-2">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">laptop_mac</span>
+</div>
+<div>
+<div class="font-label-lg text-label-lg text-on-surface flex items-center gap-1.5">
+                      Safari 17.4 • macOS Sonoma
+                      <span class="w-2 h-2 rounded-full bg-[#10b981]" title="Current active session"></span>
+</div>
+<div class="font-code-citation text-code-citation text-on-surface-variant">131.111.8.44 (Cambridge Janet Gwy)</div>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md">Current</span>
+</div>
+<div class="flex items-center justify-between pt-1 font-body-sm text-body-sm text-on-surface-variant">
+<span>Hardware Token: YubiKey 5C NFC</span>
+<span class="font-code-citation text-code-citation text-primary">TLS 1.3 Strict</span>
+</div>
+</div>
+<!-- Active Session 2 -->
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col gap-2">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">tablet_mac</span>
+</div>
+<div>
+<div class="font-label-lg text-label-lg text-on-surface">iPad Pro 12.9 • ResearchLens iOS</div>
+<div class="font-code-citation text-code-citation text-on-surface-variant">Trinity Library Stacks • 2h ago</div>
+</div>
+</div>
+<button class="text-error hover:text-on-error-container font-label-md text-label-md transition-colors px-2 py-1 rounded hover:bg-error-container" type="button">
+                  Revoke
+                </button>
+</div>
+<div class="flex items-center justify-between pt-1 font-body-sm text-body-sm text-on-surface-variant">
+<span>Secure Enclave Biometric Lock</span>
+<span class="font-code-citation text-code-citation text-outline">Encrypted Cache</span>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-3 flex items-center justify-between">
+<button class="font-label-md text-label-md text-error hover:underline flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[16px]">logout</span>
+              Sign Out of All Enclaves
+            </button>
+<span class="font-code-citation text-code-citation text-on-surface-variant">mTLS Auth Enabled</span>
+</div>
+</div>
+<!-- Academic Rigor Callout Box -->
+<div class="p-space-lg rounded-[24px] bg-gradient-to-br from-secondary-fixed/40 via-surface-container-lowest to-surface-container-low shadow-sm">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary text-[28px] -mt-1 select-none">format_quote</span>
+<div class="space-y-2">
+<blockquote class="font-body-md text-body-md text-on-surface italic">
+                “An evidence-first instrument must treat source documents not as tokenized statistical fodder, but as inviolable historical ground.”
+              </blockquote>
+<cite class="block font-code-citation text-code-citation text-on-surface-variant not-italic">
+                — Cambridge Faculty Handbook §14.2 (Epistemological Standards)
+              </cite>
+</div>
+</div>
+</div>
+</div>
+<!-- COLUMN B: 7 Cols (Right Rail) -->
+<div class="lg:col-span-7 flex flex-col gap-6">
+<!-- Research Epistemology & Retrieval Tuning -->
+<div class="p-space-lg rounded-[24px] bg-surface-container-lowest shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-4px_rgba(0,97,148,0.08)]">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 gap-2">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Research Epistemology &amp; Retrieval Tuning</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Dictate mathematical rigor, citation anchoring boundaries, and model inference constraints.</p>
+</div>
+<span class="self-start sm:self-auto px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">Active Profile: Pure Scientific</span>
+</div>
+<!-- Epistemology Segment 1: Citation Anchor Boundary -->
+<div class="py-4 space-y-3">
+<div class="flex items-center justify-between">
+<label class="font-label-lg text-label-lg text-on-surface">Default Citation Anchor Boundary</label>
+<span class="font-body-sm text-body-sm text-primary font-medium">Fine vs. Macro Level</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="citation-boundary-group">
+<!-- Selected Card -->
+<div class="boundary-card cursor-pointer p-4 rounded-2xl bg-secondary-fixed/20 shadow-sm transition-all hover:translate-y-[-1px] relative" onclick="selectBoundary(this)">
+<div class="flex items-start justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">pin_drop</span>
+<span class="font-label-lg text-label-lg text-on-surface">Exact sentence &amp; boundary</span>
+</div>
+<span class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Pins citations to character-accurate clauses with zero-drift highlight overlays. Recommended for thesis drafting and formal referee reviews.
+                </p>
+<div class="mt-3 flex items-center gap-1.5 font-code-citation text-code-citation text-primary">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+<span>Tolerance: ±0 tokens</span>
+</div>
+</div>
+<!-- Unselected Card -->
+<div class="boundary-card cursor-pointer p-4 rounded-2xl bg-surface-container-low shadow-none transition-all hover:bg-surface-container relative" onclick="selectBoundary(this)">
+<div class="flex items-start justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">short_text</span>
+<span class="font-label-lg text-label-lg text-on-surface">Broad section level</span>
+</div>
+<span class="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-transparent">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Binds citations to thematic headings or full paragraphs for exploratory reading and rapid panoramic literature reviews.
+                </p>
+<div class="mt-3 flex items-center gap-1.5 font-code-citation text-code-citation text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px]">info</span>
+<span>Tolerance: ±350 tokens</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Epistemology Segment 2: Synthesis Tone & Epistemic Rigor -->
+<div class="py-4 space-y-3">
+<div class="flex items-center justify-between">
+<label class="font-label-lg text-label-lg text-on-surface">Synthesis Tone &amp; Epistemic Rigor</label>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Proof Verification Strategy</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="rigor-group">
+<!-- Rigorous Academic (Selected) -->
+<div class="rigor-card cursor-pointer p-4 rounded-2xl bg-secondary-fixed/20 shadow-sm transition-all hover:translate-y-[-1px]" onclick="selectRigor(this)">
+<div class="flex items-start justify-between mb-2">
+<span class="font-label-lg text-label-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">functions</span>
+                    Rigorous Academic
+                  </span>
+<span class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Enforces explicit LaTeX derivations, formal logic steps, counter-argument verification, and continuous confidence interval metrics.
+                </p>
+<div class="mt-3 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest text-primary font-code-citation text-code-citation">Formal Proofs</span>
+<span class="px-2 py-0.5 rounded bg-surface-container-lowest text-primary font-code-citation text-code-citation">p &lt; 0.001 Checks</span>
+</div>
+</div>
+<!-- Executive Literature Digest -->
+<div class="rigor-card cursor-pointer p-4 rounded-2xl bg-surface-container-low transition-all hover:bg-surface-container" onclick="selectRigor(this)">
+<div class="flex items-start justify-between mb-2">
+<span class="font-label-lg text-label-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">summarize</span>
+                    Executive Literature Digest
+                  </span>
+<span class="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-transparent">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Distills peer-reviewed literature into key findings, high-level implications, and action matrices for grant boards and committee presentations.
+                </p>
+<div class="mt-3 flex items-center gap-2">
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-code-citation text-code-citation">Bullet Synthesis</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-code-citation text-code-citation">Key Findings</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Epistemology Segment 3: Preferred Reading Canvas -->
+<div class="py-4 space-y-3">
+<label class="font-label-lg text-label-lg text-on-surface block">Reading Layout &amp; Margin Density</label>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="density-group">
+<div class="density-card cursor-pointer p-3.5 rounded-xl bg-secondary-fixed/20 shadow-sm flex items-center justify-between" onclick="selectDensity(this)">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]">view_agenda</span>
+<div>
+<div class="font-label-lg text-label-lg text-on-surface">Comfortable Reading Canvas</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">1.75 line-height, expansive margins for marginalia</div>
+</div>
+</div>
+<span class="w-4 h-4 rounded-full bg-primary ring-4 ring-secondary-fixed/50"></span>
+</div>
+<div class="density-card cursor-pointer p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between hover:bg-surface-container" onclick="selectDensity(this)">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">grid_view</span>
+<div>
+<div class="font-label-lg text-label-lg text-on-surface">Dense Analytical Grid</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Compact metrics, parallel 3-column verification</div>
+</div>
+</div>
+<span class="w-4 h-4 rounded-full bg-surface-container-highest"></span>
+</div>
+</div>
+</div>
+<!-- Interactive Precision Toggles -->
+<div class="pt-4 space-y-3.5">
+<!-- Toggle 1: Math Notation -->
+<div class="p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between gap-4">
+<div class="space-y-0.5">
+<div class="flex items-center gap-2">
+<span class="font-label-lg text-label-lg text-on-surface">Mathematical Notation (KaTeX &amp; LaTeX v0.16)</span>
+<span class="font-code-citation text-code-citation px-1.5 py-0.5 rounded bg-primary-fixed text-on-primary-fixed">Engine Active</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Automatically parse and render equations in real time. Example: 
+                  <span class="font-code-inline text-code-inline px-1 py-0.5 rounded bg-surface-container-highest text-primary font-semibold">∑_{i} \log P(e_i | d_i)</span>
+</p>
+</div>
+<button aria-pressed="true" class="w-12 h-6 rounded-full bg-primary relative transition-colors flex-shrink-0 cursor-pointer" onclick="toggleSwitch(this)" type="button">
+<span class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-on-primary shadow-sm transition-transform"></span>
+</button>
+</div>
+<!-- Toggle 2: Strict Vector Boundary -->
+<div class="p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between gap-4">
+<div class="space-y-0.5">
+<div class="flex items-center gap-2">
+<span class="font-label-lg text-label-lg text-on-surface">Strict Vector Boundary Isolation</span>
+<span class="material-symbols-outlined text-primary text-[16px]" title="Air-gapped k-NN spaces">verified</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Guarantees project embeddings never intermingle into cross-institutional indexes or shared memory pools.
+                </p>
+</div>
+<button aria-pressed="true" class="w-12 h-6 rounded-full bg-primary relative transition-colors flex-shrink-0 cursor-pointer" onclick="toggleSwitch(this)" type="button">
+<span class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-on-primary shadow-sm transition-transform"></span>
+</button>
+</div>
+<!-- Toggle 3: Counter-factual Proof Checking -->
+<div class="p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between gap-4">
+<div class="space-y-0.5">
+<span class="font-label-lg text-label-lg text-on-surface">Automated Counter-factual Proof Checking</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Proactively queries the corpus to locate falsifying counter-examples before accepting synthesized conclusions.
+                </p>
+</div>
+<button aria-pressed="true" class="w-12 h-6 rounded-full bg-primary relative transition-colors flex-shrink-0 cursor-pointer" onclick="toggleSwitch(this)" type="button">
+<span class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-on-primary shadow-sm transition-transform"></span>
+</button>
+</div>
+</div>
+</div>
+<!-- Institutional Security Architecture Card -->
+<div class="p-space-lg rounded-[24px] bg-surface-container-lowest shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-4px_rgba(0,97,148,0.08)]">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[22px]">policy</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Data Handling &amp; Security Architecture</h3>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">ISO 27001 • SOC2 Type II</span>
+</div>
+<!-- 3-card horizontal grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+<!-- Module 1 -->
+<div class="p-4 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+<div>
+<div class="w-8 h-8 rounded-lg bg-primary-fixed flex items-center justify-center text-primary mb-3">
+<span class="material-symbols-outlined text-[18px]">lock_clock</span>
+</div>
+<h4 class="font-label-lg text-label-lg text-on-surface mb-1">Source Document Isolation</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  AES-256-GCM Ephemeral encryption. Preprints and confidential draft PDFs never cross workspace silos.
+                </p>
+</div>
+<div class="mt-4 pt-2 font-code-citation text-code-citation text-primary">Key: HSM FIPS-140-3</div>
+</div>
+<!-- Module 2 -->
+<div class="p-4 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+<div>
+<div class="w-8 h-8 rounded-lg bg-secondary-fixed flex items-center justify-center text-secondary mb-3">
+<span class="material-symbols-outlined text-[18px]">database</span>
+</div>
+<h4 class="font-label-lg text-label-lg text-on-surface mb-1">Data Retention &amp; Vectors</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Dedicated ChromaDB &amp; Neo4j instance per project. Purging a project instantly zeroes all embedding vectors.
+                </p>
+</div>
+<div class="mt-4 pt-2 font-code-citation text-code-citation text-secondary">Zero Residual Remanence</div>
+</div>
+<!-- Module 3 -->
+<div class="p-4 rounded-2xl bg-surface-container-low flex flex-col justify-between">
+<div>
+<div class="w-8 h-8 rounded-lg bg-tertiary-fixed flex items-center justify-center text-tertiary mb-3">
+<span class="material-symbols-outlined text-[18px]">shield_lock</span>
+</div>
+<h4 class="font-label-lg text-label-lg text-on-surface mb-1">Zero-Training SLA</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Model inference executes strictly in retrieved contexts. Enterprise BAA prohibits queries from fine-tuning foundation models.
+                </p>
+</div>
+<div class="mt-4 pt-2 font-code-citation text-code-citation text-tertiary">Strict Non-Ingestion</div>
+</div>
+</div>
+<!-- Audit verification footer -->
+<div class="p-3.5 rounded-xl bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-code-citation text-code-citation">
+<div class="flex items-center gap-2 truncate">
+<span class="material-symbols-outlined text-primary text-[18px]">fingerprint</span>
+<span class="text-on-surface-variant">SHA-256 Cert:</span>
+<span class="font-semibold text-on-surface truncate">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+</div>
+<a class="text-primary hover:text-primary-container font-medium underline flex-shrink-0 flex items-center gap-1" href="#">
+              Inspect Audit Logs
+              <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</a>
+</div>
+</div>
+<!-- Academic Data Archive & Export -->
+<div class="p-space-lg rounded-[24px] bg-gradient-to-r from-surface-container-lowest via-secondary-fixed/15 to-surface-container-lowest shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_32px_-4px_rgba(0,97,148,0.08)] flex flex-col sm:flex-row items-center justify-between gap-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-secondary-fixed flex items-center justify-center text-primary shadow-sm flex-shrink-0">
+<span class="material-symbols-outlined text-[24px]">archive</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Academic Data Archive &amp; Export</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                Package all project notes, synthesized proofs, citation graph links, and vector metadata into an open archival bundle.
+              </p>
+</div>
+</div>
+<button class="w-full sm:w-auto px-5 py-3 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-md hover:shadow transition-all flex items-center justify-center gap-2 flex-shrink-0" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+            Download Research Folio (.zip)
+          </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function selectBoundary(card) {
+    const parent = document.getElementById('citation-boundary-group');
+    const cards = parent.querySelectorAll('.boundary-card');
+    cards.forEach(c => {
+      c.classList.remove('bg-secondary-fixed/20', 'shadow-sm');
+      c.classList.add('bg-surface-container-low', 'shadow-none');
+      const iconWrap = c.querySelector('.rounded-full.flex');
+      if (iconWrap) {
+        iconWrap.classList.remove('bg-primary', 'text-on-primary');
+        iconWrap.classList.add('bg-surface-container-highest', 'text-transparent');
+      }
+    });
+    card.classList.remove('bg-surface-container-low', 'shadow-none');
+    card.classList.add('bg-secondary-fixed/20', 'shadow-sm');
+    const activeIcon = card.querySelector('.rounded-full.flex');
+    if (activeIcon) {
+      activeIcon.classList.remove('bg-surface-container-highest', 'text-transparent');
+      activeIcon.classList.add('bg-primary', 'text-on-primary');
+    }
+  }
+
+  function selectRigor(card) {
+    const parent = document.getElementById('rigor-group');
+    const cards = parent.querySelectorAll('.rigor-card');
+    cards.forEach(c => {
+      c.classList.remove('bg-secondary-fixed/20', 'shadow-sm');
+      c.classList.add('bg-surface-container-low');
+      const check = c.querySelector('.rounded-full.flex');
+      if (check) {
+        check.classList.remove('bg-primary', 'text-on-primary');
+        check.classList.add('bg-surface-container-highest', 'text-transparent');
+      }
+    });
+    card.classList.remove('bg-surface-container-low');
+    card.classList.add('bg-secondary-fixed/20', 'shadow-sm');
+    const activeCheck = card.querySelector('.rounded-full.flex');
+    if (activeCheck) {
+      activeCheck.classList.remove('bg-surface-container-highest', 'text-transparent');
+      activeCheck.classList.add('bg-primary', 'text-on-primary');
+    }
+  }
+
+  function selectDensity(card) {
+    const parent = document.getElementById('density-group');
+    const cards = parent.querySelectorAll('.density-card');
+    cards.forEach(c => {
+      c.classList.remove('bg-secondary-fixed/20', 'shadow-sm');
+      c.classList.add('bg-surface-container-low');
+      const radio = c.querySelector('.rounded-full:not(.flex)');
+      if (radio) {
+        radio.className = 'w-4 h-4 rounded-full bg-surface-container-highest';
+      }
+    });
+    card.classList.remove('bg-surface-container-low');
+    card.classList.add('bg-secondary-fixed/20', 'shadow-sm');
+    const activeRadio = card.querySelector('.rounded-full:not(.flex)');
+    if (activeRadio) {
+      activeRadio.className = 'w-4 h-4 rounded-full bg-primary ring-4 ring-secondary-fixed/50';
+    }
+  }
+
+  function toggleSwitch(btn) {
+    const isPressed = btn.getAttribute('aria-pressed') === 'true';
+    btn.setAttribute('aria-pressed', (!isPressed).toString());
+    const dot = btn.querySelector('span');
+    if (isPressed) {
+      btn.classList.remove('bg-primary');
+      btn.classList.add('bg-outline-variant');
+      dot.classList.remove('right-0.5');
+      dot.classList.add('left-0.5');
+    } else {
+      btn.classList.remove('bg-outline-variant');
+      btn.classList.add('bg-primary');
+      dot.classList.remove('left-0.5');
+      dot.classList.add('right-0.5');
+    }
+  }
+</script></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>

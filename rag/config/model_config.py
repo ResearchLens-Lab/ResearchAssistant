@@ -7,16 +7,16 @@ from pydantic import BaseModel, Field
 
 
 class EmbeddingModelConfig(BaseModel):
-    provider: Literal["mock", "openai"] = "mock"
-    model_name: str = "mock-dense-384"
-    dimension: int = 384
-    batch_size: int = 32
+    provider: Literal["mock", "gemini"] = "gemini"
+    model_name: str = "gemini-embedding-001"
+    dimension: int = 768
+    batch_size: int = 64
     api_key: str = Field(default="", repr=False)
 
 
 class LLMModelConfig(BaseModel):
-    provider: Literal["mock", "openai"] = "mock"
-    model_name: str = "gpt-4o-mini"
+    provider: Literal["mock", "gemini"] = "gemini"
+    model_name: str = "gemini-3.8-flash"
     temperature: float = 0.1
     max_tokens: int = 1024
     timeout_seconds: float = 30.0

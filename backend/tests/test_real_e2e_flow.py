@@ -119,6 +119,7 @@ async def test_real_end_to_end_upload_and_chat_flow(tmp_path, monkeypatch):
             "/api/v1/auth/register",
             json={
                 "email": "e2e_researcher@test.com",
+                    "username": "e2e_researcher",
                 "password": "SecurePassword123!",
                 "full_name": "E2E Lead Researcher",
             },

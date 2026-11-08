@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"tertiary-fixed-dim":"#7bd0ff","on-secondary-container":"#004666","surface-container-highest":"#e0e3e5","secondary-container":"#39b8fd","secondary-fixed":"#c9e6ff","primary":"#006194","on-primary":"#ffffff","on-primary-container":"#fdfcff","tertiary-fixed":"#c4e7ff","on-surface-variant":"#3f4850","on-error":"#ffffff","on-tertiary-fixed":"#001e2c","on-secondary-fixed-variant":"#004c6e","surface-bright":"#f7f9fb","on-primary-fixed":"#001d31","on-secondary-fixed":"#001e2f","on-secondary":"#ffffff","outline-variant":"#bfc7d2","inverse-surface":"#2d3133","background":"#f7f9fb","surface-container":"#eceef0","on-tertiary-fixed-variant":"#004c69","tertiary":"#006387","secondary":"#006591","surface-dim":"#d8dadc","outline":"#707881","primary-container":"#007bb9","primary-fixed-dim":"#93ccff","primary-fixed":"#cce5ff","surface-container-high":"#e6e8ea","on-primary-fixed-variant":"#004b73","surface-variant":"#e0e3e5","surface":"#f7f9fb","on-tertiary":"#ffffff","secondary-fixed-dim":"#89ceff","surface-tint":"#006398","error-container":"#ffdad6","surface-container-low":"#f2f4f6","error":"#ba1a1a","on-surface":"#191c1e","inverse-primary":"#93ccff","inverse-on-surface":"#eff1f3","on-error-container":"#93000a","on-background":"#191c1e","on-tertiary-container":"#fcfcff","surface-container-lowest":"#ffffff","tertiary-container":"#007da9"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-xl":"2.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xs":"0.25rem","gutter":"1.5rem","space-md":"1rem","space-lg":"1.5rem","margin":"2rem","space-sm":"0.5rem"},"fontFamily":{"body-lg":["Inter"],"label-md":["Inter"],"display-lg-mobile":["Plus Jakarta Sans"],"code-citation":["JetBrains Mono"],"body-md":["Inter"],"label-lg":["Inter"],"headline-sm":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"body-sm":["Inter"],"headline-xl-mobile":["Plus Jakarta Sans"],"headline-xl":["Plus Jakarta Sans"],"display-lg":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"]},"fontSize":{"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_4px_24px_-2px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.04)]"><div class="h-16 max-w-[1720px] mx-auto px-margin flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-sm group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[180px] xl:max-w-[240px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-primary-container text-on-primary-container shadow-sm font-label-lg"><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="compare-and-reports" href="#">Compare &amp; Reports</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-briefs" href="#">Research Briefs</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-tools" href="#">Research Tools</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-1.5 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_4px_16px_-2px_rgba(0,97,148,0.25)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div></header><main class="w-full max-w-[1720px] mx-auto pt-16 pb-12 px-margin bg-surface"><div class="flex flex-col w-full">
+<!-- Subtle Ambient Glow Orbs -->
+<div class="relative w-full">
+<div class="absolute -top-10 left-1/4 w-96 h-96 rounded-full bg-secondary-fixed/30 blur-3xl pointer-events-none -z-10"></div>
+<div class="absolute top-48 right-12 w-80 h-80 rounded-full bg-primary-fixed/25 blur-3xl pointer-events-none -z-10"></div>
+<!-- Section 1: Breadcrumbs & Project Dossier Header -->
+<div class="w-full flex flex-col gap-6 pt-4 pb-2">
+<!-- High-precision Monospace Breadcrumb -->
+<div class="flex items-center gap-2 font-code-citation text-code-citation text-on-surface-variant flex-wrap">
+<span class="hover:text-primary transition-colors cursor-pointer flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">workspaces</span>
+          Workspace Archive
+        </span>
+<span class="text-outline-variant">/</span>
+<span class="hover:text-primary transition-colors cursor-pointer">Project Alpha</span>
+<span class="text-outline-variant">/</span>
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-medium">
+          Access Governance &amp; Collaborator Registry
+        </span>
+</div>
+<!-- Project Dossier Card (Bento Master) -->
+<div class="w-full rounded-[24px] bg-surface-container-lowest p-6 lg:p-8 shadow-[0_12px_32px_-4px_rgba(2,132,199,0.08),0_2px_8px_rgba(25,28,30,0.03)] relative overflow-hidden">
+<!-- Soft diagonal ambient accent line -->
+<div class="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-secondary-fixed/20 via-transparent to-transparent pointer-events-none"></div>
+<div class="flex flex-col xl:flex-row xl:items-center justify-between gap-6 relative z-10">
+<div class="flex flex-col gap-3 max-w-3xl">
+<div class="flex items-center gap-3 flex-wrap">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-code-citation text-code-citation">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                PROJECT ID: RL-8824-ALPHA
+              </span>
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-code-citation text-code-citation">
+<span class="material-symbols-outlined text-[14px] text-primary">account_tree</span>
+                Neo4j ACL Locked
+              </span>
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-code-citation text-code-citation">
+<span class="material-symbols-outlined text-[14px] text-tertiary">lock</span>
+                Strict Project Boundary
+              </span>
+</div>
+<h1 class="font-headline-xl text-headline-xl text-on-surface tracking-tight">
+              Transformer Scaling &amp; Retrieval Dynamics
+            </h1>
+<div class="flex items-center gap-3 text-on-surface-variant flex-wrap font-body-sm text-body-sm">
+<span class="flex items-center gap-1.5 font-medium text-on-surface">
+<span class="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+                Principal Investigator: Dr. Gorav Gumber
+              </span>
+<span class="text-outline-variant">•</span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+                18 Ingested Papers (4.2k Embedding Chunks)
+              </span>
+<span class="text-outline-variant">•</span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">domain</span>
+                University of Cambridge
+              </span>
+</div>
+</div>
+<!-- Live Telemetry Badges Cluster -->
+<div class="flex flex-row xl:flex-col gap-2.5 sm:gap-3 flex-wrap shrink-0">
+<div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-low text-on-surface">
+<span class="w-2 h-2 rounded-full bg-secondary-container shadow-[0_0_8px_rgba(57,184,253,0.8)]"></span>
+<span class="font-label-lg text-label-lg">End-to-End Encrypted Project</span>
+</div>
+<div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-low text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-primary text-[17px]">history_edu</span>
+<span>Audit Trail: <strong class="text-on-surface font-semibold">142 logged actions</strong></span>
+</div>
+<div class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-container-low text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-secondary text-[17px]">hub</span>
+<span>Federated Shibboleth &amp; SSO Active</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 2: Invite Collaborator Action Box -->
+<div class="w-full mt-6">
+<div class="w-full rounded-[24px] bg-surface-container-lowest p-6 lg:p-7 shadow-[0_8px_24px_-4px_rgba(2,132,199,0.06),0_1px_4px_rgba(25,28,30,0.04)] relative">
+<div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">Grant Project Access</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Provision scoped cryptographic credentials to institutional researchers</p>
+</div>
+</div>
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container font-code-citation text-code-citation text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+            Zero Global Vector Bleed Policy
+          </span>
+</div>
+<!-- Invitation Form Matrix -->
+<form class="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end" id="invite-form" onsubmit="event.preventDefault(); triggerInviteSuccess();">
+<!-- Email Input -->
+<div class="md:col-span-5 flex flex-col gap-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">
+              Institutional Email Identifier
+            </label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px] absolute left-3.5 pointer-events-none">mail</span>
+<input class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:shadow-[0_0_0_3px_rgba(57,184,253,0.35)] transition-all" id="collaborator-email" placeholder="colleague@institution.edu" required="" type="email"/>
+</div>
+</div>
+<!-- Role Select -->
+<div class="md:col-span-4 flex flex-col gap-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">
+              Assigned Permission Scope
+            </label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px] absolute left-3.5 pointer-events-none">security</span>
+<select class="w-full appearance-none pl-10 pr-9 py-2.5 rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none focus:bg-surface-container-lowest focus:shadow-[0_0_0_3px_rgba(57,184,253,0.35)] transition-all cursor-pointer">
+<option value="collaborator">Can collaborate (Ask questions, ingest papers, participate in synthesis)</option>
+<option value="viewer">Can view (Read-only citation inspection &amp; graph analysis)</option>
+<option value="auditor">Auditor (Read-only cryptographically stamped logs)</option>
+</select>
+<span class="material-symbols-outlined text-on-surface-variant text-[18px] absolute right-3 pointer-events-none">unfold_more</span>
+</div>
+</div>
+<!-- Submit CTA Button -->
+<div class="md:col-span-3">
+<button class="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_4px_16px_-2px_rgba(0,97,148,0.25)] hover:shadow-none hover:scale-[0.99] active:scale-[0.97] transition-all" type="submit">
+<span class="material-symbols-outlined text-[18px]">send</span>
+<span>Dispatch Invitation</span>
+</button>
+</div>
+</form>
+<div class="hidden mt-3 p-3 rounded-xl bg-secondary-fixed text-on-secondary-fixed font-body-sm text-body-sm flex items-center gap-2" id="invite-feedback">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span>Authentication token cryptographic envelope generated and transmitted via university relay.</span>
+</div>
+<div class="mt-4 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-on-surface-variant font-body-sm text-body-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-[16px]">info</span>
+<span>Invited scholars receive an authenticated token valid for 7 days via institutional email relay. Public sharing is disabled by default.</span>
+</div>
+<div class="flex items-center gap-2 font-code-citation text-code-citation shrink-0 text-on-surface">
+<span class="material-symbols-outlined text-[15px] text-primary">key</span>
+            Ed25519 Signatures Active
+          </div>
+</div>
+</div>
+</div>
+<!-- Section 3: Collaborators & Role Registry Master Table -->
+<div class="w-full mt-6">
+<div class="w-full rounded-[24px] bg-surface-container-lowest p-6 lg:p-7 shadow-[0_8px_24px_-4px_rgba(2,132,199,0.06),0_1px_4px_rgba(25,28,30,0.04)]">
+<!-- Tab Switches & Filters -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
+<div class="flex items-center gap-1.5 p-1 rounded-full bg-surface-container-low max-w-fit shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]">
+<button class="px-4 py-1.5 rounded-full font-label-lg text-label-lg bg-surface-container-lowest text-primary shadow-sm transition-all" id="tab-members-btn" onclick="switchTab('members')">
+              Project Members (4 active)
+            </button>
+<button class="px-4 py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" id="tab-pending-btn" onclick="switchTab('pending')">
+              Pending Invitations (2)
+            </button>
+</div>
+<div class="flex items-center gap-2">
+<div class="relative">
+<input class="pl-9 pr-3 py-1.5 rounded-full bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest focus:shadow-[0_0_0_2px_rgba(57,184,253,0.35)] transition-all" id="search-table" onkeyup="filterMembers(this.value)" placeholder="Filter scholars or email..." type="text"/>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant absolute left-3 top-2 pointer-events-none">search</span>
+</div>
+<button class="p-2 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant transition-colors" title="Export CSV Table">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+</div>
+</div>
+<!-- TAB 1: ACTIVE MEMBERS TABLE -->
+<div class="w-full overflow-x-auto" id="members-view">
+<table class="w-full text-left font-body-md text-body-md border-collapse">
+<thead>
+<tr class="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
+<th class="py-3 px-4 font-semibold">Scholar &amp; Affiliation</th>
+<th class="py-3 px-4 font-semibold">Access Level</th>
+<th class="py-3 px-4 font-semibold">Status</th>
+<th class="py-3 px-4 font-semibold">Telemetry &amp; Activity</th>
+<th class="py-3 px-4 font-semibold text-right">Governance Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-low" id="member-rows">
+<!-- Row 1: Dr. Gorav Gumber (PI) -->
+<tr class="hover:bg-surface-container-low/60 transition-colors member-item">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-headline-sm font-semibold shrink-0 shadow-sm">
+                      GG
+                    </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold member-name">Dr. Gorav Gumber</span>
+<span class="px-2 py-0.5 rounded-md bg-primary-fixed text-on-primary-fixed-variant font-code-citation text-code-citation font-semibold">PI</span>
+</div>
+<span class="font-code-citation text-code-citation text-on-surface-variant member-email">gorav.gumber@cambridge.ac.uk</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">University of Cambridge</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary text-on-primary font-label-lg text-label-lg shadow-sm">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span>Owner (Master Authority)</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">Active Session</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface">Last query 4m ago</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">vector_search(chunk_881)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+                    Non-Revocable PI
+                  </span>
+</td>
+</tr>
+<!-- Row 2: Dr. Elena Rostova -->
+<tr class="hover:bg-surface-container-low/60 transition-colors member-item">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed font-headline-sm font-semibold shrink-0">
+                      ER
+                    </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold member-name">Dr. Elena Rostova</span>
+<span class="px-2 py-0.5 rounded-md bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">Invited</span>
+</div>
+<span class="font-code-citation text-code-citation text-on-surface-variant member-email">elena.rostova@cambridge.ac.uk</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Cambridge AI Evaluation Group</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[14px]">edit_note</span>
+<span>Collaborator (Query, Synthesize &amp; Ingest)</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">Active</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface">Ingested 3 papers yesterday</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">arxiv:2403.09110</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<select class="px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface font-label-md text-label-md focus:outline-none cursor-pointer">
+<option selected="">Collaborator</option>
+<option>Viewer</option>
+<option>Auditor</option>
+</select>
+<button class="px-2.5 py-1 rounded-lg text-error hover:bg-error-container hover:text-on-error-container transition-all font-label-md text-label-md flex items-center gap-1" onclick="removeRow(this)">
+<span class="material-symbols-outlined text-[15px]">person_remove</span>
+<span>Remove</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3: G. Alvarez -->
+<tr class="hover:bg-surface-container-low/60 transition-colors member-item">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed font-headline-sm font-semibold shrink-0">
+                      GA
+                    </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold member-name">G. Alvarez</span>
+</div>
+<span class="font-code-citation text-code-citation text-on-surface-variant member-email">alvarez@stanford.edu</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Stanford NLP Lab</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[14px]">edit_note</span>
+<span>Collaborator</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">Active</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface">Read node graph 2h ago</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">explore_cluster(node_44)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<select class="px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface font-label-md text-label-md focus:outline-none cursor-pointer">
+<option selected="">Collaborator</option>
+<option>Viewer</option>
+<option>Auditor</option>
+</select>
+<button class="px-2.5 py-1 rounded-lg text-error hover:bg-error-container hover:text-on-error-container transition-all font-label-md text-label-md flex items-center gap-1" onclick="removeRow(this)">
+<span class="material-symbols-outlined text-[15px]">person_remove</span>
+<span>Remove</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 4: Marcus Vance -->
+<tr class="hover:bg-surface-container-low/60 transition-colors member-item">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface font-headline-sm font-semibold shrink-0">
+                      MV
+                    </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold member-name">Marcus Vance</span>
+</div>
+<span class="font-code-citation text-code-citation text-on-surface-variant member-email">vance@mit.edu</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">MIT CSAIL</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[14px]">visibility</span>
+<span>Viewer (Read-only inspection)</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+<span class="font-body-sm text-body-sm font-medium text-on-surface">Active</span>
+</div>
+</td>
+<td class="py-4 px-4">
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm text-on-surface">Inspected claim citations 3d ago</span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">verify_citation(doi:10.1145)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<select class="px-2.5 py-1 rounded-lg bg-surface-container-low text-on-surface font-label-md text-label-md focus:outline-none cursor-pointer">
+<option>Collaborator</option>
+<option selected="">Viewer</option>
+<option>Auditor</option>
+</select>
+<button class="px-2.5 py-1 rounded-lg text-error hover:bg-error-container hover:text-on-error-container transition-all font-label-md text-label-md flex items-center gap-1" onclick="removeRow(this)">
+<span class="material-symbols-outlined text-[15px]">person_remove</span>
+<span>Remove</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- TAB 2: PENDING INVITATIONS TABLE -->
+<div class="w-full overflow-x-auto hidden" id="pending-view">
+<table class="w-full text-left font-body-md text-body-md border-collapse">
+<thead>
+<tr class="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
+<th class="py-3 px-4 font-semibold">Recipient Identifier</th>
+<th class="py-3 px-4 font-semibold">Proposed Role</th>
+<th class="py-3 px-4 font-semibold">Dispatch Timestamp</th>
+<th class="py-3 px-4 font-semibold">Token Lifecycle</th>
+<th class="py-3 px-4 font-semibold text-right">Verification Control</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-low">
+<!-- Pending 1: Danvers -->
+<tr class="hover:bg-surface-container-low/60 transition-colors">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-secondary-fixed/50 flex items-center justify-center text-primary font-code-citation text-code-citation">
+                      OX
+                    </div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">prof.danvers@ox.ac.uk</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">University of Oxford • Dept of Computer Science</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-label-md text-label-md">
+                    Collaborator
+                  </span>
+</td>
+<td class="py-4 px-4 font-body-sm text-body-sm text-on-surface-variant">
+                  Sent 2 days ago (Relay #991)
+                </td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-fixed-dim animate-ping"></span>
+<span class="font-body-sm text-body-sm text-primary font-medium">Pending Verification</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">refresh</span>
+<span>Resend Invite</span>
+</button>
+<button class="px-3 py-1.5 rounded-lg text-error hover:bg-error-container hover:text-on-error-container font-label-md text-label-md transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">cancel</span>
+<span>Revoke Token</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Pending 2: Nakamura -->
+<tr class="hover:bg-surface-container-low/60 transition-colors">
+<td class="py-4 px-4">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-tertiary-fixed/50 flex items-center justify-center text-tertiary font-code-citation text-code-citation">
+                      UT
+                    </div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">k.nakamura@u-tokyo.ac.jp</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">University of Tokyo • Information Science</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md">
+                    Viewer
+                  </span>
+</td>
+<td class="py-4 px-4 font-body-sm text-body-sm text-on-surface-variant">
+                  Sent 5 hours ago (Relay #1004)
+                </td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Token Delivered</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">refresh</span>
+<span>Resend Invite</span>
+</button>
+<button class="px-3 py-1.5 rounded-lg text-error hover:bg-error-container hover:text-on-error-container font-label-md text-label-md transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">cancel</span>
+<span>Revoke Token</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Section 4: Security & Permission Architecture Footprint (3-Card Cluster Bento) -->
+<div class="w-full mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+<!-- Card 1: Vector Namespace -->
+<div class="rounded-[22px] bg-surface-container-lowest p-6 shadow-[0_8px_24px_-4px_rgba(2,132,199,0.06),0_1px_4px_rgba(25,28,30,0.04)] hover:-translate-y-0.5 transition-transform flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-3">
+<span class="w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">data_object</span>
+</span>
+<span class="font-code-citation text-code-citation text-secondary">Qdrant Cluster Isolated</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">Active Vector Namespace</h3>
+<p class="font-code-citation text-code-citation text-primary mt-1 select-all bg-surface-container-low px-2 py-1 rounded-md">
+            project-alpha-transformer-v3
+          </p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-3">
+            Encapsulated embedding index. Queries and dense representations have absolute zero vector leak to neighboring research sets.
+          </p>
+</div>
+<div class="mt-4 pt-4 flex items-center gap-2 font-code-citation text-code-citation text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+          Dimension: 1536 (Cosine Norm)
+        </div>
+</div>
+<!-- Card 2: SHA-256 Audit Log -->
+<div class="rounded-[22px] bg-surface-container-lowest p-6 shadow-[0_8px_24px_-4px_rgba(2,132,199,0.06),0_1px_4px_rgba(25,28,30,0.04)] hover:-translate-y-0.5 transition-transform flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-3">
+<span class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+</span>
+<span class="font-code-citation text-code-citation text-primary">Immutable Ledger</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">Tamper-Proof SHA-256 Log</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+            Tracks all quote verifications, question prompts, and role updates with cryptographic UTC timestamping and signature anchoring.
+          </p>
+</div>
+<div class="mt-4 pt-4 flex items-center justify-between font-body-sm text-body-sm">
+<span class="font-code-citation text-code-citation text-on-surface-variant">Head: #88c2...fa01</span>
+<a class="text-primary hover:underline font-label-md text-label-md flex items-center gap-0.5" href="#">
+            Verify Hash <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</a>
+</div>
+</div>
+<!-- Card 3: Session Sync Status -->
+<div class="rounded-[22px] bg-surface-container-lowest p-6 shadow-[0_8px_24px_-4px_rgba(2,132,199,0.06),0_1px_4px_rgba(25,28,30,0.04)] hover:-translate-y-0.5 transition-transform flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-3">
+<span class="w-8 h-8 rounded-full bg-tertiary-fixed flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+</span>
+<span class="inline-flex items-center gap-1 font-code-citation text-code-citation text-primary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+              Live WSS Channel
+            </span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">Session Sync Status</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+            Real-time peer nodes listening on secure WebSocket channel with live presence markers and decentralized CRDT document sync.
+          </p>
+</div>
+<div class="mt-4 pt-4 flex items-center justify-between text-on-surface font-body-sm text-body-sm">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">group</span>
+            3 active node listeners
+          </span>
+<span class="font-code-citation text-code-citation text-on-surface-variant">12ms broadcast</span>
+</div>
+</div>
+</div>
+<!-- Section 5: Rigorous Source Boundary Guarantee Banner -->
+<div class="w-full mt-6 mb-4">
+<div class="w-full rounded-[24px] bg-gradient-to-r from-surface-container-low via-surface-container-lowest to-secondary-fixed/20 p-6 lg:p-7 shadow-[0_4px_20px_-2px_rgba(2,132,199,0.06)] relative overflow-hidden">
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+<div class="flex items-start gap-4 max-w-4xl">
+<div class="w-11 h-11 rounded-2xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
+<span class="material-symbols-outlined text-[24px]">gavel</span>
+</div>
+<div class="flex flex-col gap-1">
+<h4 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">
+                Academic Rigor &amp; Source Boundary Guarantee
+              </h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+                Permissions are enforced strictly at the project boundary. Collaborators can only access authorized indexed sources within this Research Project. Queries, semantic maps, and synthesized dossiers generated here will never bleed into global indices or adjacent departmental workspaces.
+              </p>
+</div>
+</div>
+<!-- Bottom Action Buttons Cluster -->
+<div class="flex items-center gap-2.5 flex-wrap shrink-0">
+<button class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-container-lowest hover:bg-surface-container text-on-surface font-label-lg text-label-lg shadow-sm transition-all" id="copy-url-btn" onclick="copyInvocationUrl()">
+<span class="material-symbols-outlined text-[18px]">link</span>
+<span id="copy-btn-text">Copy Invocation URL</span>
+</button>
+<button class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-container-lowest hover:bg-surface-container text-on-surface font-label-lg text-label-lg shadow-sm transition-all">
+<span class="material-symbols-outlined text-[18px]">download_for_offline</span>
+<span>Export Access Audit Log</span>
+</button>
+<button class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-sm transition-all">
+<span class="material-symbols-outlined text-[18px]">check</span>
+<span>Close Registry</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function switchTab(tab) {
+    const membersView = document.getElementById('members-view');
+    const pendingView = document.getElementById('pending-view');
+    const tabMembersBtn = document.getElementById('tab-members-btn');
+    const tabPendingBtn = document.getElementById('tab-pending-btn');
+
+    if (tab === 'members') {
+      membersView.classList.remove('hidden');
+      pendingView.classList.add('hidden');
+      tabMembersBtn.className = "px-4 py-1.5 rounded-full font-label-lg text-label-lg bg-surface-container-lowest text-primary shadow-sm transition-all";
+      tabPendingBtn.className = "px-4 py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all";
+    } else {
+      membersView.classList.add('hidden');
+      pendingView.classList.remove('hidden');
+      tabPendingBtn.className = "px-4 py-1.5 rounded-full font-label-lg text-label-lg bg-surface-container-lowest text-primary shadow-sm transition-all";
+      tabMembersBtn.className = "px-4 py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all";
+    }
+  }
+
+  function filterMembers(query) {
+    const val = query.toLowerCase();
+    const rows = document.querySelectorAll('.member-item');
+    rows.forEach(row => {
+      const name = row.querySelector('.member-name')?.textContent.toLowerCase() || '';
+      const email = row.querySelector('.member-email')?.textContent.toLowerCase() || '';
+      if (name.includes(val) || email.includes(val)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  function removeRow(btn) {
+    const tr = btn.closest('tr');
+    if (tr) {
+      tr.style.opacity = '0';
+      setTimeout(() => {
+        tr.remove();
+      }, 200);
+    }
+  }
+
+  function triggerInviteSuccess() {
+    const feedback = document.getElementById('invite-feedback');
+    const input = document.getElementById('collaborator-email');
+    if (feedback) {
+      feedback.classList.remove('hidden');
+      setTimeout(() => {
+        feedback.classList.add('hidden');
+      }, 5000);
+    }
+    if (input) {
+      input.value = '';
+    }
+  }
+
+  function copyInvocationUrl() {
+    const btnText = document.getElementById('copy-btn-text');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.origin + "/workspace/alpha/auth/token-relay");
+    }
+    if (btnText) {
+      btnText.textContent = "Copied to Clipboard!";
+      setTimeout(() => {
+        btnText.textContent = "Copy Invocation URL";
+      }, 2500);
+    }
+  }
+</script></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>

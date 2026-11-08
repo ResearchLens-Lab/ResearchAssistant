@@ -1,3 +1,5 @@
+import json
+
 from .conftest import create_paper
 
 
@@ -86,6 +88,32 @@ async def test_chat_requires_auth(client):
     assert resp.status_code == 401
 
 
+async def test_stream_requires_auth(client):
+    resp = await client.post("/api/v1/chat/stream", json={"question": "Hi?", "paper_ids": ["x"]})
+    assert resp.status_code == 401
+
+
+async def test_stream_emits_progress_and_persists_one_final_response(client, auth_headers):
+    paper = await create_paper(client, auth_headers)
+    response = await client.post("/api/v1/chat/stream", json={
+        "question": "What is the main contribution?", "paper_ids": [paper["id"]],
+    }, headers=auth_headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    kinds = [event["type"] for event in events]
+    assert kinds[0:2] == ["started", "planning_started"]
+    assert "retrieval_started" in kinds and "sources_found" in kinds
+    assert kinds[-1] == "completed"
+    assert all(event["event_id"] == events[0]["event_id"] for event in events)
+    final = events[-1]["data"]
+    assert final["answer"]
+    messages = (await client.get(f"/api/v1/conversations/{final['conversation_id']}/messages", headers=auth_headers)).json()
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[-1]["content"] == final["answer"]
+    assert messages[-1]["sources"][0]["source_id"] == "S1"
+
+
 async def test_chat_rag_unavailable(client, auth_headers, rag_gateway):
     paper = await create_paper(client, auth_headers)
     rag_gateway.mode = "unavailable"
@@ -157,3 +185,62 @@ async def test_chat_conversation_title_from_question(client, auth_headers):
     ).json()
     assert conv["title"] == "Short question?"
     assert conv["paper_ids"] == [paper["id"]]
+
+
+async def test_rename_and_update_conversation(client, auth_headers):
+    paper = await create_paper(client, auth_headers)
+    created = (
+        await client.post(
+            "/api/v1/conversations",
+            headers=auth_headers,
+            json={"title": "Initial Title", "paper_ids": [paper["id"]]},
+        )
+    ).json()
+    conv_id = created["id"]
+
+    # Rename
+    patched = await client.patch(
+        f"/api/v1/conversations/{conv_id}",
+        headers=auth_headers,
+        json={"title": "Updated Quantum Study"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["title"] == "Updated Quantum Study"
+    assert patched.json()["paper_ids"] == [paper["id"]]
+
+
+async def test_search_conversations_and_message_count(client, auth_headers):
+    paper = await create_paper(client, auth_headers)
+    c1 = (await ask(client, auth_headers, [paper["id"]], question="What is Neural Attention?")).json()
+    c2 = (await ask(client, auth_headers, [paper["id"]], question="How does Quantum Annealing work?")).json()
+
+    # Search for "neural"
+    res_neural = await client.get("/api/v1/conversations?q=neural", headers=auth_headers)
+    assert res_neural.status_code == 200
+    items_neural = res_neural.json()["items"]
+    assert len(items_neural) == 1
+    assert "Neural" in items_neural[0]["title"]
+    assert items_neural[0]["message_count"] >= 2
+
+    # Search for "quantum"
+    res_quantum = await client.get("/api/v1/conversations?q=quantum", headers=auth_headers)
+    assert res_quantum.status_code == 200
+    items_quantum = res_quantum.json()["items"]
+    assert any("Quantum" in item["title"] for item in items_quantum)
+
+
+async def test_conversation_user_isolation(client, auth_headers, second_user_headers):
+    other_headers = second_user_headers
+    other_paper = await create_paper(client, other_headers)
+    other_conv = (await ask(client, other_headers, [other_paper["id"]], question="Secret other question")).json()
+
+    # Current user should NOT see other user's conversation in list
+    list_res = await client.get("/api/v1/conversations", headers=auth_headers)
+    titles = [c["title"] for c in list_res.json()["items"]]
+    assert "Secret other question" not in titles
+
+    # Current user should NOT be able to access, rename, or delete other user's conversation
+    other_conv_id = other_conv["conversation_id"]
+    assert (await client.get(f"/api/v1/conversations/{other_conv_id}", headers=auth_headers)).status_code == 404
+    assert (await client.patch(f"/api/v1/conversations/{other_conv_id}", headers=auth_headers, json={"title": "Hacked"})).status_code == 404
+    assert (await client.delete(f"/api/v1/conversations/{other_conv_id}", headers=auth_headers)).status_code == 404

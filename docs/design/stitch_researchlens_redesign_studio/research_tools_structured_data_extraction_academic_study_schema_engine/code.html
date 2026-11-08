@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"tertiary-fixed-dim":"#7bd0ff","on-secondary-container":"#004666","surface-container-highest":"#e0e3e5","secondary-container":"#39b8fd","secondary-fixed":"#c9e6ff","primary":"#006194","on-primary":"#ffffff","on-primary-container":"#fdfcff","tertiary-fixed":"#c4e7ff","on-surface-variant":"#3f4850","on-error":"#ffffff","on-tertiary-fixed":"#001e2c","on-secondary-fixed-variant":"#004c6e","surface-bright":"#f7f9fb","on-primary-fixed":"#001d31","on-secondary-fixed":"#001e2f","on-secondary":"#ffffff","outline-variant":"#bfc7d2","inverse-surface":"#2d3133","background":"#f7f9fb","surface-container":"#eceef0","on-tertiary-fixed-variant":"#004c69","tertiary":"#006387","secondary":"#006591","surface-dim":"#d8dadc","outline":"#707881","primary-container":"#007bb9","primary-fixed-dim":"#93ccff","primary-fixed":"#cce5ff","surface-container-high":"#e6e8ea","on-primary-fixed-variant":"#004b73","surface-variant":"#e0e3e5","surface":"#f7f9fb","on-tertiary":"#ffffff","secondary-fixed-dim":"#89ceff","surface-tint":"#006398","error-container":"#ffdad6","surface-container-low":"#f2f4f6","error":"#ba1a1a","on-surface":"#191c1e","inverse-primary":"#93ccff","inverse-on-surface":"#eff1f3","on-error-container":"#93000a","on-background":"#191c1e","on-tertiary-container":"#fcfcff","surface-container-lowest":"#ffffff","tertiary-container":"#007da9"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-xl":"2.5rem","margin-mobile":"1rem","gutter-mobile":"0.75rem","space-xs":"0.25rem","gutter":"1.5rem","space-md":"1rem","space-lg":"1.5rem","margin":"2rem","space-sm":"0.5rem"},"fontFamily":{"body-lg":["Inter"],"label-md":["Inter"],"display-lg-mobile":["Plus Jakarta Sans"],"code-citation":["JetBrains Mono"],"body-md":["Inter"],"label-lg":["Inter"],"headline-sm":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"body-sm":["Inter"],"headline-xl-mobile":["Plus Jakarta Sans"],"headline-xl":["Plus Jakarta Sans"],"display-lg":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"]},"fontSize":{"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_4px_24px_-2px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.04)]"><div class="h-16 max-w-[1720px] mx-auto px-margin flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-sm group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[180px] xl:max-w-[240px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-primary-container text-on-primary-container shadow-sm font-label-lg"><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="compare-and-reports" href="#">Compare &amp; Reports</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-briefs" href="#">Research Briefs</a><a aria-current="page" class="px-space-md py-1.5 rounded-full transition-all bg-primary-container text-on-primary-container shadow-sm font-label-lg" data-path="research-tools" href="#">Research Tools</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-1.5 rounded-full bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_4px_16px_-2px_rgba(0,97,148,0.25)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div></header><main class="w-full max-w-[1720px] mx-auto pt-16 pb-12 px-margin bg-surface"><div class="flex flex-col w-full">
+<!-- Interactive Style & Script Injection for 3D Flip and Dynamic States -->
+<style>
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+    .step-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+      opacity: 0;
+    }
+    .step-content.expanded {
+      max-height: 240px;
+      opacity: 1;
+    }
+  </style>
+<!-- SUB-HEADER RIBBON & BREADCRUMB COMMAND BAR -->
+<div class="flex flex-col gap-space-md mb-8">
+<!-- Breadcrumb & Workspace Status -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm pt-2">
+<div class="flex items-center gap-2 font-code-citation text-code-citation text-on-surface-variant">
+<span class="hover:text-primary transition-colors cursor-pointer">Project Alpha</span>
+<span class="text-outline-variant font-sans">/</span>
+<span class="hover:text-primary transition-colors cursor-pointer text-on-surface font-semibold">Transformer Scaling &amp; Retrieval Dynamics</span>
+<span class="text-outline-variant font-sans">/</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-medium">Compare &amp; Reports</span>
+</div>
+<div class="flex items-center gap-space-xs font-label-md text-label-md text-on-surface-variant">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-low shadow-sm">
+<span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
+<span>Corpus Sync: <strong class="text-on-surface">3 Papers Anchored</strong></span>
+</span>
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface-container-low shadow-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[15px]">verified</span>
+<span>Extraction Engine 99.4% Precision</span>
+</span>
+</div>
+</div>
+<!-- Navigation Pills Array & Quick Omni-Search -->
+<div class="p-2 rounded-3xl bg-surface-container-lowest shadow-[0_4px_24px_-4px_rgba(0,97,148,0.08),0_1px_3px_rgba(25,28,30,0.03)] flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+<!-- Tabs -->
+<div class="flex flex-wrap items-center gap-1.5">
+<button class="px-space-md py-2 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all" type="button">
+          Research Map
+        </button>
+<button class="px-space-md py-2 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all" type="button">
+          Comparison Builder
+        </button>
+<button class="px-space-md py-2 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all" type="button">
+          Research Briefs
+        </button>
+<button class="px-space-md py-2 rounded-full font-label-lg text-label-lg bg-primary text-on-primary shadow-sm flex items-center gap-2" type="button">
+<span>Research Tools</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-code-citation text-code-citation text-[10px]">4 Active Modules</span>
+</button>
+</div>
+<!-- Capability Search Input -->
+<div class="relative flex-1 max-w-xl">
+<div class="relative flex items-center w-full">
+<span class="material-symbols-outlined absolute left-3.5 text-primary text-[20px] pointer-events-none">manage_search</span>
+<input class="w-full pl-10 pr-14 py-2 rounded-full bg-surface-container-low focus:bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant font-body-sm text-body-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus:shadow-[0_0_0_3px_rgba(56,189,248,0.35)] outline-none transition-all" placeholder="Filter capabilities, extracted schemas, or formula fields... (⌘K)" type="text"/>
+<kbd class="absolute right-3 font-code-citation text-code-citation text-[10px] px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant">⌘K</kbd>
+</div>
+</div>
+</div>
+<!-- Sub Filter Chips -->
+<div class="flex flex-wrap items-center gap-2 px-1">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mr-1">Scope:</span>
+<button class="px-3.5 py-1 rounded-full font-label-md text-label-md bg-secondary-fixed text-on-secondary-fixed shadow-sm flex items-center gap-1.5" type="button">
+<span>All Tools</span>
+</button>
+<button class="px-3.5 py-1 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px] text-primary">table_chart</span>
+<span>Structured Extraction</span>
+</button>
+<button class="px-3.5 py-1 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px] text-primary">school</span>
+<span>Study &amp; Review</span>
+</button>
+<button class="px-3.5 py-1 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px] text-primary">functions</span>
+<span>Formula Derivation</span>
+</button>
+<button class="px-3.5 py-1 rounded-full font-label-md text-label-md bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[15px] text-primary">account_tree</span>
+<span>Concept Mapping</span>
+</button>
+</div>
+</div>
+<!-- SECTION A: STRUCTURED EVIDENCE EXTRACTION ENGINE -->
+<section class="mb-10">
+<div class="rounded-3xl bg-surface-container-lowest p-space-lg md:p-8 shadow-[0_8px_32px_-6px_rgba(0,97,148,0.07),0_1px_3px_rgba(25,28,30,0.03)] hover:shadow-[0_12px_40px_-6px_rgba(0,97,148,0.12)] transition-all">
+<!-- Section Header -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6">
+<div>
+<div class="flex items-center gap-2 mb-1.5">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation uppercase">Tome 01 • Matrix Extraction</span>
+<span class="flex items-center gap-1 font-label-md text-label-md text-primary font-semibold">
+<span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+              AI Schema Synthesizer
+            </span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface tracking-tight">Structured Evidence Extraction Engine</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">
+            Comparative parameters strictly derived from document source text. Hover over anchor badges to view verbatim academic grounding.
+          </p>
+</div>
+<!-- Matrix Controls -->
+<div class="flex flex-wrap items-center gap-2">
+<div class="flex items-center rounded-full bg-surface-container-low p-1 shadow-sm">
+<button class="px-3 py-1 rounded-full font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1" title="Export as CSV" type="button">
+<span class="material-symbols-outlined text-[15px]">file_download</span> CSV
+            </button>
+<button class="px-3 py-1 rounded-full font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1" title="Export as JSON Schema" type="button">
+<span class="material-symbols-outlined text-[15px]">code</span> JSON
+            </button>
+<button class="px-3 py-1 rounded-full font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1" title="Export BibTeX Entries" type="button">
+<span class="material-symbols-outlined text-[15px]">format_quote</span> BibTeX
+            </button>
+</div>
+<button class="px-4 py-2 rounded-full bg-surface-container-low hover:bg-surface-container text-primary font-label-lg text-label-lg transition-all flex items-center gap-1.5" id="add-dimension-btn" type="button">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Add Custom Schema Dimension</span>
+</button>
+<button class="px-4 py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-sm transition-all flex items-center gap-1.5" type="button">
+<span class="material-symbols-outlined text-[18px]">sync_alt</span>
+<span>Run Dynamic Tabular Extractor</span>
+</button>
+</div>
+</div>
+<!-- Tabular Matrix Container -->
+<div class="overflow-x-auto rounded-2xl bg-surface-container-low shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)]">
+<table class="w-full text-left font-body-md text-body-md border-collapse">
+<thead>
+<tr class="bg-surface-container-high/60 text-on-surface">
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap">Corpus Document</th>
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap">Loss Function</th>
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap">Sequence Bound</th>
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap">Parameter Scale</th>
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap">Hardware Ceiling</th>
+<th class="py-3.5 px-4 font-label-lg text-label-lg whitespace-nowrap text-right">Verified Evidence Anchor</th>
+</tr>
+</thead>
+<tbody class="divide-y-0">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest/80 transition-colors group">
+<td class="py-4 px-4 font-headline-sm text-headline-sm text-on-surface">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="font-semibold text-primary">Vaswani et al. (2017)</span>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pl-4">Attention Is All You Need</div>
+</td>
+<td class="py-4 px-4">
+<span class="font-code-citation text-code-citation px-2.5 py-1 rounded-md bg-surface-container-highest text-on-surface inline-block">
+                  Cross-Entropy w/ ε_ls = 0.1
+                </span>
+</td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-medium text-secondary">512 tokens</span> (natively bounded)
+              </td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-semibold text-on-surface">65M params</span> (Base Model)
+              </td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-tertiary">memory</span>
+<span>8x NVIDIA P100 GPUs (3.5 days)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<a class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation hover:bg-secondary-container hover:text-on-secondary-container transition-all shadow-sm" href="#cite-vaswani">
+<span class="material-symbols-outlined text-[14px]">link</span>
+<span>[cite p.6 §5.4]</span>
+<span class="material-symbols-outlined text-[14px]">verified</span>
+</a>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest/80 transition-colors group bg-surface-container-low/40">
+<td class="py-4 px-4 font-headline-sm text-headline-sm text-on-surface">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-semibold text-primary">Devlin et al. (2018)</span>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pl-4">BERT: Pre-training of Deep Bidirectional Transformers</div>
+</td>
+<td class="py-4 px-4">
+<span class="font-code-citation text-code-citation px-2.5 py-1 rounded-md bg-surface-container-highest text-on-surface inline-block">
+                  Masked LM (15%) + NSP
+                </span>
+</td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-medium text-secondary">512 tokens</span> (positional embeddings)
+              </td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-semibold text-on-surface">340M params</span> (BERT-Large)
+              </td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-tertiary">grid_view</span>
+<span>64x TPU v2 Pods (4 days)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<a class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation hover:bg-secondary-container hover:text-on-secondary-container transition-all shadow-sm" href="#cite-devlin">
+<span class="material-symbols-outlined text-[14px]">link</span>
+<span>[cite p.3 §3.1]</span>
+<span class="material-symbols-outlined text-[14px]">verified</span>
+</a>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest/80 transition-colors group">
+<td class="py-4 px-4 font-headline-sm text-headline-sm text-on-surface">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="font-semibold text-primary">Lewis et al. (2020)</span>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pl-4">Retrieval-Augmented Generation for Knowledge Tasks</div>
+</td>
+<td class="py-4 px-4">
+<span class="font-code-citation text-code-citation px-2.5 py-1 rounded-md bg-surface-container-highest text-on-surface inline-block">
+                  Marginalized Seq2Seq NLL
+                </span>
+</td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-medium text-secondary">100-word</span> passages (top-k DPR)
+              </td>
+<td class="py-4 px-4 font-code-inline text-code-inline text-on-surface">
+<span class="font-semibold text-on-surface">400M params</span> (BART + DPR Encoders)
+              </td>
+<td class="py-4 px-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px] text-tertiary">memory</span>
+<span>16x NVIDIA V100 GPUs (32GB)</span>
+</div>
+</td>
+<td class="py-4 px-4 text-right">
+<a class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation hover:bg-secondary-container hover:text-on-secondary-container transition-all shadow-sm" href="#cite-lewis">
+<span class="material-symbols-outlined text-[14px]">link</span>
+<span>[cite p.4 §3.2]</span>
+<span class="material-symbols-outlined text-[14px]">verified</span>
+</a>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Matrix Footnote Provenance bar -->
+<div class="mt-4 pt-3 flex flex-wrap items-center justify-between text-on-surface-variant font-label-md text-label-md gap-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[16px]">info</span>
+<span>Anchors directly synchronized with raw PDF corpus vectors stored in Project Alpha.</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-on-surface font-medium">Confidence Score: 0.982</span>
+<span>Last full parse: 14 mins ago</span>
+<button class="text-primary hover:underline font-label-lg text-label-lg" type="button">Audit Extraction Logs</button>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION B: 2-COLUMN SPLIT (INTERACTIVE FLASHCARDS + FORMULA TREE) -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg mb-10 items-start">
+<!-- LEFT COLUMN: CORPUS FLASHCARDS & ACTIVE RECALL (5 cols) -->
+<div class="lg:col-span-5 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation uppercase">Tome 02</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Corpus Flashcards &amp; Active Recall</h3>
+</div>
+<!-- Spaced Repetition SuperMemo SM-2 Tag -->
+<span class="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-code-citation text-code-citation flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+<span>SM-2 Engine • 12 Cards</span>
+</span>
+</div>
+<!-- Interactive 3D Flip Flashcard -->
+<div class="relative w-full h-[470px] perspective-1000">
+<div class="relative w-full h-full transform-style-3d transition-transform duration-500 rounded-3xl cursor-pointer" id="flashcard-element">
+<!-- FLASHCARD FRONT (Question) -->
+<div class="absolute inset-0 backface-hidden rounded-3xl bg-surface-container-lowest p-6 md:p-8 flex flex-col justify-between shadow-[0_12px_36px_-6px_rgba(0,97,148,0.08),0_1px_3px_rgba(25,28,30,0.04)]">
+<div>
+<div class="flex items-center justify-between text-on-surface-variant mb-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md">
+<span class="material-symbols-outlined text-primary text-[18px]">psychology</span>
+<span class="uppercase font-semibold tracking-wider text-primary">Theoretical Probe</span>
+<span>•</span>
+<span>Computational Bounds</span>
+</div>
+<button class="p-1.5 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant" id="bookmark-btn" title="Mark for Later Review" type="button">
+<span class="material-symbols-outlined text-[20px]">bookmark_border</span>
+</button>
+</div>
+<div class="font-code-citation text-code-citation text-primary mb-3">ID: FC-ATTN-01 • Card 1 of 12</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface font-semibold leading-relaxed">
+                What fundamental computational limitation prevents Vaswani et al. (2017) attention from scaling beyond 512–1024 token sequences natively without sparse approximations?
+              </h4>
+<!-- Clue pill -->
+<div class="mt-4 p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">lightbulb</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+<strong class="text-on-surface">Recall Clue:</strong> Focus on the matrix dimensionality allocation inside the softmax function and memory complexity $O(n^2)$.
+                </p>
+</div>
+</div>
+<!-- Card Flip Trigger Button -->
+<div class="pt-4 flex flex-col items-center gap-3">
+<button class="w-full py-3 rounded-full bg-secondary-fixed hover:bg-secondary-container text-on-secondary-fixed hover:text-on-secondary-container font-label-lg text-label-lg transition-all flex items-center justify-center gap-2 shadow-sm" id="flip-btn-front" type="button">
+<span class="material-symbols-outlined text-[18px]">flip</span>
+<span>Reveal Grounded Answer</span>
+</button>
+<span class="font-label-md text-label-md text-on-surface-variant">Click card or button to rotate 180°</span>
+</div>
+</div>
+<!-- FLASHCARD BACK (Answer with citation grounding) -->
+<div class="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-surface-container-low p-6 md:p-8 flex flex-col justify-between shadow-[0_12px_36px_-6px_rgba(0,97,148,0.08),0_1px_3px_rgba(25,28,30,0.04)]">
+<div>
+<div class="flex items-center justify-between text-on-surface-variant mb-4">
+<div class="flex items-center gap-1.5 font-label-md text-label-md">
+<span class="material-symbols-outlined text-secondary text-[18px]">verified</span>
+<span class="uppercase font-semibold tracking-wider text-secondary">Verified Grounded Answer</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest font-code-citation text-code-citation">cite p.4 §3.2.1</span>
+</div>
+<div class="font-body-lg text-body-lg text-on-surface font-medium leading-relaxed mb-3">
+                Quadratic Memory &amp; Compute Footprint:
+              </div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed mb-4">
+                The computation of the attention weight matrix requires calculating <code class="font-code-inline text-code-inline px-1 py-0.5 rounded bg-surface-container-highest text-primary">Softmax(QK^T / \sqrt{d_k})</code>. This generates an <strong class="text-on-surface">n × n</strong> inner-product matrix where memory allocation scales as <strong class="text-secondary font-code-inline text-code-inline">O(n²)</strong>.
+              </p>
+<div class="p-3.5 rounded-2xl bg-surface-container-lowest shadow-sm flex flex-col gap-1">
+<div class="font-label-md text-label-md text-on-surface-variant uppercase font-semibold">Corpus Excerpt (Vaswani et al. 2017):</div>
+<div class="font-body-sm text-body-sm italic text-on-surface">
+                  "A self-attention layer connects all positions with a constant number of sequentially executed operations... whereas computational complexity per layer is O(n² · d)."
+                </div>
+</div>
+</div>
+<div class="pt-4 flex flex-col items-center gap-3">
+<div class="grid grid-cols-3 w-full gap-2">
+<button class="py-2 rounded-xl bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-90 transition-opacity" type="button">Again (&lt;1m)</button>
+<button class="py-2 rounded-xl bg-surface-container-high text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors" type="button">Good (1d)</button>
+<button class="py-2 rounded-xl bg-secondary-fixed text-on-secondary-fixed font-label-md text-label-md hover:bg-secondary-container transition-colors" type="button">Easy (4d)</button>
+</div>
+<button class="text-primary font-label-md text-label-md hover:underline flex items-center gap-1" id="flip-btn-back" type="button">
+<span class="material-symbols-outlined text-[16px]">rotate_left</span> Return to question
+              </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Flashcard Pagination Navigation -->
+<div class="flex items-center justify-between px-2 pt-1 font-label-md text-label-md">
+<button class="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant transition-colors" id="prev-card-btn" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span> Previous
+        </button>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-highest"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-highest"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-highest"></span>
+<span class="w-2 h-2 rounded-full bg-surface-container-highest"></span>
+<span class="text-on-surface-variant ml-1 font-code-citation text-code-citation">1/12</span>
+</div>
+<button class="flex items-center gap-1 px-4 py-1.5 rounded-full bg-primary hover:bg-primary-container text-on-primary shadow-sm transition-all" id="next-card-btn" type="button">
+          Next Card <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+<!-- Reference Companion Image Tile -->
+<div class="mt-2 rounded-3xl bg-surface-container-lowest p-4 shadow-sm flex items-center gap-4">
+<div class="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 bg-surface-container">
+<img alt="Research reference flashcard preview" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuZyRPUNGJmwX5CU1hfdq-kK6Fn2Vm8xed2QkA4zPBQmt6iBQfLhsOWnAczwH3AfJ0_4L7EGNQ8B-Hn1Sowf2Of3_iZjEaoam3TR8ijJOAJHLoV6JiEMnNX_0qTNCS9jINFUeU3vKgcd5l3i_70s4omG-Le0lFyT3DGyFDht9meW_nGb8f6V60D1SjL40LNzI6DgCP3anKNaV-M5mHvbg3qAivBYKYhjtk3V7WNA8uZyd4Q2A0YA9Y3tWPeKG2-zWRKg"/>
+</div>
+<div class="flex-1 min-w-0">
+<span class="px-2 py-0.5 rounded-md bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation text-[10px]">Reference Template</span>
+<h5 class="font-headline-sm text-headline-sm text-on-surface truncate mt-1">Multi-Document Study Synthesis</h5>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Linked to Attention Is All You Need &amp; BERT Corpus</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant">auto_stories</span>
+</div>
+</div>
+<!-- RIGHT COLUMN: FORMULA DERIVATION & CONCEPT GRAPH (7 cols) -->
+<div class="lg:col-span-7 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation uppercase">Tome 03</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Formula Derivation &amp; Conceptual Topology</h3>
+</div>
+<button class="text-primary font-label-md text-label-md hover:underline flex items-center gap-1" type="button">
+<span class="material-symbols-outlined text-[16px]">open_in_new</span> Expand LaTeX Proof
+        </button>
+</div>
+<!-- Theorem Digest Container (Accordion Steps) -->
+<div class="rounded-3xl bg-surface-container-lowest p-6 shadow-[0_8px_32px_-6px_rgba(0,97,148,0.07),0_1px_3px_rgba(25,28,30,0.03)] flex flex-col gap-4">
+<div class="flex items-center justify-between pb-2">
+<div>
+<span class="font-label-md text-label-md text-secondary font-semibold uppercase tracking-wider">Theorem Digest</span>
+<h4 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Scaled Dot-Product Attention: Variance Normalization Proof</h4>
+</div>
+<span class="font-code-citation text-code-citation px-2.5 py-1 rounded-full bg-surface-container-low text-primary">Eq. (1) Vaswani</span>
+</div>
+<!-- Step 1 Accordion -->
+<div class="rounded-2xl bg-surface-container-low p-4 transition-all">
+<div class="step-toggle flex items-center justify-between cursor-pointer" data-target="step-1-body">
+<div class="flex items-center gap-3">
+<span class="w-7 h-7 rounded-full bg-primary text-on-primary font-code-citation text-code-citation flex items-center justify-center font-bold">1</span>
+<div>
+<span class="font-label-lg text-label-lg text-on-surface">Step 1: Inner Product Variance Expansion</span>
+<div class="font-code-citation text-code-citation text-on-surface-variant">Assume $q_i, k_i \sim \mathcal{N}(0, 1)$ are independent random variables.</div>
+</div>
+</div>
+<span class="step-icon material-symbols-outlined text-primary text-[22px] transition-transform">expand_more</span>
+</div>
+<div class="step-content expanded pt-3" id="step-1-body">
+<div class="p-3 rounded-xl bg-surface-container-lowest font-code-citation text-code-citation text-on-surface overflow-x-auto">
+              $\text{Var}(q \cdot k) = \sum_{i=1}^{d_k} \text{Var}(q_i k_i) = \sum_{i=1}^{d_k} \mathbb{E}[q_i^2]\mathbb{E}[k_i^2] = d_k \times (1 \times 1) = d_k$
+            </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+              For large values of $d_k$, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients.
+            </p>
+</div>
+</div>
+<!-- Step 2 Accordion -->
+<div class="rounded-2xl bg-surface-container-low p-4 transition-all">
+<div class="step-toggle flex items-center justify-between cursor-pointer" data-target="step-2-body">
+<div class="flex items-center gap-3">
+<span class="w-7 h-7 rounded-full bg-primary text-on-primary font-code-citation text-code-citation flex items-center justify-center font-bold">2</span>
+<div>
+<span class="font-label-lg text-label-lg text-on-surface">Step 2: Division by $\sqrt{d_k}$ Scaling Factor</span>
+<div class="font-code-citation text-code-citation text-on-surface-variant">Rescaling scalar coefficient application to normalize variance to 1.</div>
+</div>
+</div>
+<span class="step-icon material-symbols-outlined text-primary text-[22px] transition-transform">expand_more</span>
+</div>
+<div class="step-content expanded pt-3" id="step-2-body">
+<div class="p-3 rounded-xl bg-surface-container-lowest font-code-citation text-code-citation text-on-surface overflow-x-auto">
+              $\text{Var}\left(\frac{q \cdot k}{\sqrt{d_k}}\right) = \frac{1}{(\sqrt{d_k})^2} \text{Var}(q \cdot k) = \frac{1}{d_k} \cdot d_k = 1.0$
+            </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+              By counteracting the variance expansion through $\frac{1}{\sqrt{d_k}}$, the pre-softmax activations maintain unit variance independent of hidden embedding width.
+            </p>
+</div>
+</div>
+<!-- Step 3 Accordion -->
+<div class="rounded-2xl bg-surface-container-low p-4 transition-all">
+<div class="step-toggle flex items-center justify-between cursor-pointer" data-target="step-3-body">
+<div class="flex items-center gap-3">
+<span class="w-7 h-7 rounded-full bg-primary text-on-primary font-code-citation text-code-citation flex items-center justify-center font-bold">3</span>
+<div>
+<span class="font-label-lg text-label-lg text-on-surface">Step 3: Gradient Vanishing Mitigation in Softmax</span>
+<div class="font-code-citation text-code-citation text-on-surface-variant">Preventing saturation in the exponential multinomial distribution.</div>
+</div>
+</div>
+<span class="step-icon material-symbols-outlined text-primary text-[22px] transition-transform">expand_more</span>
+</div>
+<div class="step-content pt-3" id="step-3-body">
+<div class="p-3 rounded-xl bg-surface-container-lowest font-code-citation text-code-citation text-on-surface overflow-x-auto">
+              $\frac{\partial \text{Softmax}(z)_i}{\partial z_j} = \text{Softmax}(z)_i (\delta_{ij} - \text{Softmax}(z)_j) \approx 0 \quad \text{when } |z_i| \gg 0$
+            </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+              Ensures backpropagated gradients $\frac{\partial \mathcal{L}}{\partial Q}$ and $\frac{\partial \mathcal{L}}{\partial K}$ do not underflow during FP16 mixed-precision training.
+            </p>
+</div>
+</div>
+</div>
+<!-- Interactive Mini Concept Graph with Dynamic SVG Connectors -->
+<div class="rounded-3xl bg-surface-container-lowest p-6 shadow-[0_8px_32px_-6px_rgba(0,97,148,0.07),0_1px_3px_rgba(25,28,30,0.03)] flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">hub</span>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Active Cross-Corpus Concept Topology</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant">Interactive 4 Nodes • 4 Edges</span>
+</div>
+<div class="relative w-full h-48 rounded-2xl bg-surface-container-low overflow-hidden">
+<!-- Background SVG Vector Connections -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient id="grad-blue" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#006194" stop-opacity="0.6"></stop>
+<stop offset="100%" stop-color="#39b8fd" stop-opacity="0.8"></stop>
+</lineargradient>
+</defs>
+<!-- Curved connecting paths between node centers -->
+<!-- Node 1 (18%, 32%) to Node 2 (48%, 28%) -->
+<path d="M 120 55 C 180 50, 240 45, 310 50" fill="none" stroke="url(#grad-blue)" stroke-dasharray="4,4" stroke-width="2"></path>
+<!-- Node 1 (18%, 32%) to Node 4 (25%, 75%) -->
+<path d="M 120 55 C 130 90, 140 120, 160 140" fill="none" stroke="url(#grad-blue)" stroke-width="2"></path>
+<!-- Node 2 (48%, 28%) to Node 3 (80%, 65%) -->
+<path d="M 370 50 C 450 60, 500 90, 560 120" fill="none" stroke="url(#grad-blue)" stroke-width="2"></path>
+<!-- Node 4 (25%, 75%) to Node 3 (80%, 65%) -->
+<path d="M 210 140 C 320 160, 440 150, 560 120" fill="none" stroke="url(#grad-blue)" stroke-dasharray="2,2" stroke-width="2"></path>
+</svg>
+<!-- Node 1 -->
+<div class="absolute left-6 top-6 p-2.5 rounded-2xl bg-surface-container-lowest shadow-md hover:scale-105 transition-all cursor-pointer group">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span>Self-Attention</span>
+</div>
+<div class="font-code-citation text-code-citation text-[10px] text-on-surface-variant">Vaswani 2017</div>
+</div>
+<!-- Node 2 -->
+<div class="absolute left-1/3 top-5 p-2.5 rounded-2xl bg-surface-container-lowest shadow-md hover:scale-105 transition-all cursor-pointer group">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-on-surface font-semibold">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span>Bi-Dir MLM</span>
+</div>
+<div class="font-code-citation text-code-citation text-[10px] text-on-surface-variant">Devlin 2018 (BERT)</div>
+</div>
+<!-- Node 3 -->
+<div class="absolute right-6 top-20 p-2.5 rounded-2xl bg-surface-container-lowest shadow-md hover:scale-105 transition-all cursor-pointer group">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-tertiary font-semibold">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span>DPR Dense Index</span>
+</div>
+<div class="font-code-citation text-code-citation text-[10px] text-on-surface-variant">Karpukhin / Lewis</div>
+</div>
+<!-- Node 4 -->
+<div class="absolute left-28 bottom-4 p-2.5 rounded-2xl bg-surface-container-lowest shadow-md hover:scale-105 transition-all cursor-pointer group">
+<div class="flex items-center gap-1.5 font-label-md text-label-md text-error font-semibold">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span>Quadratic Barrier $O(n^2)$</span>
+</div>
+<div class="font-code-citation text-code-citation text-[10px] text-on-surface-variant">Scaling Bottleneck</div>
+</div>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant font-label-md text-label-md px-1">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span> Theoretical Root</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error"></span> Computational Bottleneck</span>
+</div>
+<button class="text-primary hover:underline font-label-md text-label-md" type="button">Open Full 3D Force Graph</button>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION C: ACADEMIC CAPABILITY MATRIX & PIPELINE (3-COLUMN STATUS CARDS) -->
+<section class="mb-6">
+<div class="flex flex-col gap-1 mb-4">
+<div class="flex items-center gap-2">
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation uppercase">System Roadway</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Academic Capability Matrix &amp; Pipeline</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Continuous integration of analytical tools for principal investigators and doctoral researchers.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<!-- Card 1: Available Today -->
+<div class="rounded-3xl bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.03)] hover:-translate-y-1 transition-all flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Available Today</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-code-citation text-code-citation">v3.4 Production</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
+            Engineered, mathematically validated, and grounded against primary corpus indexes.
+          </p>
+<div class="space-y-3">
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Structured Extraction Matrix</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Full PDF schema extraction with exact equation &amp; table coordinate anchors.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Cross-Corpus Study Guide</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">SuperMemo SM-2 active recall decks with automated distractor generation.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-primary text-[18px] mt-0.5">check_circle</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Pairwise Claim Differencing</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">NLI conflict detection highlighting contradiction vectors across authors.</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between">
+<span class="font-code-citation text-code-citation text-on-surface-variant">Status: Active &amp; Verified</span>
+<span class="material-symbols-outlined text-primary text-[20px]">arrow_forward</span>
+</div>
+</div>
+<!-- Card 2: Planned Next -->
+<div class="rounded-3xl bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.03)] hover:-translate-y-1 transition-all flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed">
+<span class="material-symbols-outlined text-[18px]">build_circle</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Planned Next</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-citation text-code-citation">Active Testing</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
+            Currently running in Stanford &amp; Oxford bio-computational testbeds.
+          </p>
+<div class="space-y-3">
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">timer</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Adaptive Doctoral Quizzes</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Generative adversarial questioning challenging student methodology interpretations.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">timer</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">LaTeX Proof Step Tracer</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Step-by-step symbolic derivation engine highlighting intermediate lemma leaps.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-secondary text-[18px] mt-0.5">timer</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Collaborative Socratic Annotator</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Multi-PI peer review threads with inline citation grounding validator.</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between">
+<span class="font-code-citation text-code-citation text-on-surface-variant">Beta Release: Q3 2025</span>
+<button class="font-label-md text-label-md text-primary font-semibold hover:underline" type="button">Request Early Access</button>
+</div>
+</div>
+<!-- Card 3: Research Lab Future Staging -->
+<div class="rounded-3xl bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(0,97,148,0.06),0_1px_3px_rgba(25,28,30,0.03)] hover:-translate-y-1 transition-all flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">science</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Future Staging</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant font-code-citation text-code-citation">Lab Experimental</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
+            Exploratory cognitive intelligence models for long-context synthesis.
+          </p>
+<div class="space-y-3">
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-outline text-[18px] mt-0.5">headphones</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Automated Scholarly Audio Briefs</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Natural voice dual-host academic debate synthesized directly from cross-paper disagreements.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-outline text-[18px] mt-0.5">slideshow</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">Multimodal Slide Deck Compiler</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Converts comparative literature tables into conference-ready LaTeX Beamer slide decks.</span>
+</div>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-start gap-2.5">
+<span class="material-symbols-outlined text-outline text-[18px] mt-0.5">terminal</span>
+<div>
+<strong class="font-label-lg text-label-lg text-on-surface block">PyTorch Replication Codebook</strong>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Parses equations into documented Jupyter notebook modules with synthetic dummy tensors.</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 flex items-center justify-between">
+<span class="font-code-citation text-code-citation text-on-surface-variant">Horizon: 2026 Sandbox</span>
+<span class="material-symbols-outlined text-outline-variant text-[20px]">biotech</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Interactive JavaScript -->
+<script>
+    // Flashcard 3D flip trigger logic
+    const cardEl = document.getElementById('flashcard-element');
+    const flipFront = document.getElementById('flip-btn-front');
+    const flipBack = document.getElementById('flip-btn-back');
+    const bookmarkBtn = document.getElementById('bookmark-btn');
+
+    let isFlipped = false;
+
+    function toggleFlip(e) {
+      if (e) e.stopPropagation();
+      isFlipped = !isFlipped;
+      if (isFlipped) {
+        cardEl.classList.add('rotate-y-180');
+      } else {
+        cardEl.classList.remove('rotate-y-180');
+      }
+    }
+
+    if (flipFront) flipFront.addEventListener('click', toggleFlip);
+    if (flipBack) flipBack.addEventListener('click', toggleFlip);
+    if (cardEl) {
+      cardEl.addEventListener('click', (e) => {
+        // Prevent flip if clicking bookmark
+        if (e.target.closest('#bookmark-btn') || e.target.closest('button')) return;
+        toggleFlip();
+      });
+    }
+
+    if (bookmarkBtn) {
+      bookmarkBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const icon = bookmarkBtn.querySelector('.material-symbols-outlined');
+        if (icon.textContent === 'bookmark_border') {
+          icon.textContent = 'bookmark';
+          bookmarkBtn.classList.add('text-primary');
+        } else {
+          icon.textContent = 'bookmark_border';
+          bookmarkBtn.classList.remove('text-primary');
+        }
+      });
+    }
+
+    // Formula Step Expand/Collapse
+    const toggles = document.querySelectorAll('.step-toggle');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const targetId = toggle.getAttribute('data-target');
+        const content = document.getElementById(targetId);
+        const icon = toggle.querySelector('.step-icon');
+        
+        if (content.classList.contains('expanded')) {
+          content.classList.remove('expanded');
+          icon.style.transform = 'rotate(0deg)';
+        } else {
+          content.classList.add('expanded');
+          icon.style.transform = 'rotate(180deg)';
+        }
+      });
+    });
+
+    // Custom Schema Dimension button prompt
+    const addDimBtn = document.getElementById('add-dimension-btn');
+    if (addDimBtn) {
+      addDimBtn.addEventListener('click', () => {
+        const dimensionName = prompt('Enter custom extraction attribute (e.g., "Quantization Precision", "Vocabulary Size", "Benchmark Latency"):', 'Quantization Precision');
+        if (dimensionName) {
+          alert(`Dynamic Extractor scheduled for attribute: "${dimensionName}". Re-indexing 3 corpus papers...`);
+        }
+      });
+    }
+
+    // Flashcard pagination simulation
+    const prevCard = document.getElementById('prev-card-btn');
+    const nextCard = document.getElementById('next-card-btn');
+    if (nextCard) {
+      nextCard.addEventListener('click', () => {
+        if (isFlipped) toggleFlip();
+        cardEl.style.opacity = '0.5';
+        setTimeout(() => {
+          cardEl.style.opacity = '1';
+        }, 150);
+      });
+    }
+    if (prevCard) {
+      prevCard.addEventListener('click', () => {
+        if (isFlipped) toggleFlip();
+        cardEl.style.opacity = '0.5';
+        setTimeout(() => {
+          cardEl.style.opacity = '1';
+        }, 150);
+      });
+    }
+  </script>
+</div></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>

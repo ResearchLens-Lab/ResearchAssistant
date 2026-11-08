@@ -67,6 +67,9 @@ export function usePaperDetails(paperId) {
     queryKey: ["paperDocuments", paperId],
     queryFn: () => papersService.getDocuments(paperId),
     enabled: !!paperId,
+    refetchInterval: (query) => query.state.data?.some((document) =>
+      document.processing_status === "processing" || document.processing_status === "uploaded"
+    ) ? 3000 : false,
   });
 
   const summarizeMutation = useMutation({
@@ -77,6 +80,7 @@ export function usePaperDetails(paperId) {
     mutationFn: (file) => documentsService.upload(file, paperId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["paperDocuments", paperId] });
+      queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
       queryClient.invalidateQueries({ queryKey: ["paper", paperId] });
     },
   });
@@ -88,6 +92,9 @@ export function usePaperDetails(paperId) {
     error: paperQuery.error,
     documents: documentsQuery.data || [],
     isLoadingDocuments: documentsQuery.isLoading,
+    isDocumentsError: documentsQuery.isError,
+    documentsError: documentsQuery.error,
+    refetchDocuments: documentsQuery.refetch,
     summarize: summarizeMutation.mutateAsync,
     summaryData: summarizeMutation.data,
     isSummarizing: summarizeMutation.isPending,

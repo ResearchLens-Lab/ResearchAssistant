@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><title>ResearchLens — Cognitive Intelligence Workspace</title><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = {"darkMode":"class","theme":{"extend":{"colors":{"outline-variant":"#bfc7d2","outline":"#707881","primary-container":"#007bb9","surface-container-high":"#e6e8ea","inverse-primary":"#93ccff","on-secondary-fixed-variant":"#004c6e","on-error":"#ffffff","surface":"#f7f9fb","on-surface":"#191c1e","on-background":"#191c1e","tertiary":"#006387","on-tertiary-container":"#fcfcff","on-tertiary":"#ffffff","surface-container-highest":"#e0e3e5","surface-container":"#eceef0","secondary-fixed":"#c9e6ff","on-secondary":"#ffffff","surface-dim":"#d8dadc","primary-fixed-dim":"#93ccff","error":"#ba1a1a","secondary-fixed-dim":"#89ceff","tertiary-fixed":"#c4e7ff","secondary-container":"#39b8fd","surface-container-low":"#f2f4f6","surface-variant":"#e0e3e5","primary":"#006194","surface-container-lowest":"#ffffff","on-primary-fixed-variant":"#004b73","surface-tint":"#006398","primary-fixed":"#cce5ff","background":"#f7f9fb","on-surface-variant":"#3f4850","inverse-surface":"#2d3133","on-tertiary-fixed-variant":"#004c69","secondary":"#006591","error-container":"#ffdad6","on-error-container":"#93000a","tertiary-fixed-dim":"#7bd0ff","on-secondary-container":"#004666","on-tertiary-fixed":"#001e2c","inverse-on-surface":"#eff1f3","on-primary":"#ffffff","surface-bright":"#f7f9fb","on-primary-fixed":"#001d31","on-primary-container":"#fdfcff","tertiary-container":"#007da9","on-secondary-fixed":"#001e2f"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"margin-mobile":"1rem","gutter":"1.5rem","space-sm":"0.5rem","gutter-mobile":"0.75rem","space-xl":"2.5rem","margin":"2rem","space-xs":"0.25rem","space-lg":"1.5rem","space-md":"1rem"},"fontFamily":{"headline-xl":["Plus Jakarta Sans"],"display-lg-mobile":["Plus Jakarta Sans"],"code-inline":["JetBrains Mono"],"body-sm":["Inter"],"body-lg":["Inter"],"label-lg":["Inter"],"headline-md":["Plus Jakarta Sans"],"headline-xl-mobile":["Plus Jakarta Sans"],"body-md":["Inter"],"headline-sm":["Plus Jakarta Sans"],"code-citation":["JetBrains Mono"],"display-lg":["Plus Jakarta Sans"],"label-md":["Inter"]},"fontSize":{"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.025em","fontWeight":"600"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"code-inline":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"body-sm":["12px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"26px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-lg":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"headline-sm":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"code-citation":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"500"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"label-md":["11px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}]}}}}</script></head><body class="min-h-full bg-surface text-on-surface font-body-md text-body-md antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><div class="fixed top-0 inset-x-0 z-50 pointer-events-none"><header class="pointer-events-auto mx-auto mt-4 px-margin max-w-[1720px]"><div class="h-16 px-space-md rounded-full bg-surface-container-lowest/85 backdrop-blur-2xl shadow-[0_16px_36px_-6px_rgba(0,97,148,0.1),0_2px_10px_rgba(25,28,30,0.04)] flex items-center justify-between gap-space-md ring-1 ring-white/60"><div class="flex items-center gap-space-md min-w-0 flex-shrink-0"><a class="flex items-center gap-space-sm group focus:outline-none" data-path="research-desk" href="#"><div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-primary to-secondary-container flex items-center justify-center text-on-primary shadow-[0_4px_12px_rgba(0,97,148,0.25)] group-hover:scale-105 transition-transform"><span class="material-symbols-outlined text-[20px]">hub</span></div><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight hidden sm:inline-block">Research<span class="text-primary">Lens</span></span></a><div class="h-5 w-[1px] bg-surface-container-high hidden md:block"></div><div class="hidden md:flex items-center gap-space-xs px-space-sm py-1.5 rounded-full bg-surface-container-low/80 hover:bg-surface-container transition-colors cursor-pointer"><span class="material-symbols-outlined text-primary text-[18px]">folder_special</span><span class="font-label-lg text-label-lg text-on-surface truncate max-w-[190px] xl:max-w-[260px]">Transformer Scaling &amp; Retrieval Dynamics</span><span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">3 Papers</span><span class="material-symbols-outlined text-on-surface-variant text-[16px]">expand_more</span></div></div><nav class="hidden lg:flex items-center p-1 rounded-full bg-surface-container-low/90 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]" data-active-classes="bg-surface-container-lowest text-primary shadow-[0_4px_14px_-2px_rgba(0,97,148,0.12)] font-semibold"><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="library" href="#">Library</a><a class="px-space-md py-1.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-all" data-path="research-desk" href="#">Research Desk</a><a aria-current="page" class="px-space-md py-1.5 rounded-full transition-all bg-surface-container-lowest text-primary shadow-[0_4px_14px_-2px_rgba(0,97,148,0.12)] font-semibold" data-path="compare-and-reports" href="#">Compare &amp; Reports</a></nav><div class="flex items-center gap-space-sm flex-shrink-0"><button class="hidden sm:flex items-center gap-space-xs px-space-md py-2 rounded-full bg-surface-container-low/90 text-on-surface-variant hover:text-on-surface hover:bg-surface-container shadow-[0_2px_6px_rgba(0,0,0,0.02)] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">search</span><span class="font-body-sm text-body-sm hidden md:inline">Search corpus</span><kbd class="font-code-citation text-code-citation px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-medium">⌘K</kbd></button><button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_8px_20px_-3px_rgba(0,97,148,0.28)] hover:shadow-none hover:scale-[0.98] transition-all" type="button"><span class="material-symbols-outlined text-[18px]">add_circle</span><span class="hidden sm:inline">Add Sources</span></button><div class="hidden xl:flex items-center -space-x-2 pl-1"><div class="w-7 h-7 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">DR</div><div class="w-7 h-7 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center font-label-md text-label-md ring-2 ring-surface-container-lowest font-medium">AL</div><div class="h-7 px-1.5 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center font-code-citation text-code-citation ring-2 ring-surface-container-lowest">+2</div></div><div class="h-5 w-[1px] bg-surface-container-high hidden sm:block"></div><button class="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-full hover:bg-surface-container transition-colors" type="button"><div class="relative"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-secondary-container ring-2 ring-surface-container-lowest"></span></div><div class="hidden 2xl:flex flex-col text-left"><span class="font-label-lg text-label-lg text-on-surface leading-none">Dr. Evans</span><span class="font-label-md text-label-md text-on-surface-variant leading-tight">Stanford BioMed</span></div></button></div></div><div class="mt-2 px-space-md py-2 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-md shadow-[0_4px_16px_rgba(0,97,148,0.04)] flex items-center justify-between gap-space-sm text-body-sm font-body-sm ring-1 ring-white/50"><div class="flex items-center gap-space-sm overflow-x-auto text-on-surface-variant"><span class="flex items-center gap-1 font-label-md text-label-md uppercase tracking-wider text-primary"><span class="material-symbols-outlined text-[16px]">dataset</span> Corpus:</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Vaswani_2017.pdf</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Kaplan_Scaling_2020.pdf</span><span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">Chinchilla_2022.pdf</span></div><div class="hidden md:flex items-center gap-space-md flex-shrink-0 font-label-md text-label-md text-on-surface-variant"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span><span>ChromaDB &amp; Neo4j Synced</span></div><div class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-[15px]">verified</span><span>Zero-Hallucination Grounding</span></div></div></div></header></div><main class="w-full max-w-[1720px] mx-auto pt-16 pb-12 px-margin bg-surface"><div class="flex flex-col w-full">
+<!-- Interactive Top Action & Meta Ribbon -->
+<div class="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md mb-space-lg">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs flex-wrap font-code-citation text-code-citation text-on-surface-variant">
+<span class="hover:text-primary transition-colors cursor-pointer">Project Alpha</span>
+<span class="material-symbols-outlined text-[14px] text-outline-variant">chevron_right</span>
+<span class="text-on-surface">Transformer Scaling &amp; Retrieval Dynamics</span>
+<span class="material-symbols-outlined text-[14px] text-outline-variant">chevron_right</span>
+<span class="text-primary font-semibold">Research Map &amp; Question Board</span>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap mt-1">
+<div class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed/50 text-on-secondary-fixed-variant font-label-md text-label-md shadow-sm">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-container opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+<span>Neo4j Topological Graph Synced</span>
+</div>
+<div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-code-citation text-code-citation">
+<span class="material-symbols-outlined text-[14px] text-primary">layers</span>
+<span>Batch 5A / 5B</span>
+</div>
+<div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-md text-label-md">
+<span class="material-symbols-outlined text-[14px] text-tertiary">verified_user</span>
+<span>Strict Grounding: 93.3%</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap">
+<button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-surface-container-lowest text-primary shadow-[0_4px_16px_rgba(0,97,148,0.08)] hover:shadow-md hover:bg-surface-container-low transition-all font-label-lg text-label-lg group" id="reanalyze-btn">
+<span class="material-symbols-outlined text-[18px] group-hover:rotate-180 transition-transform duration-500">sync</span>
+<span>Re-analyze Subquestions</span>
+</button>
+<div class="relative group">
+<button class="flex items-center gap-1.5 px-space-md py-2 rounded-full bg-surface-container-lowest text-on-surface shadow-[0_4px_16px_rgba(0,97,148,0.08)] hover:bg-surface-container-low transition-all font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[18px] text-primary">download</span>
+<span>Export Graph</span>
+<span class="material-symbols-outlined text-[16px] text-outline">expand_more</span>
+</button>
+<div class="hidden group-hover:flex flex-col absolute right-0 mt-2 w-44 rounded-2xl bg-surface-container-lowest/95 backdrop-blur-xl shadow-xl p-1.5 z-40">
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-surface-container font-label-md text-label-md text-on-surface text-left">
+<span class="material-symbols-outlined text-[16px] text-primary">shape_line</span> Vector (.SVG)
+          </button>
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-surface-container font-label-md text-label-md text-on-surface text-left">
+<span class="material-symbols-outlined text-[16px] text-primary">data_object</span> Graph Topology (.JSON)
+          </button>
+</div>
+</div>
+<button class="flex items-center gap-2 px-space-md py-2 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_8px_20px_-4px_rgba(0,97,148,0.32)] hover:shadow-lg hover:scale-[1.01] transition-all">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+<span>Synthesize into Brief</span>
+</button>
+</div>
+</div>
+<!-- Primary Asymmetric Workspace: 65% Main Canvas / 35% Inspector -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
+<!-- LEFT / CENTER COLUMN: Question Decomposition & Interactive Graph (approx 65%) -->
+<div class="xl:col-span-8 flex flex-col gap-space-lg">
+<!-- Anchor Inquiry Card -->
+<div class="relative overflow-hidden rounded-[28px] bg-surface-container-lowest p-space-lg shadow-[0_12px_32px_-4px_rgba(0,97,148,0.08)]">
+<div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-secondary-fixed/40 blur-3xl pointer-events-none"></div>
+<div class="flex items-center justify-between gap-space-sm mb-space-sm flex-wrap">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-code-citation text-code-citation uppercase font-bold tracking-wider">
+              Core Inquiry #01
+            </span>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-label-md text-label-md">
+              Synthesized from 3 Cross-Disciplinary ArXiv Preprints
+            </span>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<button class="p-1.5 rounded-full hover:bg-surface-container transition-colors text-primary" title="Bookmark Question">
+<span class="material-symbols-outlined text-[20px]">bookmark</span>
+</button>
+<button class="p-1.5 rounded-full hover:bg-surface-container transition-colors" title="Full View">
+<span class="material-symbols-outlined text-[20px]">open_in_full</span>
+</button>
+</div>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface leading-snug tracking-tight mb-space-md">
+          How do attention query-key scaling factors in Vaswani et al. mitigate gradient vanishing, and how does BERT adapt this for bidirectional representation?
+        </h2>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-space-sm pt-space-sm">
+<div class="p-3 rounded-2xl bg-surface-container-low/70 flex flex-col gap-0.5">
+<span class="font-label-md text-label-md text-on-surface-variant">Coverage Rate</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">82.4%</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">4/5 Nodes Grounded</span>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low/70 flex flex-col gap-0.5">
+<span class="font-label-md text-label-md text-on-surface-variant">Key Bottleneck</span>
+<span class="font-headline-sm text-headline-sm text-error font-bold">&gt;10k Ctx</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Critical Evidence Gap</span>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low/70 flex flex-col gap-0.5">
+<span class="font-label-md text-label-md text-on-surface-variant">Citations Active</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">14 Citations</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">3 Ingested Preprints</span>
+</div>
+<div class="p-3 rounded-2xl bg-surface-container-low/70 flex flex-col gap-0.5">
+<span class="font-label-md text-label-md text-on-surface-variant">Audit Confidence</span>
+<span class="font-headline-sm text-headline-sm text-tertiary font-bold">High (0.91)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Zero-Hallucination Gate</span>
+</div>
+</div>
+</div>
+<!-- Question Board & Decomposition List -->
+<div class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[22px]">account_tree</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Decomposed Subquestions &amp; Verification State</h3>
+</div>
+<span class="font-code-citation text-code-citation text-on-surface-variant">5 Critical Dimensions</span>
+</div>
+<!-- Subquestion 1: Fully Grounded -->
+<div class="rounded-2xl bg-surface-container-lowest p-space-md shadow-[0_4px_20px_rgba(0,97,148,0.04)] hover:shadow-[0_8px_24px_rgba(0,97,148,0.08)] transition-all cursor-pointer group" onclick="toggleDrawer('drawer-1')">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant flex items-center justify-center font-code-citation text-code-citation font-bold">
+                  01
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-code-citation text-code-citation">
+                  Math Foundations
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Fully Grounded (2 Sources)
+                </span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<div class="w-24 bg-surface-container rounded-full h-2 overflow-hidden hidden sm:block">
+<div class="bg-primary h-full rounded-full w-full"></div>
+</div>
+<span class="font-code-citation text-code-citation text-primary font-bold">100%</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-transform duration-300 transform" id="icon-drawer-1">expand_more</span>
+</div>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface">
+              Mathematical Scaling &amp; Dot-Product Saturation (1/√d_k factor)
+            </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Examines how scaling the dot products by the square root of projection dimension d_k counters extreme softmax gradient vanishing in multi-head spaces.
+            </p>
+<!-- Collapsible Drawer -->
+<div class="hidden flex-col gap-space-sm pt-space-sm mt-space-xs bg-surface-container-low/50 p-space-md rounded-xl" id="drawer-1">
+<div class="flex items-center justify-between text-label-md font-label-md text-on-surface-variant pb-1">
+<span class="uppercase tracking-wider font-semibold">Corpus Evidence Extracts</span>
+<span class="text-primary font-code-citation">2 Equations Verified</span>
+</div>
+<div class="p-3 rounded-lg bg-surface-container-lowest flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">Vaswani et al. (2017)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Page 4, Equation (1)</span>
+</div>
+<span class="font-label-md text-label-md text-primary flex items-center gap-0.5"><span class="material-symbols-outlined text-[14px]">check_circle</span> Verified Eq</span>
+</div>
+<div class="p-2.5 rounded bg-surface-container text-on-surface font-code-inline text-code-inline overflow-x-auto">
+                  Attention(Q, K, V) = softmax((Q K^T) / sqrt(d_k)) * V
+                </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant italic">
+                  "We suspect that for large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients."
+                </p>
+</div>
+<div class="p-3 rounded-lg bg-surface-container-lowest flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="px-2 py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">Devlin et al. (2018)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Section 3.1 &amp; Architecture</span>
+</div>
+<span class="font-label-md text-label-md text-primary flex items-center gap-0.5"><span class="material-symbols-outlined text-[14px]">check_circle</span> Verified Arch</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  BERT Base and Large strictly retain d_k = 64 across 12 and 16 heads respectively to maintain variance stability during pre-training cross-entropy passes.
+                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Subquestion 2: Fully Grounded -->
+<div class="rounded-2xl bg-surface-container-lowest p-space-md shadow-[0_4px_20px_rgba(0,97,148,0.04)] hover:shadow-[0_8px_24px_rgba(0,97,148,0.08)] transition-all cursor-pointer group" onclick="toggleDrawer('drawer-2')">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant flex items-center justify-center font-code-citation text-code-citation font-bold">
+                  02
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant font-code-citation text-code-citation">
+                  Attention Topology
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Fully Grounded (2 Sources)
+                </span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<div class="w-24 bg-surface-container rounded-full h-2 overflow-hidden hidden sm:block">
+<div class="bg-primary h-full rounded-full w-full"></div>
+</div>
+<span class="font-code-citation text-code-citation text-primary font-bold">100%</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-transform duration-300 transform" id="icon-drawer-2">expand_more</span>
+</div>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface">
+              Bidirectional Causal Masking Elimination vs Autoregressive Bounds
+            </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Contrasting Vaswani's lower-triangular causal attention matrix against Devlin's unconstrained bidirectional attention enabled by the Masked LM pre-training objective.
+            </p>
+<div class="hidden flex-col gap-space-sm pt-space-sm mt-space-xs bg-surface-container-low/50 p-space-md rounded-xl" id="drawer-2">
+<div class="p-3 rounded-lg bg-surface-container-lowest flex flex-col gap-1">
+<span class="font-code-citation text-code-citation text-primary">Devlin et al. §3.1 (p. 2):</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Unlike OpenAI GPT which uses a left-to-right Transformer where every token can only attend to previous tokens in the self-attention layers, BERT's masked tokens allow bidirectional conditioning across the entire sequence.
+                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Subquestion 3: Partially Supported -->
+<div class="rounded-2xl bg-surface-container-lowest p-space-md shadow-[0_4px_20px_rgba(0,97,148,0.04)] hover:shadow-[0_8px_24px_rgba(0,97,148,0.08)] transition-all cursor-pointer group" onclick="toggleDrawer('drawer-3')">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant flex items-center justify-center font-code-citation text-code-citation font-bold">
+                  03
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">
+                  Parametric Grounding
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-secondary-container/20 text-on-secondary-container font-label-md text-label-md flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Partially Supported (1 Source)
+                </span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<div class="w-24 bg-surface-container rounded-full h-2 overflow-hidden hidden sm:block">
+<div class="bg-secondary-container h-full rounded-full w-[60%]"></div>
+</div>
+<span class="font-code-citation text-code-citation text-secondary font-bold">60%</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-transform duration-300 transform" id="icon-drawer-3">expand_more</span>
+</div>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface">
+              External Parametric Memory Grounding vs Pre-trained Feedforward Vectors
+            </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Lewis et al. (RAG) replaces deep parameter hallucination with non-parametric dense index retrieval, though lacking empirical compute-latency curves.
+            </p>
+<div class="hidden flex-col gap-space-sm pt-space-sm mt-space-xs bg-surface-container-low/50 p-space-md rounded-xl" id="drawer-3">
+<div class="p-3 rounded-lg bg-surface-container-lowest">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Covered in Lewis et al. via DPR + BART generator. However, tradeoffs between index retrieval latency (MIPS) and deep multi-hop self-attention inference remain unquantified in the current corpus.
+                </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Subquestion 4: EVIDENCE GAP (Highlighted) -->
+<div class="rounded-2xl bg-gradient-to-r from-surface-container-lowest via-secondary-fixed/20 to-surface-container-lowest p-space-md shadow-[0_8px_24px_rgba(0,123,185,0.1)] transition-all cursor-pointer group" onclick="selectInspectorGap()">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="w-6 h-6 rounded-full bg-error-container text-on-error-container flex items-center justify-center font-code-citation text-code-citation font-bold">
+                  04
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-code-citation text-code-citation font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">warning</span> Evidence Gap Flagged (0 Sources)
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-md text-label-md">
+                  Active Inspector Focus
+                </span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<div class="w-24 bg-surface-container rounded-full h-2 overflow-hidden hidden sm:block">
+<div class="bg-error h-full rounded-full w-0"></div>
+</div>
+<span class="font-code-citation text-code-citation text-error font-bold">0% Grounded</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</div>
+</div>
+<div>
+<p class="font-headline-sm text-headline-sm text-on-surface">
+                Maximum Context Length Scaling &gt; 10,000 Tokens (Quadratic O(N²) Bottleneck)
+              </p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">
+                Neither Vaswani (512 tokens), Devlin (512 tokens), nor Lewis et al. address sequence scaling beyond 1,024 tokens. The O(N²) memory consumption prevents long-document reasoning.
+              </p>
+</div>
+<div class="flex items-center justify-between gap-space-sm pt-space-xs flex-wrap">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error animate-ping"></span>
+<span class="font-label-md text-label-md text-error font-medium">Unresolved in Current Corpus (Vaswani, Devlin, Lewis)</span>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md transition-all shadow-sm">
+<span class="material-symbols-outlined text-[16px]">stream</span>
+<span>+ Ingest Longformer / RoPE Literature</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Subquestion 5: Conflicting / Varied Benchmarks -->
+<div class="rounded-2xl bg-surface-container-lowest p-space-md shadow-[0_4px_20px_rgba(0,97,148,0.04)] hover:shadow-[0_8px_24px_rgba(0,97,148,0.08)] transition-all cursor-pointer group" onclick="toggleDrawer('drawer-5')">
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant flex items-center justify-center font-code-citation text-code-citation font-bold">
+                  05
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-code-citation text-code-citation">
+                  Compute Efficiency
+                </span>
+<span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-tertiary">difference</span> Conflicting / Varied Benchmarks (2 Sources)
+                </span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<div class="w-24 bg-surface-container rounded-full h-2 overflow-hidden hidden sm:block">
+<div class="bg-tertiary h-full rounded-full w-[75%]"></div>
+</div>
+<span class="font-code-citation text-code-citation text-tertiary font-bold">75%</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-transform duration-300 transform" id="icon-drawer-5">expand_more</span>
+</div>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface">
+              Computational Inference Latency &amp; FLOP Memory Footprint
+            </p>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Vaswani notes linear-time encoder-decoder generation during self-attention prefill, whereas Devlin's non-autoregressive output layer exhibits batch-size latency saturation on GPU memory ceilings.
+            </p>
+<div class="hidden flex-col gap-space-sm pt-space-sm mt-space-xs bg-surface-container-low/50 p-space-md rounded-xl" id="drawer-5">
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+<div class="p-3 rounded-lg bg-surface-container-lowest">
+<span class="font-code-citation text-code-citation text-primary">Vaswani FLOPs/Layer:</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">O(n² · d) self-attention complexity vs O(n · d²) recurrent cell step.</p>
+</div>
+<div class="p-3 rounded-lg bg-surface-container-lowest">
+<span class="font-code-citation text-code-citation text-primary">BERT-Large Latency:</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Slower inference due to 340M dense weights without early exit gating.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Interactive Topological Concept Map -->
+<div class="rounded-[28px] bg-surface-container-lowest p-space-lg shadow-[0_12px_32px_-4px_rgba(0,97,148,0.08)] flex flex-col gap-space-md">
+<div class="flex items-center justify-between flex-wrap gap-space-sm">
+<div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[22px]">hub</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Interactive Topological Coverage Graph</h3>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+              Cross-document semantic clusters and ungrounded dimension nodes. Click any node to highlight associations.
+            </p>
+</div>
+<div class="flex items-center gap-2">
+<span class="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span> Grounded
+            </span>
+<span class="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-container"></span> Partial
+            </span>
+<span class="flex items-center gap-1 font-label-md text-label-md text-error">
+<span class="w-2.5 h-2.5 rounded-full bg-error"></span> Critical Gap
+            </span>
+</div>
+</div>
+<!-- Inline Visual Topology Canvas / Interactive SVG -->
+<div class="relative w-full h-[360px] rounded-2xl bg-surface-container-low/60 overflow-hidden flex items-center justify-center p-4">
+<!-- Subtle background grid lines -->
+<div class="absolute inset-0 bg-[radial-gradient(#39b8fd_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none"></div>
+<svg class="w-full h-full max-h-[340px] select-none" viewbox="0 0 800 320">
+<!-- Connecting Dimension Edges with Flow Gradients -->
+<defs>
+<lineargradient id="edgeGrounded" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#006194" stop-opacity="0.6"></stop>
+<stop offset="100%" stop-color="#39b8fd" stop-opacity="0.8"></stop>
+</lineargradient>
+<lineargradient id="edgeGap" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#006194" stop-opacity="0.4"></stop>
+<stop offset="100%" stop-color="#ba1a1a" stop-opacity="0.8"></stop>
+</lineargradient>
+<filter height="140%" id="glow" width="140%" x="-20%" y="-20%">
+<fegaussianblur result="blur" stddeviation="4"></fegaussianblur>
+<fecomposite in="SourceGraphic" in2="blur" operator="over"></fecomposite>
+</filter>
+</defs>
+<!-- Edge 1: Vaswani to Devlin -->
+<path class="animate-pulse" d="M 170 160 C 260 90, 340 90, 420 120" fill="none" stroke="url(#edgeGrounded)" stroke-dasharray="6,4" stroke-width="3"></path>
+<text fill="#006194" font-family="JetBrains Mono" font-size="10" font-weight="600" x="280" y="95">1/√d_k Scaling</text>
+<!-- Edge 2: Devlin to Lewis -->
+<path d="M 420 120 C 500 150, 560 190, 640 180" fill="none" stroke="url(#edgeGrounded)" stroke-width="2.5"></path>
+<text fill="#006387" font-family="JetBrains Mono" font-size="10" font-weight="600" x="510" y="165">Masked LM &amp; Dense DPR</text>
+<!-- Edge 3: Vaswani to Lewis (Cross) -->
+<path d="M 170 160 C 350 250, 480 250, 640 180" fill="none" stroke="#707881" stroke-dasharray="4,4" stroke-opacity="0.3" stroke-width="1.5"></path>
+<!-- Edge 4: Toward Gap Node (>10k Tokens) -->
+<path d="M 420 120 C 440 230, 410 240, 380 260" fill="none" stroke="url(#edgeGap)" stroke-dasharray="4,3" stroke-width="2.5"></path>
+<text fill="#ba1a1a" font-family="JetBrains Mono" font-size="10" font-weight="700" x="415" y="210">Quadratic Memory Barrier</text>
+<!-- Node 1: Vaswani et al. 2017 -->
+<g class="cursor-pointer transition-transform hover:scale-105" transform="translate(170, 160)">
+<circle fill="#ffffff" filter="url(#glow)" r="44" stroke="#006194" stroke-width="3"></circle>
+<circle fill="#f2f4f6" r="36"></circle>
+<text fill="#006194" font-family="Plus Jakarta Sans" font-size="12" font-weight="700" text-anchor="middle" y="-4">Vaswani '17</text>
+<text fill="#3f4850" font-family="JetBrains Mono" font-size="9" text-anchor="middle" y="14">Self-Attention</text>
+</g>
+<!-- Node 2: Devlin et al. 2018 (BERT) -->
+<g class="cursor-pointer transition-transform hover:scale-105" transform="translate(420, 120)">
+<circle fill="#ffffff" filter="url(#glow)" r="48" stroke="#007bb9" stroke-width="3"></circle>
+<circle fill="#f2f4f6" r="40"></circle>
+<text fill="#006194" font-family="Plus Jakarta Sans" font-size="13" font-weight="700" text-anchor="middle" y="-4">Devlin '18</text>
+<text fill="#3f4850" font-family="JetBrains Mono" font-size="9" text-anchor="middle" y="14">BERT-BiDir</text>
+</g>
+<!-- Node 3: Lewis et al. 2020 (RAG) -->
+<g class="cursor-pointer transition-transform hover:scale-105" transform="translate(640, 180)">
+<circle fill="#ffffff" filter="url(#glow)" r="42" stroke="#39b8fd" stroke-width="3"></circle>
+<circle fill="#f2f4f6" r="34"></circle>
+<text fill="#006591" font-family="Plus Jakarta Sans" font-size="12" font-weight="700" text-anchor="middle" y="-4">Lewis '20</text>
+<text fill="#3f4850" font-family="JetBrains Mono" font-size="9" text-anchor="middle" y="14">RAG / DPR</text>
+</g>
+<!-- Gap Node: Context > 10k Tokens -->
+<g class="cursor-pointer transition-transform hover:scale-110" onclick="selectInspectorGap()" transform="translate(370, 260)">
+<circle fill="#ffffff" r="40" stroke="#ba1a1a" stroke-dasharray="4,4" stroke-width="2.5"></circle>
+<circle fill="#ffdad6" opacity="0.6" r="32"></circle>
+<circle cy="-8" fill="#ba1a1a" r="8"></circle>
+<text fill="#93000a" font-family="Plus Jakarta Sans" font-size="11" font-weight="800" text-anchor="middle" y="12">Gap: &gt;10k Ctx</text>
+<text fill="#ba1a1a" font-family="JetBrains Mono" font-size="8" text-anchor="middle" y="24">Unaddressed</text>
+</g>
+</svg>
+<!-- Floating Map Overlay Controls -->
+<div class="absolute bottom-3 left-4 flex items-center gap-1.5 p-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md shadow-sm">
+<button class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+<button class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<button class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">center_focus_strong</span>
+</button>
+</div>
+<div class="absolute top-3 right-4 px-2.5 py-1 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-on-surface font-code-citation text-code-citation shadow-sm flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span> Force-Directed Physics Engine Active
+          </div>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN: Subquestion Evidence Inspector (approx 35%) -->
+<div class="xl:col-span-4 flex flex-col gap-space-lg sticky top-24">
+<!-- Primary Inspector Sticky Box -->
+<div class="rounded-[28px] bg-surface-container-lowest p-space-lg shadow-[0_12px_36px_-6px_rgba(0,97,148,0.1)] flex flex-col gap-space-md">
+<!-- Inspector Header -->
+<div class="flex items-start justify-between gap-space-sm pb-space-sm">
+<div class="flex flex-col gap-1">
+<span class="px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-code-citation text-code-citation font-bold w-fit">
+              Evidence Gap Inspector
+            </span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mt-1">
+              Dim 04: Maximum Context Length Scaling
+            </h3>
+</div>
+<button class="p-1 rounded-full hover:bg-surface-container text-on-surface-variant" title="Pin Inspector">
+<span class="material-symbols-outlined text-[20px]">push_pin</span>
+</button>
+</div>
+<!-- Synthesis & Discrepancy Breakdown -->
+<div class="p-space-md rounded-2xl bg-surface-container-low/70 flex flex-col gap-space-sm">
+<div class="flex items-center gap-2 text-error font-label-lg text-label-lg">
+<span class="material-symbols-outlined text-[18px]">find_in_page</span>
+<span>Why is this an evidence gap?</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            All 3 documents currently loaded in the corpus evaluate sequences up to a strict limit of <span class="font-code-inline text-code-inline text-on-surface font-semibold">n = 512</span> or <span class="font-code-inline text-code-inline text-on-surface font-semibold">n = 1024</span> tokens. The compute footprint of full <span class="font-code-inline text-code-inline text-on-surface font-semibold">O(N²)</span> self-attention blows out memory ceilings when attempting whole-document QA or book-level synthesis.
+          </p>
+<div class="pt-2 flex flex-col gap-1.5 font-code-citation text-code-citation">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>Vaswani et al. Max Eval:</span>
+<span class="font-bold text-on-surface">512 Tokens</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>BERT Base / Large Max:</span>
+<span class="font-bold text-on-surface">512 Tokens (Static Pos Embed)</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>RAG Passage Passage Chunk:</span>
+<span class="font-bold text-on-surface">100 Words (~130 Tokens)</span>
+</div>
+</div>
+</div>
+<!-- Verification Audit Trail -->
+<div class="flex flex-col gap-2">
+<span class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant font-semibold">
+            Verification Engine Audit Trail
+          </span>
+<div class="p-3 rounded-xl bg-surface-container flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">policy</span>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">50 PDF Pages Scanned</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">0 passages above 70% semantic match</span>
+</div>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-code-citation text-code-citation font-bold">
+              0 Hits
+            </span>
+</div>
+</div>
+<!-- Curator Recommendations: ArXiv Preprints -->
+<div class="flex flex-col gap-space-sm pt-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md uppercase tracking-wider text-primary font-semibold">
+              Curator Recommended Literature
+            </span>
+<span class="material-symbols-outlined text-primary text-[16px]">tips_and_updates</span>
+</div>
+<!-- Recommendation 1 -->
+<div class="p-3.5 rounded-2xl bg-surface-container-low hover:bg-surface-container-high transition-all flex flex-col gap-2">
+<div class="flex items-start justify-between gap-2">
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Beltagy et al. (2020)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Longformer: The Long-Document Transformer</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">
+                arXiv:2004.05150
+              </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+              Applies a sliding window attention with dilated strides, reducing quadratic attention to linear O(N) complexity for sequences up to 4,096+ tokens.
+            </p>
+<button class="mt-1 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-xl bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary transition-all font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[16px]">library_add</span>
+<span>+ Add to Ingestion Queue</span>
+</button>
+</div>
+<!-- Recommendation 2 -->
+<div class="p-3.5 rounded-2xl bg-surface-container-low hover:bg-surface-container-high transition-all flex flex-col gap-2">
+<div class="flex items-start justify-between gap-2">
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Su et al. (2021 / 2023)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">RoFormer: Enhanced Transformer with Rotary Position Embedding</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-code-citation text-code-citation">
+                arXiv:2104.09864
+              </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+              Introduces RoPE embeddings allowing relative position extrapolation to 32k+ tokens without fine-tuning overhead.
+            </p>
+<button class="mt-1 flex items-center justify-center gap-1.5 w-full py-1.5 rounded-xl bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary transition-all font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[16px]">library_add</span>
+<span>+ Add to Ingestion Queue</span>
+</button>
+</div>
+</div>
+<!-- Sticky Box Action Buttons -->
+<div class="flex flex-col gap-2 pt-space-xs">
+<button class="flex items-center justify-center gap-2 w-full py-2.5 rounded-full bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg shadow-[0_8px_20px_-4px_rgba(0,97,148,0.28)] hover:scale-[1.01] transition-all">
+<span class="material-symbols-outlined text-[18px]">bookmark_add</span>
+<span>Bookmark Gap to Synthesis Report</span>
+</button>
+<button class="flex items-center justify-center gap-2 w-full py-2 rounded-full bg-surface-container-low text-on-surface hover:bg-surface-container font-label-lg text-label-lg transition-colors">
+<span class="material-symbols-outlined text-[18px] text-primary">arrow_back</span>
+<span>Jump to Research Desk</span>
+</button>
+</div>
+</div>
+<!-- Quick Research Metrics Summary Card -->
+<div class="rounded-2xl bg-surface-container-lowest p-space-md shadow-[0_4px_16px_rgba(0,97,148,0.06)] flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px] text-primary">analytics</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold">Graph Completeness</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">4 Grounded / 1 Critical Gap</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-sm text-headline-sm text-primary font-bold">80.0%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function toggleDrawer(drawerId) {
+    const drawer = document.getElementById(drawerId);
+    const icon = document.getElementById('icon-' + drawerId);
+    if (!drawer) return;
+    
+    if (drawer.classList.contains('hidden')) {
+      drawer.classList.remove('hidden');
+      drawer.classList.add('flex');
+      if (icon) icon.classList.add('rotate-180');
+    } else {
+      drawer.classList.add('hidden');
+      drawer.classList.remove('flex');
+      if (icon) icon.classList.remove('rotate-180');
+    }
+  }
+
+  function selectInspectorGap() {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+
+  const reanalyzeBtn = document.getElementById('reanalyze-btn');
+  if (reanalyzeBtn) {
+    reanalyzeBtn.addEventListener('click', function() {
+      const icon = this.querySelector('.material-symbols-outlined');
+      if (icon) {
+        icon.classList.add('animate-spin');
+        setTimeout(() => {
+          icon.classList.remove('animate-spin');
+        }, 1200);
+      }
+    });
+  }
+</script></main><footer class="w-full mt-auto bg-surface-container-lowest/90 py-8"><div class="max-w-[1720px] mx-auto px-margin flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex items-center gap-2"><div class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary"><span class="material-symbols-outlined text-[14px]">hub</span></div><span class="font-label-lg text-label-lg text-on-surface">ResearchLens Platform</span><span class="text-outline-variant">•</span><span>Academic AI Engine v3.4.2</span></div><div class="flex items-center gap-6 font-label-md text-label-md"><span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Latency: 142ms</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px] text-primary">lock</span> Strict Citation Grounding</span><a class="hover:text-on-surface transition-colors" href="#">Export BibTeX</a><a class="hover:text-on-surface transition-colors" href="#">Workspace Audit</a><a class="hover:text-on-surface transition-colors" href="#">API Keys</a></div><div class="text-on-surface-variant font-code-citation text-code-citation">© 2025 ResearchLens Technologies Inc.</div></div></footer></body></html>

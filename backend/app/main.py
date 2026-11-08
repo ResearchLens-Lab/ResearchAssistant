@@ -8,8 +8,10 @@ Run from the repository root (so the in-process `rag` package resolves):
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.app.core.config import get_settings
 from backend.app.middleware.error_handler import register_error_handlers
@@ -54,6 +56,9 @@ def create_app() -> FastAPI:
 
     # Added after RequestID so CORS is the outermost layer.
     app.add_middleware(RequestIDMiddleware)
+    # Compress larger JSON API payloads. GZipMiddleware leaves event streams
+    # unbuffered, so incremental chat responses retain their timing.
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -62,6 +67,20 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     register_error_handlers(app)
+
+    @app.middleware("http")
+    async def reject_oversized_upload_request(request: Request, call_next):
+        if request.method == "POST" and request.url.path.endswith(("/documents/upload", "/documents/upload/batch")):
+            content_length = request.headers.get("content-length")
+            if content_length and content_length.isdigit():
+                # Allow multipart headers and boundaries around the configured file payload.
+                request_limit = settings.max_upload_batch_size_bytes + 2 * 1024 * 1024
+                if int(content_length) > request_limit:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"error": {"code": "UPLOAD_TOO_LARGE", "message": f"Upload request exceeds the {settings.max_upload_batch_size_mb} MB total batch limit."}},
+                    )
+        return await call_next(request)
 
     app.include_router(health_router)
     app.include_router(api_router)

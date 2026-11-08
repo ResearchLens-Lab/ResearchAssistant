@@ -3,6 +3,7 @@ from fastapi import APIRouter, status
 from backend.app.core.dependencies import CurrentUser, DBSession
 from backend.app.schemas.auth import (
     LoginRequest,
+    LoginResponse,
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
@@ -24,7 +25,7 @@ async def register(payload: RegisterRequest, db: DBSession):
     return await AuthService(db).register(payload)
 
 
-@router.post("/login", response_model=TokenResponse, summary="Login with email/password")
+@router.post("/login", response_model=LoginResponse, summary="Login with username or legacy email/password")
 async def login(payload: LoginRequest, db: DBSession):
     return await AuthService(db).login(payload)
 

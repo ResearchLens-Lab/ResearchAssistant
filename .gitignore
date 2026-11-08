@@ -51,3 +51,4 @@ htmlcov/
 
 # Node (Neon config tooling)
 node_modules/
+.model_cache/

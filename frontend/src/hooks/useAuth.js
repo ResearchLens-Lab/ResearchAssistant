@@ -15,9 +15,6 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: (payload) => login(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-    },
   });
 
   const logoutMutation = useMutation({

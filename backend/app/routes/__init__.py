@@ -21,5 +21,6 @@ api_router.include_router(documents.router)
 api_router.include_router(chat.router)
 api_router.include_router(search.router)
 api_router.include_router(research.router)
+api_router.include_router(health.router)
 
 health_router = health.router

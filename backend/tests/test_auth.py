@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from backend.app.models.user import User
 
-from .conftest import USER_CREDENTIALS, register_and_login
+from .conftest import SECOND_USER_CREDENTIALS, USER_CREDENTIALS, register_and_login
 
 
 async def test_register(client):
@@ -11,6 +11,7 @@ async def test_register(client):
     assert resp.status_code == 201
     body = resp.json()
     assert body["email"] == USER_CREDENTIALS["email"]
+    assert body["username"] == USER_CREDENTIALS["username"]
     assert body["is_active"] is True
     assert "password" not in body
     assert "hashed_password" not in body
@@ -26,7 +27,7 @@ async def test_register_duplicate_email(client):
 
 async def test_register_short_password_rejected(client):
     resp = await client.post(
-        "/api/v1/auth/register", json={"email": "a@b.com", "password": "short"}
+        "/api/v1/auth/register", json={"email": "a@b.com", "username": "shortname", "password": "short"}
     )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
@@ -46,6 +47,42 @@ async def test_login(client):
     assert body["access_token"]
     assert body["refresh_token"]
     assert body["token_type"] == "bearer"
+    assert body["user"]["username"] == USER_CREDENTIALS["username"]
+    assert "hashed_password" not in body["user"]
+
+
+async def test_username_is_normalized_and_username_login_works(client):
+    registration = {**USER_CREDENTIALS, "username": "Abhay.Kumar"}
+    created = await client.post("/api/v1/auth/register", json=registration)
+    assert created.status_code == 201
+    assert created.json()["username"] == "abhay.kumar"
+    login = await client.post("/api/v1/auth/login", json={"identifier": "ABHAY.KUMAR", "password": USER_CREDENTIALS["password"]})
+    assert login.status_code == 200
+
+
+async def test_duplicate_username_conflicts_case_insensitively(client):
+    assert (await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)).status_code == 201
+    duplicate = {**SECOND_USER_CREDENTIALS, "username": "ABHAY_KUMAR"}
+    response = await client.post("/api/v1/auth/register", json=duplicate)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "USERNAME_ALREADY_TAKEN"
+    assert SECOND_USER_CREDENTIALS["email"] not in response.text
+
+
+async def test_email_login_remains_compatible(client):
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    response = await client.post("/api/v1/auth/login", json={"email": USER_CREDENTIALS["email"], "password": USER_CREDENTIALS["password"]})
+    assert response.status_code == 200
+
+
+async def test_legacy_account_without_username_keeps_email_login(client, db_engine):
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with factory() as session:
+        await session.execute(update(User).where(User.email == USER_CREDENTIALS["email"]).values(username=None))
+        await session.commit()
+    response = await client.post("/api/v1/auth/login", json={"identifier": USER_CREDENTIALS["email"], "password": USER_CREDENTIALS["password"]})
+    assert response.status_code == 200
 
 
 async def test_login_wrong_password(client):

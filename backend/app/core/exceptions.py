@@ -54,6 +54,11 @@ class EmailAlreadyRegisteredError(ConflictError):
     message = "This email is already registered."
 
 
+class UsernameAlreadyTakenError(ConflictError):
+    code = "USERNAME_ALREADY_TAKEN"
+    message = "That username is already taken."
+
+
 class RequestValidationAppError(AppError):
     status_code = 400
     code = "VALIDATION_ERROR"
@@ -70,6 +75,10 @@ class RAGUnavailableError(AppError):
     status_code = 503
     code = "RAG_UNAVAILABLE"
     message = "The RAG service is currently unavailable."
+
+
+class RAGIngestionTimeoutError(RAGUnavailableError):
+    """Ingestion deadline expired while cooperative cancellation may still run."""
 
 
 class KnowledgeGraphUnavailableError(AppError):

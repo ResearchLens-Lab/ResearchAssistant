@@ -11,8 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { User, LogOut, Settings, Sparkles } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 
 export function UserDropdown() {
   const { user, logout, isLoggingOut } = useAuth();
@@ -31,23 +30,23 @@ export function UserDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="relative h-8 w-8 rounded-full bg-zinc-100 p-0 text-xs font-semibold text-zinc-800 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 ring-1 ring-zinc-200 dark:ring-zinc-700"
+        <button
+          type="button"
+          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[var(--rl-selected)] p-0 text-xs font-semibold text-[var(--rl-primary)] ring-1 ring-[var(--rl-border)] hover:bg-[#d8ebfa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)] transition-colors select-none cursor-pointer"
+          aria-label="Open account menu"
         >
           <span>{initials}</span>
-        </Button>
+        </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent className="w-56" align="end">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-xs font-semibold leading-none text-zinc-900 dark:text-zinc-100 truncate">
+            <p className="text-sm font-semibold leading-none text-[var(--rl-ink)] truncate">
               {user?.full_name || "Researcher"}
             </p>
-            <p className="text-[11px] leading-none text-zinc-500 truncate font-mono">
-              {user?.email || "user@researchlens.ai"}
+            <p className="text-xs leading-none text-[var(--rl-muted)] truncate">
+              {user?.email || "Account"}
             </p>
           </div>
         </DropdownMenuLabel>

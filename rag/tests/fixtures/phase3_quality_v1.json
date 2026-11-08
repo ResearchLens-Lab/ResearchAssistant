@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "description": "Held-out deterministic evaluation cases for paraphrase retrieval, scope, identifiers, comparable conflicts, and condition differences.",
+  "documents": [
+    {"paper_id":"atlas","document_id":"atlas-doc","filename":"Atlas.pdf","passages":[
+      {"chunk_id":"atlas-id","page":1,"text":"Atlas system identifier AX-17A was evaluated using amber routing."},
+      {"chunk_id":"atlas-metric","page":2,"text":"Atlas reported an accuracy of 91.2 percent on 2024-03-14 using 64 nodes."}]},
+    {"paper_id":"boreal","document_id":"boreal-doc","filename":"Boreal.pdf","passages":[
+      {"chunk_id":"boreal-id","page":1,"text":"Boreal system identifier AX-17B was evaluated using blue routing."},
+      {"chunk_id":"boreal-metric","page":2,"text":"Boreal reported an accuracy of 87.6 percent on 2024-04-02 using 96 nodes."}]},
+    {"paper_id":"orion-a","document_id":"orion-a-doc","filename":"Orion-Lab-A.pdf","passages":[
+      {"chunk_id":"orion-a-conflict","page":3,"text":"The Orion-4 model reported accuracy 91.2 percent under Argo-9 test-split."},
+      {"chunk_id":"orion-a-condition","page":4,"text":"The Orion-4 model reported accuracy 78.0 percent under Boreal-2 test-split."}]},
+    {"paper_id":"orion-b","document_id":"orion-b-doc","filename":"Orion-Lab-B.pdf","passages":[
+      {"chunk_id":"orion-b-conflict","page":5,"text":"The Orion-4 model reported accuracy 87.6 percent under Argo-9 test-split."}]},
+    {"paper_id":"within-doc","document_id":"within-doc","filename":"Errata.pdf","passages":[
+      {"chunk_id":"within-a","page":1,"text":"The Delta model reported precision 0.91 under Clinic-7 cohort."},
+      {"chunk_id":"within-b","page":2,"text":"The Delta model reported precision 0.88 under Clinic-7 cohort."}]}
+  ],
+  "retrieval_cases": [
+    {"id":"paraphrase_identifier","question":"Which code labels the Atlas system?","scope":["atlas"],"relevant_chunk_ids":["atlas-id"],"pages":{"atlas-id":1}},
+    {"id":"paraphrase_date_and_value","question":"On what day did Atlas reach 91.2% accuracy?","scope":["atlas"],"relevant_chunk_ids":["atlas-metric"],"pages":{"atlas-metric":2}},
+    {"id":"lookalike_identifier","question":"Give Boreal's identifier, exactly.","scope":["boreal"],"relevant_chunk_ids":["boreal-id"],"pages":{"boreal-id":1}},
+    {"id":"out_of_scope_answer","question":"What identifier does Boreal use?","scope":["atlas"],"relevant_chunk_ids":[],"abstain":true},
+    {"id":"missing_fact","question":"What recall did Atlas report?","scope":["atlas"],"relevant_chunk_ids":[],"abstain":true}
+  ],
+  "conflict_cases": [
+    {"id":"same_subject_attribute_and_condition_across_documents","source_chunks":["orion-a-conflict","orion-b-conflict"],"conflict":true,"pages":[3,5]},
+    {"id":"different_conditions_are_not_conflict","source_chunks":["orion-a-conflict","orion-a-condition"],"conflict":false,"pages":[3,4]},
+    {"id":"same_document_conflict","source_chunks":["within-a","within-b"],"conflict":true,"pages":[1,2]},
+    {"id":"different_subjects_are_not_conflict","source_chunks":["atlas-metric","boreal-metric"],"conflict":false,"pages":[2,2]}
+  ]
+}

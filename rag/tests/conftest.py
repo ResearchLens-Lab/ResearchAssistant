@@ -3,9 +3,17 @@ Pytest configuration and shared test fixtures for ResearchLens RAG.
 """
 
 import pytest
+import os
 import shutil
 import tempfile
 from pathlib import Path
+
+# Automated tests use deterministic providers and never access cloud APIs.
+os.environ["EMBEDDING_PROVIDER"] = "mock"
+os.environ["EMBEDDING_MODEL"] = "mock-dense-384"
+os.environ["EMBEDDING_DIMENSION"] = "384"
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["APP_ENV"] = "testing"
 
 from rag.ingestion.document_normalizer import Page, Section, DocumentMetadata, NormalizedDocument, DocumentNormalizer
 from rag.chunking.chunker import DocumentChunker
@@ -75,6 +83,12 @@ def temp_chroma_dir():
     temp_dir = tempfile.mkdtemp(prefix="test_chroma_")
     yield temp_dir
     shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def isolated_llm_state_path(tmp_path, monkeypatch):
+    from rag.config.settings import settings
+    monkeypatch.setattr(settings, "embedding_cache_path", str(tmp_path / "llm-state.sqlite3"))
 
 
 @pytest.fixture

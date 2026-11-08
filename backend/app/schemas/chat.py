@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.citation import Source
 
@@ -10,6 +11,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     paper_ids: list[str] = Field(min_length=1)
     conversation_id: Optional[str] = None
+    answer_mode: Literal["DOCUMENTS_GENERAL", "DOCUMENTS_ONLY"] = "DOCUMENTS_GENERAL"
 
 
 class ChatResponse(BaseModel):
@@ -18,10 +20,28 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[Source]
     paper_ids: list[str]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatStreamEvent(BaseModel):
+    event_id: str
+    type: Literal["started", "planning_started", "planning_completed", "retrieval_started", "sources_found", "additional_retrieval", "evidence_ready", "generation_skipped", "generation_started", "verification_started", "verification_completed", "token", "completed", "error"]
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_token_payload(self):
+        if self.type == "token" and (not isinstance(self.data.get("text"), str) or self.data.get("provisional") is not True):
+            raise ValueError("Token events must contain provisional text.")
+        return self
 
 
 class ConversationCreate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=255)
+    paper_ids: Optional[list[str]] = None
+
+
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
     paper_ids: Optional[list[str]] = None
 
 
@@ -31,6 +51,7 @@ class ConversationResponse(BaseModel):
     id: str
     title: Optional[str] = None
     paper_ids: Optional[list[str]] = None
+    message_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -43,4 +64,5 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     sources: Optional[list[Source]] = None
+    meta: Optional[dict[str, Any]] = None
     created_at: datetime

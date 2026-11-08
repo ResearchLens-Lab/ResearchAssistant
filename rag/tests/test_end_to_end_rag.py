@@ -4,6 +4,7 @@ Document -> Normalization -> Chunking -> Embeddings -> ChromaDB -> Query -> Retr
 """
 
 import pytest
+from types import SimpleNamespace
 from rag.tests.conftest import SAMPLE_PAPER_TEXT
 from backend.app.integrations.rag_client import RAGClient
 
@@ -40,7 +41,7 @@ def test_end_to_end_rag_flow(full_rag_pipeline):
     # 3. Verify Source Provenance
     top_source = rag_result.sources[0]
     assert top_source.paper_id == "paper_attention_2017"
-    assert top_source.page_start >= 1
+    assert top_source.locator
     assert top_source.section != ""
     assert "BLEU" in top_source.text or "translation" in top_source.text.lower()
 
@@ -70,3 +71,44 @@ def test_backend_rag_client_integration(full_rag_pipeline):
     assert "page" in chat_resp["sources"][0]
     assert "section" in chat_resp["sources"][0]
     assert "text" in chat_resp["sources"][0]
+
+
+def test_query_pipeline_performs_one_safe_repair(full_rag_pipeline, monkeypatch):
+    ingest, query = full_rag_pipeline
+    ingest.ingest_text(content=SAMPLE_PAPER_TEXT, paper_id="paper_repair", metadata={"title": "Attention"})
+    monkeypatch.setattr(query.generator, "generate_answer", lambda **kwargs: SimpleNamespace(
+        answer="The Transformer achieved 99 BLEU on English-to-German translation [S1]."))
+    repairs = []
+    def repair(question, answer, issues, context):
+        repairs.append((answer, issues))
+        return "The Transformer achieves 28.4 BLEU on English-to-German translation [S1]."
+    monkeypatch.setattr(query.generator, "repair_answer", repair)
+    result = query.answer_question("Explain the experimental results and reported BLEU scores", paper_ids=["paper_repair"])
+    assert len(repairs) == 1
+    assert "28.4 BLEU" in result.answer
+    assert "99 BLEU" not in result.answer
+    assert result.metadata["research"]["claim_verification"]["repair_attempted"] is True
+
+
+def test_unresolved_repair_never_returns_the_unverified_numeric_claim(full_rag_pipeline, monkeypatch):
+    ingest, query = full_rag_pipeline
+    ingest.ingest_text(content=SAMPLE_PAPER_TEXT, paper_id="paper_repair_failure", metadata={"title": "Attention"})
+    monkeypatch.setattr(query.generator, "generate_answer", lambda **kwargs: SimpleNamespace(
+        answer="The Transformer achieved 99 BLEU on English-to-German translation [S1]."))
+    repairs = []
+    def repair(*args):
+        repairs.append(1)
+        return "The Transformer achieved 100 BLEU on English-to-German translation [S1]."
+    monkeypatch.setattr(query.generator, "repair_answer", repair)
+    result = query.answer_question("Explain the experimental results and reported BLEU scores", paper_ids=["paper_repair_failure"])
+    assert len(repairs) == 1
+    assert "99 BLEU" not in result.answer and "100 BLEU" not in result.answer
+    # A missing metric value is called a contradiction only when the cited
+    # excerpt actually reports that same metric; otherwise the claim is
+    # unsupported and the pipeline uses its general abstention wording.
+    assert "not reported as established" in result.answer or "do not adequately support" in result.answer
+    # Keep the cited passage available in the evidence inspector with its failed
+    # claim check, even though neither unverified numeric answer is returned.
+    assert [source.source_id for source in result.sources] == ["S1"]
+    claim_report = result.metadata["research"]["claim_verification"]
+    assert claim_report["items"][0]["status"] in {"unsupported", "contradicted"}

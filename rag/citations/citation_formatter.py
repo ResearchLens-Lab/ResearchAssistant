@@ -38,6 +38,8 @@ class RAGResult(BaseModel):
                     "text": s.text,
                     "score": s.score,
                     "title": s.title,
+                    "filename": s.filename,
+                    "locator": s.locator,
                 }
                 for s in self.sources
             ],
