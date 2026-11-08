@@ -17,8 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import or_, select
 
-from backend.app.database.session import get_session_factory
-from backend.app.integrations.rag_gateway import RAGGateway
 from backend.app.models.document import Document, DocumentStatus
 from backend.app.models.paper import Paper
 
@@ -63,6 +61,9 @@ def build_selection(document_ids: list[str] | None, include_all: bool, resume_st
 async def reindex_documents(document_ids: list[str] | None, include_all: bool,
                             resume_stale: bool = False, stale_after_seconds: int = 900,
                             apply: bool = False) -> tuple[int, int]:
+    from backend.app.database.session import get_session_factory
+    from backend.app.integrations.rag_gateway import RAGGateway
+
     session_factory = get_session_factory()
     clauses, cutoff = build_selection(document_ids, include_all, resume_stale, stale_after_seconds)
     rag = RAGGateway() if apply else None
