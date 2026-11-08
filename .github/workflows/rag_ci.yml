@@ -2,7 +2,7 @@ name: ResearchLens RAG CI
 
 on:
   push:
-    branches: [ main, master, "feat/*", "rag/*" ]
+    branches: [ main, master, "feat/*", "rag/*", "gorav/*", "codex/*" ]
     paths:
       - 'rag/**'
       - 'backend/app/integrations/**'
@@ -16,6 +16,7 @@ on:
       - 'backend/app/integrations/**'
       - 'scripts/**'
       - 'requirements.txt'
+      - '.github/workflows/rag_ci.yml'
 
 jobs:
   test-rag:

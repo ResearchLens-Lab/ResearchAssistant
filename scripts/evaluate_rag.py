@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Run the practical RAG benchmark against an isolated disposable vector store."""
 import sys
 import argparse
