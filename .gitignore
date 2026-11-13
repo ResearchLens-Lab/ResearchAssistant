@@ -37,6 +37,11 @@ ENV/
 # Uploaded documents (backend file storage)
 storage/
 
+# Private reviewed NLP annotations and local model artifacts
+rag/training/local_data/
+rag/training/model_registry/
+rag/document_intelligence/local_data/
+
 # Pytest / Test Artifacts
 .pytest_cache/
 .coverage
