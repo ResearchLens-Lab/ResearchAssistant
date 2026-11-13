@@ -55,8 +55,7 @@ def test_phase3_local_retrieval_scope_citations_conflicts_and_verification(tmp_p
                 chunk_id=passage["chunk_id"], paper_id=document["paper_id"],
                 document_id=document["document_id"], page_start=passage["page"], page_end=passage["page"],
                 section="Results", chunk_index=index, filename=document["filename"],
-                title=document["filename"], locator=f"Results · page {passage['page']}",
-            ))
+                title=document["filename"], locator=f"Results · page {passage['page']}", owner_id="test_user_fixture"))
             chunks.append(chunk)
             by_chunk[passage["chunk_id"]] = passage
     vectors = embedder.embed_documents([chunk.text for chunk in chunks])
@@ -69,14 +68,19 @@ def test_phase3_local_retrieval_scope_citations_conflicts_and_verification(tmp_p
     abstentions = []
     case_results = []
     for case in data["retrieval_cases"]:
-        result = retriever.retrieve(QueryRequest(question=case["question"], paper_ids=case["scope"], top_k=5))
+        result = retriever.retrieve(
+            QueryRequest(question=case["question"], paper_ids=case["scope"], top_k=5),
+            owner_id="test_user_fixture",
+        )
         ids = [source.chunk_id for source in result]
         assert all(source.paper_id in case["scope"] for source in result), case["id"]
         expected = set(case["relevant_chunk_ids"])
         if expected:
             recalls.append(len(expected & set(ids)) / len(expected))
             reciprocal_ranks.append(1 / min(ids.index(chunk_id) + 1 for chunk_id in expected if chunk_id in ids))
-        pipeline_result = QueryPipeline(retriever=retriever).answer_question(case["question"], paper_ids=case["scope"])
+        pipeline_result = QueryPipeline(retriever=retriever).answer_question(
+            case["question"], user_id="test_user_fixture", paper_ids=case["scope"]
+        )
         cited = {source.chunk_id for source in pipeline_result.sources}
         if expected:
             citation_tp += len(expected & cited)

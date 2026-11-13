@@ -1,0 +1,966 @@
+{
+  "dataset": "ResearchLens Phase 1 deterministic QA gold set",
+  "provenance": "Hand-authored synthetic passages and expected labels for software evaluation. No private uploads or model training data are included.",
+  "metrics": {
+    "cases": 30,
+    "intent_accuracy": 1.0,
+    "recall_at_k": 1.0,
+    "mrr": 0.9827586206896551,
+    "citation_correctness": 1.0,
+    "evidence_coverage": 1.0,
+    "physical_page_accuracy_when_expected": 1.0,
+    "extraction_correctness": 1.0,
+    "abstention_accuracy": 1.0,
+    "abstention_cases": 1,
+    "conflict_cases_detected": 3,
+    "conflict_cases_expected": 3,
+    "mean_query_latency_seconds": 0.004896666666666666,
+    "p95_query_latency_seconds": 0.0097,
+    "positive_evidence_cases": 29,
+    "page_evaluation_cases": 25,
+    "definition": "Recall@K is the fraction of answerable cases with any expected chunk in top K; MRR uses the first expected chunk. Evidence coverage is expected gold chunks that were actually cited divided by expected chunks. Citation correctness checks that citations map to returned source IDs (and abstentions contain no citations). Page accuracy uses only cases with a gold page. Synthetic smoke evaluation only; no confidence intervals or production claims."
+  },
+  "cases": [
+    {
+      "id": "P01",
+      "question": "Who are the authors of Introduction to Algorithms?",
+      "expected_intent": "AUTHOR_LOOKUP",
+      "predicted_intent": "AUTHOR_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-author"
+      ],
+      "retrieved_chunks": [
+        "c-author"
+      ],
+      "relevant_retrieved": [
+        "c-author"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 1,
+      "page_correct": true,
+      "expected_fact": "Thomas H. Cormen",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0097,
+      "answer": "### Authors found in the selected documents\n- Thomas H. Cormen [S1]\n- Charles E. Leiserson [S1]\n- Ronald L. Rivest [S1]\n- Clifford Stein [S1]\n- The MIT [S1]\n\n### Verification note\nThe names were extracted from title-page or bibliographic structure; verify the source page before citing.\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P02",
+      "question": "Who wrote this book?",
+      "expected_intent": "AUTHOR_LOOKUP",
+      "predicted_intent": "AUTHOR_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-author"
+      ],
+      "retrieved_chunks": [
+        "c-author"
+      ],
+      "relevant_retrieved": [
+        "c-author"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 1,
+      "page_correct": true,
+      "expected_fact": "Clifford Stein",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0036,
+      "answer": "### Authors found in the selected documents\n- Thomas H. Cormen [S1]\n- Charles E. Leiserson [S1]\n- Ronald L. Rivest [S1]\n- Clifford Stein [S1]\n- The MIT [S1]\n\n### Verification note\nThe names were extracted from title-page or bibliographic structure; verify the source page before citing.\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P03",
+      "question": "Identify the book's authors",
+      "expected_intent": "AUTHOR_LOOKUP",
+      "predicted_intent": "AUTHOR_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-author"
+      ],
+      "retrieved_chunks": [
+        "c-author"
+      ],
+      "relevant_retrieved": [
+        "c-author"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 1,
+      "page_correct": true,
+      "expected_fact": "Ronald L. Rivest",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0053,
+      "answer": "### Authors found in the selected documents\n- Thomas H. Cormen [S1]\n- Charles E. Leiserson [S1]\n- Ronald L. Rivest [S1]\n- Clifford Stein [S1]\n- The MIT [S1]\n\n### Verification note\nThe names were extracted from title-page or bibliographic structure; verify the source page before citing.\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P04",
+      "question": "What is an algorithm?",
+      "expected_intent": "DEFINITION",
+      "predicted_intent": "DEFINITION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-alg"
+      ],
+      "retrieved_chunks": [
+        "c-alg"
+      ],
+      "relevant_retrieved": [
+        "c-alg"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 25,
+      "page_correct": true,
+      "expected_fact": "computational procedure",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.018,
+      "answer": "### Definition\n> An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output [S1]\n\n### Key points from the definition\n- **Input:** takes some value, or set of values, as input [S1]\n- **Procedure:** well-defined computational procedure [S1]\n- **Output:** produces some value, or set of values, as output [S1]\n\n### Explanation from the retrieved text\n- This definition describes input, a procedure, and output. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P05",
+      "question": "Define an algorithm in the selected book",
+      "expected_intent": "DEFINITION",
+      "predicted_intent": "DEFINITION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-alg"
+      ],
+      "retrieved_chunks": [
+        "c-alg"
+      ],
+      "relevant_retrieved": [
+        "c-alg"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 25,
+      "page_correct": true,
+      "expected_fact": "input",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.007,
+      "answer": "### Definition\n> An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output [S1]\n\n### Key points from the definition\n- **Input:** takes some value, or set of values, as input [S1]\n- **Procedure:** well-defined computational procedure [S1]\n- **Output:** produces some value, or set of values, as output [S1]\n\n### Explanation from the retrieved text\n- This definition describes input, a procedure, and output. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P06",
+      "question": "How does the text define a computational procedure?",
+      "expected_intent": "DEFINITION",
+      "predicted_intent": "DEFINITION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-alg"
+      ],
+      "retrieved_chunks": [
+        "c-alg"
+      ],
+      "relevant_retrieved": [
+        "c-alg"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 25,
+      "page_correct": true,
+      "expected_fact": "output",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0065,
+      "answer": "### Definition\n> An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output [S1]\n\n### Key points from the definition\n- **Input:** takes some value, or set of values, as input [S1]\n- **Procedure:** well-defined computational procedure [S1]\n- **Output:** produces some value, or set of values, as output [S1]\n\n### Explanation from the retrieved text\n- This definition describes input, a procedure, and output. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P07",
+      "question": "What does binary search do with the interval?",
+      "expected_intent": "EXPLANATION",
+      "predicted_intent": "EXPLANATION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-search"
+      ],
+      "retrieved_chunks": [
+        "c-search"
+      ],
+      "relevant_retrieved": [
+        "c-search"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 70,
+      "page_correct": true,
+      "expected_fact": "half",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.005,
+      "answer": "### Direct answer from the selected documents\n> Binary search repeatedly compares the target with the middle element of a sorted array and discards half of the remaining interval. [S1]\n\n### Supporting evidence\n- It terminates when the target is found or the interval is empty. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P08",
+      "question": "How many records were in ExampleSet?",
+      "expected_intent": "NUMERICAL_QUERY",
+      "predicted_intent": "NUMERICAL_QUERY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 8,
+      "page_correct": true,
+      "expected_fact": "1,000",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0058,
+      "answer": "### Values reported in the selected documents\n- The method uses the ExampleSet dataset with 1,000 records [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P09",
+      "question": "What percentage accuracy did Paper A report?",
+      "expected_intent": "NUMERICAL_QUERY",
+      "predicted_intent": "NUMERICAL_QUERY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 8,
+      "page_correct": true,
+      "expected_fact": "83%",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0048,
+      "answer": "### Values reported in the selected documents\n- The reported accuracy was 83% after five training epochs [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P10",
+      "question": "How many epochs were used in Paper B?",
+      "expected_intent": "NUMERICAL_QUERY",
+      "predicted_intent": "NUMERICAL_QUERY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 11,
+      "page_correct": true,
+      "expected_fact": "five training epochs",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0056,
+      "answer": "### Values reported in the selected documents\n- On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P11",
+      "question": "When was Paper A published?",
+      "expected_intent": "DATE_LOOKUP",
+      "predicted_intent": "DATE_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-date"
+      ],
+      "retrieved_chunks": [
+        "c-date"
+      ],
+      "relevant_retrieved": [
+        "c-date"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 2,
+      "page_correct": true,
+      "expected_fact": "March 12, 2021",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0034,
+      "answer": "### Dates found\n- March 12, 2021 — The paper was published on March 12, 2021 [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P12",
+      "question": "What year did the publication appear?",
+      "expected_intent": "DATE_LOOKUP",
+      "predicted_intent": "DATE_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-date"
+      ],
+      "retrieved_chunks": [
+        "c-date"
+      ],
+      "relevant_retrieved": [
+        "c-date"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 2,
+      "page_correct": true,
+      "expected_fact": "2021",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0038,
+      "answer": "### Dates found\n- March 12, 2021 — The paper was published on March 12, 2021 [S1]\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P13",
+      "question": "Compare accuracy reported by Paper A and Paper B",
+      "expected_intent": "COMPARISON",
+      "predicted_intent": "COMPARISON",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 2,
+      "expected_page": null,
+      "page_correct": true,
+      "expected_fact": "83%",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": true,
+      "abstention_correct": true,
+      "evidence_state": "CONFLICTING EVIDENCE",
+      "execution_time_seconds": 0.0042,
+      "answer": "### Comparison of retrieved evidence\nThese are source-by-source excerpts; values are not normalized across different datasets or conditions.\n\n| Source | Retrieved finding | Location |\n|---|---|---|\n| Paper A | The reported accuracy was 83% after five training epochs. [S1] | Page 8 |\n| Paper B | On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs. [S2] | Page 11 |\n\n### Conflicting reported values\n- accuracy: 83%, 79% [[S1], [S2]]. The papers may use different datasets or conditions; inspect both passages before treating this as a contradiction.\n\nEvidence state: **CONFLICTING EVIDENCE** — Retrieved passages report different values or opposing statements for a shared query-relevant claim."
+    },
+    {
+      "id": "P14",
+      "question": "What are the differences in the reported results?",
+      "expected_intent": "COMPARISON",
+      "predicted_intent": "COMPARISON",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 2,
+      "expected_page": null,
+      "page_correct": true,
+      "expected_fact": "79%",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": true,
+      "abstention_correct": true,
+      "evidence_state": "CONFLICTING EVIDENCE",
+      "execution_time_seconds": 0.0038,
+      "answer": "### Comparison of retrieved evidence\nThese are source-by-source excerpts; values are not normalized across different datasets or conditions.\n\n| Source | Retrieved finding | Location |\n|---|---|---|\n| Paper A | The reported accuracy was 83% after five training epochs. [S1] | Page 8 |\n| Paper B | On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs. [S2] | Page 11 |\n\n### Conflicting reported values\n- accuracy: 83%, 79% [[S1], [S2]]. The papers may use different datasets or conditions; inspect both passages before treating this as a contradiction.\n\nEvidence state: **CONFLICTING EVIDENCE** — Retrieved passages report different values or opposing statements for a shared query-relevant claim."
+    },
+    {
+      "id": "P15",
+      "question": "Compare the two papers' ExampleSet findings",
+      "expected_intent": "COMPARISON",
+      "predicted_intent": "COMPARISON",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 2,
+      "expected_page": null,
+      "page_correct": true,
+      "expected_fact": "ExampleSet",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.004,
+      "answer": "### Comparison of retrieved evidence\nThese are source-by-source excerpts; values are not normalized across different datasets or conditions.\n\n| Source | Retrieved finding | Location |\n|---|---|---|\n| Paper A | The method uses the ExampleSet dataset with 1,000 records. [S3] | Page 8 |\n| Paper B | On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs. [S2] | Page 11 |\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P16",
+      "question": "Summarize the binary search passage",
+      "expected_intent": "SUMMARY",
+      "predicted_intent": "SUMMARY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-search"
+      ],
+      "retrieved_chunks": [
+        "c-search"
+      ],
+      "relevant_retrieved": [
+        "c-search"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 70,
+      "page_correct": true,
+      "expected_fact": "sorted array",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0026,
+      "answer": "### Main points from retrieved passages\n- Binary search repeatedly compares the target with the middle element of a sorted array and discards half of the remaining interval. [S1]\n\n### Scope note\nThis is a summary of retrieved passages, not a claim that every chapter or finding in the selected documents has been covered.\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P17",
+      "question": "Give an overview of the algorithm definition",
+      "expected_intent": "SUMMARY",
+      "predicted_intent": "SUMMARY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-alg"
+      ],
+      "retrieved_chunks": [
+        "c-alg"
+      ],
+      "relevant_retrieved": [
+        "c-alg"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 25,
+      "page_correct": true,
+      "expected_fact": "input",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0043,
+      "answer": "### Main points from retrieved passages\n- An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output. [S1]\n- This definition describes input, a procedure, and output. [S1]\n\n### Scope note\nThis is a summary of retrieved passages, not a claim that every chapter or finding in the selected documents has been covered.\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P18",
+      "question": "What methodology did Paper A use?",
+      "expected_intent": "METHODOLOGY_EXTRACTION",
+      "predicted_intent": "METHODOLOGY_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-date"
+      ],
+      "retrieved_chunks": [
+        "c-date",
+        "c-exp-a"
+      ],
+      "relevant_retrieved": [
+        "c-date"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 2,
+      "page_correct": true,
+      "expected_fact": "controlled experiment",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0045,
+      "answer": "### Methods and approach\n- Its methodology combines a controlled experiment with a qualitative error analysis [S1]\n- The method uses the ExampleSet dataset with 1,000 records [S2]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P19",
+      "question": "Which methods are described in Paper A?",
+      "expected_intent": "METHODOLOGY_EXTRACTION",
+      "predicted_intent": "METHODOLOGY_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-date"
+      ],
+      "retrieved_chunks": [
+        "c-date",
+        "c-exp-a"
+      ],
+      "relevant_retrieved": [
+        "c-date"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 2,
+      "page_correct": true,
+      "expected_fact": "qualitative error analysis",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0044,
+      "answer": "### Methods and approach\n- Its methodology combines a controlled experiment with a qualitative error analysis [S1]\n- The method uses the ExampleSet dataset with 1,000 records [S2]\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P20",
+      "question": "Which dataset did Paper A evaluate?",
+      "expected_intent": "DATASET_EXTRACTION",
+      "predicted_intent": "DATASET_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a"
+      ],
+      "retrieved_chunks": [
+        "c-limit",
+        "c-exp-a"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a"
+      ],
+      "reciprocal_rank": 0.5,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 8,
+      "page_correct": true,
+      "expected_fact": "ExampleSet",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0054,
+      "answer": "### Datasets and data sources\n- A limitation is that the evaluation uses only one dataset and does not test performance on data from other domains [S2]\n- The method uses the ExampleSet dataset with 1,000 records [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P21",
+      "question": "What datasets were used in Paper B?",
+      "expected_intent": "DATASET_EXTRACTION",
+      "predicted_intent": "DATASET_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 11,
+      "page_correct": true,
+      "expected_fact": "ExampleSet",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0026,
+      "answer": "### Datasets and data sources\n- On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs [S1]\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P22",
+      "question": "What metric did Paper A report?",
+      "expected_intent": "METRIC_EXTRACTION",
+      "predicted_intent": "METRIC_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a",
+        "c-limit"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 8,
+      "page_correct": true,
+      "expected_fact": "accuracy",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0031,
+      "answer": "### Reported metrics\n- The reported accuracy was 83% after five training epochs [S1]\n- A limitation is that the evaluation uses only one dataset and does not test performance on data from other domains [S2]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P23",
+      "question": "Which evaluation measure is shown for Paper B?",
+      "expected_intent": "METRIC_EXTRACTION",
+      "predicted_intent": "METRIC_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-b"
+      ],
+      "relevant_retrieved": [
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 11,
+      "page_correct": true,
+      "expected_fact": "accuracy",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0028,
+      "answer": "### Reported metrics\n- On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs [S1]\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P24",
+      "question": "What limitation does Paper A state?",
+      "expected_intent": "FACT_LOOKUP",
+      "predicted_intent": "FACT_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-limit"
+      ],
+      "retrieved_chunks": [
+        "c-limit"
+      ],
+      "relevant_retrieved": [
+        "c-limit"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 14,
+      "page_correct": true,
+      "expected_fact": "one dataset",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0032,
+      "answer": "### Direct answer from the selected documents\n> A limitation is that the evaluation uses only one dataset and does not test performance on data from other domains. [S1]\n\n### Supporting evidence\n\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P25",
+      "question": "What disadvantage is mentioned for the evaluation?",
+      "expected_intent": "ADVANTAGES_DISADVANTAGES",
+      "predicted_intent": "ADVANTAGES_DISADVANTAGES",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-limit"
+      ],
+      "retrieved_chunks": [
+        "c-limit"
+      ],
+      "relevant_retrieved": [
+        "c-limit"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 14,
+      "page_correct": true,
+      "expected_fact": "other domains",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0039,
+      "answer": "### Advantages stated in the documents\nNot found in the retrieved passages.\n\n### Disadvantages and limitations stated\n- A limitation is that the evaluation uses only one dataset and does not test performance on data from other domains. [S2]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P26",
+      "question": "What are the stated strengths and weaknesses of Paper A?",
+      "expected_intent": "ADVANTAGES_DISADVANTAGES",
+      "predicted_intent": "ADVANTAGES_DISADVANTAGES",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-limit"
+      ],
+      "retrieved_chunks": [
+        "c-limit"
+      ],
+      "relevant_retrieved": [
+        "c-limit"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 14,
+      "page_correct": true,
+      "expected_fact": "other domains",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "PARTIALLY SUPPORTED",
+      "execution_time_seconds": 0.0033,
+      "answer": "### Advantages stated in the documents\nNot found in the retrieved passages.\n\n### Disadvantages and limitations stated\n- A limitation is that the evaluation uses only one dataset and does not test performance on data from other domains. [S2]\n\nEvidence state: **PARTIALLY SUPPORTED** — Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."
+    },
+    {
+      "id": "P27",
+      "question": "List the sorting algorithms in the chapter",
+      "expected_intent": "LIST_EXTRACTION",
+      "predicted_intent": "LIST_EXTRACTION",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-list"
+      ],
+      "retrieved_chunks": [
+        "c-list"
+      ],
+      "relevant_retrieved": [
+        "c-list"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 45,
+      "page_correct": true,
+      "expected_fact": "Merge sort",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0047,
+      "answer": "### Items explicitly listed\n- Insertion sort [S2]\n- Merge sort [S2]\n- Heapsort [S2]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P28",
+      "question": "Show evidence for the binary search termination condition",
+      "expected_intent": "EVIDENCE_LOOKUP",
+      "predicted_intent": "EVIDENCE_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-search"
+      ],
+      "retrieved_chunks": [
+        "c-search"
+      ],
+      "relevant_retrieved": [
+        "c-search"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 1,
+      "expected_page": 70,
+      "page_correct": true,
+      "expected_fact": "interval is empty",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "STRONGLY SUPPORTED",
+      "execution_time_seconds": 0.0031,
+      "answer": "### Relevant evidence passages\n- **algorithms.pdf · Page 70 · Binary Search:** Binary search repeatedly compares the target with the middle element of a sorted array and discards half of the remaining interval. It terminates when the target is found or the interval is empty. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** — Displayed facts are extracted from retrieved passages and each citation resolves to its chunk."
+    },
+    {
+      "id": "P29",
+      "question": "What is the moon's chemical formula?",
+      "expected_intent": "FACT_LOOKUP",
+      "predicted_intent": "FACT_LOOKUP",
+      "intent_correct": true,
+      "expected_chunks": [],
+      "retrieved_chunks": [],
+      "relevant_retrieved": [],
+      "reciprocal_rank": 0.0,
+      "citation_correct": true,
+      "evidence_covered": false,
+      "cited_expected_chunks": 0,
+      "expected_page": null,
+      "page_correct": true,
+      "expected_fact": "Not found in your selected documents.",
+      "extraction_correct": true,
+      "expected_abstain": true,
+      "abstained": true,
+      "expected_conflict": false,
+      "abstention_correct": true,
+      "evidence_state": "NOT FOUND",
+      "execution_time_seconds": 0.0028,
+      "answer": "### Direct answer\nNot found in your selected documents.\n\n### What is missing\nNo matching passage was found in the selected documents.\n\n### Search terms used\nmoon's, chemical, formula\n\nEvidence state: **NOT FOUND** — No passages matched the selected-document search."
+    },
+    {
+      "id": "P30",
+      "question": "What was the accuracy percentage in both papers?",
+      "expected_intent": "NUMERICAL_QUERY",
+      "predicted_intent": "NUMERICAL_QUERY",
+      "intent_correct": true,
+      "expected_chunks": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "retrieved_chunks": [
+        "c-exp-a",
+        "c-exp-b",
+        "c-date"
+      ],
+      "relevant_retrieved": [
+        "c-exp-a",
+        "c-exp-b"
+      ],
+      "reciprocal_rank": 1.0,
+      "citation_correct": true,
+      "evidence_covered": true,
+      "cited_expected_chunks": 2,
+      "expected_page": null,
+      "page_correct": true,
+      "expected_fact": "83%",
+      "extraction_correct": true,
+      "expected_abstain": false,
+      "abstained": false,
+      "expected_conflict": true,
+      "abstention_correct": true,
+      "evidence_state": "CONFLICTING EVIDENCE",
+      "execution_time_seconds": 0.0057,
+      "answer": "### Values reported in the selected documents\n- The reported accuracy was 83% after five training epochs [S2]\n- On the ExampleSet dataset with 1,000 records, the reported accuracy was 79% after five training epochs [S3]\n- The paper was published on March 12, 2021 [S1]\n\n### Conflicting reported values\n- accuracy: 83%, 79% [[S2], [S3]]. The papers may use different datasets or conditions; inspect both passages before treating this as a contradiction.\n\nEvidence state: **CONFLICTING EVIDENCE** — Retrieved passages report different values or opposing statements for a shared query-relevant claim."
+    }
+  ]
+}

@@ -33,12 +33,26 @@ class ResearchRetriever:
         self.vector_repo = vector_repo or VectorRepository()
         self.reranker = reranker or IntentAwareReranker()
 
-    def retrieve(self, request: QueryRequest) -> List[RetrievedSource]:
+    def retrieve(self, request: QueryRequest, owner_id: str) -> List[RetrievedSource]:
         """
         Executes end-to-end retrieval for a QueryRequest.
+        
+        Args:
+            request: Query request with question, filters, and options
+            owner_id: REQUIRED user ID for multi-tenant isolation (SEC-001)
+            
+        Returns:
+            List of retrieved sources owned by the specified user
+            
+        Raises:
+            ValueError: If owner_id is not provided
         """
+        if not owner_id:
+            raise ValueError("owner_id is required for secure retrieval (SEC-001 compliance)")
+            
         logger.info(
-            "Retrieving sources query_chars=%d (paper_ids=%s, top_k=%d)",
+            "Retrieving sources owner_id=%s query_chars=%d (paper_ids=%s, top_k=%d)",
+            owner_id,
             len(request.question),
             request.paper_ids,
             request.top_k,
@@ -47,8 +61,9 @@ class ResearchRetriever:
         # 1. Embed query
         query_embedding = self.embedder.embed_query(request.question)
 
-        # 2. Build metadata filter
+        # 2. Build metadata filter with MANDATORY owner_id (SEC-001 fix)
         where_filter = FilterBuilder.build_where_filter(
+            owner_id=owner_id,  # CRITICAL: Enforces tenant isolation
             paper_ids=request.paper_ids,
             filters=request.filters,
         )

@@ -21,7 +21,7 @@ class RAGResult(BaseModel):
 
     def to_api_dict(self) -> Dict[str, Any]:
         """
-        Converts result into backend/frontend API contract schema.
+        Converts result into backend/frontend API contract schema with full citation provenance.
         """
         return {
             "answer": self.answer,
@@ -40,6 +40,15 @@ class RAGResult(BaseModel):
                     "title": s.title,
                     "filename": s.filename,
                     "locator": s.locator,
+                    "citation_label": s.citation_label,
+                    "author_metadata": s.author_metadata,
+                    "paper_title": s.paper_title or s.title,
+                    "publication_year": s.publication_year,
+                    "original_page_number": s.original_page_number or s.page_start,
+                    "section_label": s.section_label or s.section,
+                    "evidence_excerpt": s.evidence_excerpt or s.text,
+                    "text_offset_start": s.text_offset_start,
+                    "text_offset_end": s.text_offset_end or (len(s.text) if s.text else 0),
                 }
                 for s in self.sources
             ],
@@ -57,8 +66,9 @@ class RAGResult(BaseModel):
         else:
             for s in self.sources:
                 title_str = f" - '{s.title}'" if s.title else ""
+                label_str = f" ({s.citation_label})" if s.citation_label else ""
                 lines.append(
-                    f"- **[{s.source_id}] Paper {s.paper_id}**{title_str} ({s.page_display}, Section: *{s.section}*)\n"
+                    f"- **[{s.source_id}]{label_str} Paper {s.paper_id}**{title_str} ({s.page_display}, Section: *{s.section}*)\n"
                     f"  > \"{s.text.strip()[:200]}...\""
                 )
         return "\n".join(lines)
@@ -73,4 +83,7 @@ class CitationFormatter:
     def format_sources_summary(sources: List[SourceCitation]) -> str:
         if not sources:
             return "No sources available."
-        return ", ".join(f"[{s.source_id}: Paper {s.paper_id} p.{s.page_start}]" for s in sources)
+        return ", ".join(
+            f"[{s.source_id}: {s.citation_label or f'Paper {s.paper_id}'} p.{s.page_start}]"
+            for s in sources
+        )

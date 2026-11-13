@@ -137,20 +137,26 @@ class VectorRepository:
         constraints, values = self._lexical_constraints(where)
         clauses = ["collection_name = ?", "lexical_chunks MATCH ?"] + constraints
         params = [self.collection.name, " OR ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms), *values, limit]
-        sql = "SELECT chunk_id, paper_id, document_id, section, page_start, page_end, title, filename, locator, text, bm25(lexical_chunks) AS score FROM lexical_chunks WHERE " + " AND ".join(clauses) + " ORDER BY score ASC LIMIT ?"
-        with self._lexical_connection() as conn:
-            rows = conn.execute(sql, params).fetchall()
+        # SEC-001: Added owner_id to SELECT for metadata reconstruction
+        sql = "SELECT chunk_id, owner_id, paper_id, document_id, section, page_start, page_end, title, filename, locator, text, bm25(lexical_chunks) AS score FROM lexical_chunks WHERE " + " AND ".join(clauses) + " ORDER BY score ASC LIMIT ?"
+        try:
+            with self._lexical_connection() as conn:
+                rows = conn.execute(sql, params).fetchall()
+        except sqlite3.OperationalError as exc:
+            logger.warning("FTS5 lexical query failed (%s); continuing with dense vector search only", exc)
+            return []
         return [
             VectorRecord(
-                id=row[0], text=row[9], similarity_score=1.0 / (60 + rank),
+                id=row[0], text=row[10], similarity_score=1.0 / (60 + rank),
                 metadata=ChunkMetadata(
-                    chunk_id=row[0], paper_id=row[1], document_id=row[2], section=row[3] or "Main Content",
-                    page_start=int(row[4]) if row[4] is not None else None,
-                    page_end=int(row[5]) if row[5] is not None else None,
-                    title=row[6] or None, filename=row[7] or None, locator=row[8] or None,
+                    chunk_id=row[0], owner_id=row[1], paper_id=row[2], document_id=row[3], section=row[4] or "Main Content",
+                    page_start=int(row[5]) if row[5] is not None else None,
+                    page_end=int(row[6]) if row[6] is not None else None,
+                    title=row[7] or None, filename=row[8] or None, locator=row[9] or None,
                     chunk_index=0,
                 ),
             ) for rank, row in enumerate(rows, start=1)
+            if row[1] and str(row[1]).strip()
         ]
 
     @contextmanager
@@ -162,7 +168,8 @@ class VectorRepository:
         try:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS lexical_chunks USING fts5(chunk_id UNINDEXED, collection_name UNINDEXED, paper_id UNINDEXED, document_id UNINDEXED, section UNINDEXED, page_start UNINDEXED, page_end UNINDEXED, title UNINDEXED, filename UNINDEXED, locator UNINDEXED, text, tokenize='unicode61')")
+            # SEC-001: Added owner_id UNINDEXED column for multi-tenant isolation
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS lexical_chunks USING fts5(chunk_id UNINDEXED, owner_id UNINDEXED, collection_name UNINDEXED, paper_id UNINDEXED, document_id UNINDEXED, section UNINDEXED, page_start UNINDEXED, page_end UNINDEXED, title UNINDEXED, filename UNINDEXED, locator UNINDEXED, text, tokenize='unicode61')")
             yield conn
             conn.commit()
         except Exception:
@@ -179,7 +186,7 @@ class VectorRepository:
         items = where.get("$and", [where]) if isinstance(where, dict) else []
         if not isinstance(items, list):
             return ["1 = 0"], []
-        allowed = {"paper_id", "document_id", "section"}
+        allowed = {"owner_id", "paper_id", "document_id", "section"}  # SEC-001: Add owner_id support
         for item in items:
             if not isinstance(item, dict):
                 return ["1 = 0"], []
@@ -189,21 +196,35 @@ class VectorRepository:
                 values = value.get("$in") if isinstance(value, dict) else [value]
                 if not isinstance(values, list) or not values:
                     return ["1 = 0"], []
+                # SEC-001: Fail closed if owner_id filter contains empty or None value
+                if key == "owner_id":
+                    sanitized = [str(v).strip() for v in values if v is not None and str(v).strip()]
+                    if not sanitized or len(sanitized) != len(values):
+                        return ["1 = 0"], []
+                    values = sanitized
                 clauses.append(f"{key} IN ({','.join('?' for _ in values)})")
                 params.extend(str(v) for v in values)
         return clauses, params
 
     def _upsert_lexical(self, chunks: List[DocumentChunk]) -> None:
         collection_name = self.collection.name
+        # SEC-001: Mandatory fail-fast validation of owner_id for all indexed chunks
+        for chunk in chunks:
+            owner_id = getattr(chunk.metadata, "owner_id", None)
+            if not owner_id or not str(owner_id).strip():
+                raise ValueError(
+                    f"owner_id is required for all indexed chunks (SEC-001 compliance, chunk_id={getattr(chunk.metadata, 'chunk_id', 'unknown')})"
+                )
         with self._lexical_connection() as conn:
             conn.executemany(
                 "DELETE FROM lexical_chunks WHERE collection_name = ? AND chunk_id = ?",
                 ((collection_name, chunk.metadata.chunk_id) for chunk in chunks),
             )
+            # SEC-001: Added owner_id column to INSERT statement
             conn.executemany(
-                "INSERT INTO lexical_chunks (chunk_id, collection_name, paper_id, document_id, section, page_start, page_end, title, filename, locator, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO lexical_chunks (chunk_id, owner_id, collection_name, paper_id, document_id, section, page_start, page_end, title, filename, locator, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 ((
-                    chunk.metadata.chunk_id, collection_name, chunk.metadata.paper_id,
+                    chunk.metadata.chunk_id, chunk.metadata.owner_id, collection_name, chunk.metadata.paper_id,
                     chunk.metadata.document_id, chunk.metadata.section, chunk.metadata.page_start,
                     chunk.metadata.page_end, chunk.metadata.title or "", chunk.metadata.filename or "",
                     chunk.metadata.locator or "", chunk.text,
@@ -213,9 +234,14 @@ class VectorRepository:
     def _ensure_lexical_index(self) -> None:
         with self._lexical_connection() as conn:
             indexed = conn.execute("SELECT count(*) FROM lexical_chunks WHERE collection_name = ?", (self.collection.name,)).fetchone()[0]
-        if indexed == self.collection.count():
+        vector_count = self.collection.count()
+        if indexed >= vector_count:
+            # Independent mode can intentionally add FTS-only documents. A
+            # count mismatch must never trigger a full lexical rebuild that
+            # deletes those documents; only backfill when Chroma has more rows.
             return
-        # Backfill older Chroma collections without deleting or mutating vectors.
+        # Backfill older Chroma collections without deleting vectors or any
+        # existing lexical-only rows. Explicit integrity audits report orphans.
         records = []
         offset = 0
         page_size = 1000
@@ -226,14 +252,15 @@ class VectorRepository:
                 break
             for chunk_id, doc, meta in zip(ids, batch.get("documents", []), batch.get("metadatas", [])):
                 m = ChunkMetadata.from_chroma_metadata(meta)
+                if not m.owner_id or not str(m.owner_id).strip():
+                    continue
                 records.append(DocumentChunk(text=doc, metadata=m))
             offset += len(ids)
             if len(ids) < page_size:
                 break
-        with self._lexical_connection() as conn:
-            conn.execute("DELETE FROM lexical_chunks WHERE collection_name = ?", (self.collection.name,))
-        for start in range(0, len(records), 500):
-            self._upsert_lexical(records[start:start + 500])
+        if records:
+            for start in range(0, len(records), 500):
+                self._upsert_lexical(records[start:start + 500])
 
     def delete_paper_chunks(self, paper_id: str) -> int:
         """

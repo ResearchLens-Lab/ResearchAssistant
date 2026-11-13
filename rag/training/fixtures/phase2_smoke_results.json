@@ -1,0 +1,156 @@
+{
+  "dataset": "C:\\Users\\gorav\\OneDrive\\Desktop\\college project\\ResearchAssistant\\rag\\training\\fixtures\\phase2_smoke.jsonl",
+  "synthetic_only": true,
+  "counts": {
+    "train": 20,
+    "validation": 5,
+    "test": 5
+  },
+  "group_counts": {
+    "train": 4,
+    "validation": 1,
+    "test": 1
+  },
+  "quality": {
+    "valid": true,
+    "errors": [],
+    "duplicate_example_ids": [],
+    "label_conflicts": [],
+    "missing_provenance_ids": [],
+    "label_counts": {
+      "DEFINITION": 6,
+      "AUTHOR_LOOKUP": 6,
+      "METHODOLOGY_EXTRACTION": 6,
+      "3": 6,
+      "0": 6
+    },
+    "class_imbalance_ratio": 1.0,
+    "class_imbalance_warning": false,
+    "example_count": 30
+  },
+  "intent_test": {
+    "accuracy": 1.0,
+    "macro_precision": 1.0,
+    "macro_recall": 1.0,
+    "macro_f1": 1.0,
+    "per_class": {
+      "AUTHOR_LOOKUP": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "DEFINITION": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "METHODOLOGY_EXTRACTION": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      }
+    },
+    "confusion_matrix": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "labels": [
+      "AUTHOR_LOOKUP",
+      "DEFINITION",
+      "METHODOLOGY_EXTRACTION"
+    ],
+    "deterministic_baseline": {
+      "accuracy": 0.6666666666666666,
+      "macro_precision": 0.5,
+      "macro_recall": 0.5,
+      "macro_f1": 0.5,
+      "per_class": {
+        "AUTHOR_LOOKUP": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        },
+        "DEFINITION": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1
+        },
+        "FACT_LOOKUP": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        },
+        "METHODOLOGY_EXTRACTION": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 1
+        }
+      },
+      "confusion_matrix": [
+        [
+          1,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "labels": [
+        "AUTHOR_LOOKUP",
+        "DEFINITION",
+        "FACT_LOOKUP",
+        "METHODOLOGY_EXTRACTION"
+      ]
+    }
+  },
+  "passage_ranking_test": {
+    "trained_model": {
+      "recall@2": 1.0,
+      "mrr": 1.0,
+      "ndcg@2": 1.0
+    },
+    "deterministic_baseline": {
+      "recall@2": 1.0,
+      "mrr": 1.0,
+      "ndcg@2": 1.0
+    }
+  },
+  "model_activated": false
+}

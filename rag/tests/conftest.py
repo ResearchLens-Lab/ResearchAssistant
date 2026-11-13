@@ -122,6 +122,7 @@ def sample_document():
         title="Attention Is All You Need",
         authors=["Vaswani et al."],
         year=2017,
+        owner_id="test_user_fixture",
     )
     return normalizer.normalize(pages=pages, metadata=meta)
 

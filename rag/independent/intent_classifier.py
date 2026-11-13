@@ -1,0 +1,355 @@
+"""Configurable rules-based intent and query analysis; deliberately no model use."""
+
+import re
+import unicodedata
+from collections import OrderedDict
+from typing import Iterable
+
+from rag.independent.models import QueryAnalysis, QuestionIntent
+
+
+STOPWORDS = frozenset("""
+a about above after again against all am an and any are as at be because been before being
+below between both but by can could did do does doing down during each few for from further
+had has have having he her here hers herself him himself his how i if in into is it its itself
+just me more most my myself no nor not of off on once only or other our ours ourselves out over
+own same she should so some such than that the their theirs them themselves then there these they
+this those through to too under until up very was we were what when where which while who whom why
+will with would you your yours yourself yourselves explain tell show give find identify list
+overview describe discuss information material document paper book topic research
+""".split())
+
+
+TERM_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "algorithm": ("procedure", "computational procedure", "method", "pseudocode"),
+    "author": ("written by", "authorship", "authors"),
+    "methodology": ("method", "methods", "approach", "experimental design", "procedure"),
+    "method": ("methodology", "approach", "procedure"),
+    "dataset": ("corpus", "benchmark data", "data set"),
+    "metric": ("measure", "evaluation measure", "score", "accuracy", "precision"),
+    "evaluation": ("metric", "measure", "accuracy", "result"),
+    "measure": ("metric", "accuracy", "precision", "score"),
+    "result": ("finding", "outcome", "performance"),
+    "finding": ("result", "outcome", "evidence"),
+    "limitation": ("constraint", "caveat", "weakness", "threats to validity"),
+    "advantage": ("benefit", "strength", "merit"),
+    "disadvantage": ("drawback", "weakness", "limitation"),
+    "definition": ("defined as", "refers to", "means"),
+    "date": ("year", "published", "publication date"),
+    "publication": ("published", "release date", "issued"),
+    "appear": ("published", "issued", "released"),
+    "strengths": ("advantage", "benefit"),
+    "weakness": ("limitation", "drawback"),
+    "weaknesses": ("limitation", "drawback"),
+    "stated": ("reported", "described"),
+    "shown": ("reported", "measured"),
+    "table": ("findings", "results", "methods", "summary"),
+}
+
+
+INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...] = (
+    (QuestionIntent.CHART_SYNTHESIS, (
+        r"(?:^|\s)/(?:pie|chart)\b",
+        r"\b(?:pie\s+chart|distribution\s+chart|pie\s+diagram|breakdown\s+chart|proportions?\s+chart)\b",
+        r"\b(?:show|create|give|format|make)\b.{0,25}\b(?:pie\s+chart|chart\s+of|distribution\s+pie)\b",
+    ), ("pie chart", "topic distribution", "proportions", "evidence")),
+    (QuestionIntent.DIAGRAM_SYNTHESIS, (
+        r"(?:^|\s)/(?:diagram|flowchart|flow)\b",
+        r"\b(?:flowchart|process\s+diagram|flow\s+diagram|architecture\s+diagram|mermaid)\b",
+        r"\b(?:show|create|give|format|make)\b.{0,25}\b(?:flowchart|flow\s+chart|diagram|process\s+flow)\b",
+    ), ("flowchart", "process flow", "architecture", "evidence")),
+    (QuestionIntent.TABLE_SYNTHESIS, (
+        r"(?:^|\s)/(?:table|tabular)\b",
+        r"\b(?:present|show|give|format|put|structure|display)\b.{0,30}\b(?:table|tabular|matrix|grid)\b",
+        r"\b(?:in|as)\s+a\s+(?:concise\s+)?table\b",
+        r"^\s*(?:use\s+a\s+)?table\s*$",
+        r"\b(?:tabular\s+format|as\s+a\s+table)\b",
+    ), ("table", "findings", "citations", "evidence")),
+    (QuestionIntent.SIMPLIFIED_EXPLANATION, (
+        r"\bexplain\s+in\s+simple\s+language\b",
+        r"\bsimplif(?:y|ied)\b",
+        r"\bin\s+plain\s+(?:english|terms)\b",
+        r"\bfor\s+(?:beginners|non-experts)\b",
+        r"\beasy\s+to\s+understand\b",
+    ), ("simplified overview", "core concept", "intuitive explanation")),
+    (QuestionIntent.DEEP_EXPLANATION, (
+        r"\bexplain\s+in\s+(?:more\s+)?depth\b",
+        r"\bdetailed\s+explanation\b",
+        r"\belaborate\b",
+        r"\bdeep\s+dive\b",
+        r"\bcomprehensive\s+explanation\b",
+    ), ("detailed explanation", "underlying mechanisms", "evidence")),
+    (QuestionIntent.PRACTICAL_EXAMPLE, (
+        r"\b(?:give|provide|show)\s+(?:a\s+)?practical\s+example\b",
+        r"\bpractical\s+examples?\b",
+        r"\bconcrete\s+example\b",
+        r"\breal-world\s+example\b",
+        r"\billustrat(?:e|ive)\s+example\b",
+    ), ("concrete example", "application scenario", "passages")),
+    (QuestionIntent.METHODOLOGY_EXTRACTION, (
+        r"(?:^|\s)/(?:methods?|methodology)\b",
+        r"\bmethodolog(?:y|ies)\b",
+        r"\b(?:research|experimental|study)\s+design\b",
+        r"\bwhat\s+(?:approach|method|methods|methodology)\s+did\b",
+        r"\bhow\s+was\s+the\s+(?:research|study|experiment|review)\s+conducted\b",
+        r"\bmethods?\s+used\b",
+        r"\bsearch\s+strategy\b",
+        r"\bdata\s+collection\b",
+    ), ("methods", "design", "evidence")),
+    (QuestionIntent.AUTHOR_LOOKUP, (
+        r"\bwho\s+(?:is|are|were)\s+(?:the\s+)?author(?:s)?\b",
+        r"\bwho\s+(?:wrote|authored|created|published)\b",
+        r"\b(?:identify|list|find|name)\s+(?:the\s+)?(?:book'?s|paper'?s|document'?s)?\s*author(?:s)?\b",
+        r"\bauthor(?:s)?\s+of\s+(?:this|the)\b",
+        r"^\s*(?:the\s+)?author(?:s)?\s*\??$",
+        r"\bwritten\s+by\b",
+        r"\bauthorship\b",
+    ), ("authors", "authorship")),
+    (QuestionIntent.LIMITATIONS_EXTRACTION, (
+        r"\b(?:reported\s+)?limitations?\b",
+        r"\bthreats?\s+to\s+validity\b",
+        r"\bweakness(?:es)?\b",
+        r"\bboundaries?\s+and\s+limitations?\b",
+        r"\bchallenges?\b",
+        r"\bopen\s+(?:issues|problems|challenges)\b",
+    ), ("limitations", "threats to validity", "scope")),
+    (QuestionIntent.DATASET_EXTRACTION, (
+        r"\bdatasets?\b",
+        r"\bcorpora?\b",
+        r"\bdata\s+sets?\b",
+        r"\bbenchmark\s+data\b",
+    ), ("datasets", "evidence")),
+    (QuestionIntent.ALGORITHMS_EXTRACTION, (
+        r"\b(?:extract|list|identify|find)\s+(?:the\s+)?(?:key\s+)?algorithms?\b",
+        r"\balgorithms?\s+(?:used|proposed|presented|described)\b",
+        r"\balgorithms?\s+and\s+methods?\b",
+        r"\bpseudocode\b",
+        r"\bcomputational\s+steps?\b",
+        r"\bwhich\s+algorithms?\b",
+    ), ("algorithms", "computational steps", "methods")),
+    (QuestionIntent.SUMMARY, (
+        r"(?:^|\s)/(?:summary|outline|curriculum|syllabus)\b",
+        r"\bsummar(?:y|ize|ise|izing|ising)\b",
+        r"^\s*overview\b",
+        r"\bmain\s+(?:findings|themes|points|takeaways)\b",
+        r"\bkey\s+findings\b",
+        r"\bcore\s+findings\b",
+    ), ("summary", "findings", "limitations")),
+    (QuestionIntent.COMPARISON, (
+        r"(?:^|\s)/(?:compare|diff)\b",
+        r"\bcompare\b",
+        r"\bcompar(?:e|ison|ing)\b",
+        r"\bdifferences?\b",
+        r"\bversus\b",
+        r"\bvs\.?\b",
+    ), ("comparison", "similarities", "differences")),
+    (QuestionIntent.NUMERICAL_QUERY, (
+        r"\bhow\s+many\b",
+        r"\bhow\s+much\b",
+        r"\bwhat\s+(?:is|are|was|were)\s+the\s+(?:value|score|rate|percentage|number|amount)\b",
+        r"\bpercent(?:age)?\b",
+        r"\b\d+(?:\.\d+)?\s*%",
+    ), ("values", "units", "sources")),
+    (QuestionIntent.METRIC_EXTRACTION, (
+        r"\bmetrics?\b",
+        r"\bevaluation\s+(?:measure|metric)s?\b",
+        r"\b(?:precision|recall|accuracy|f1|bleu|auc|rmse|mae)\b",
+    ), ("metrics", "values", "evidence")),
+    (QuestionIntent.DATE_LOOKUP, (
+        r"\bwhen\b",
+        r"\bwhat\s+(?:year|date)\b",
+        r"\bpublication\s+date\b",
+        r"\bpublished\s+in\b",
+        r"\bwhen\s+did\b",
+    ), ("dates", "sources")),
+    (QuestionIntent.DEFINITION, (
+        r"\bdefine\b",
+        r"\bdefinition\s+of\b",
+        r"\bwhat\s+is\s+meant\s+by\b",
+        r"^\s*what\s+is\s+(?:an?|the)\s+[\w\s-]{1,50}\??$",
+        r"\bwhat\s+(?:is|are)\s+(?:an?|the)\s+[\w-]+\s*\??$",
+    ), ("definition", "explanation", "key points", "sources")),
+    (QuestionIntent.EXPLANATION, (
+        r"\bexplain\b",
+        r"\bdescribe\b",
+        r"\bwhy\b",
+        r"\bwhat\s+does\b",
+        r"\bwhat\s+is\s+(?:the\s+)?role\s+of\b",
+        r"\bhow\s+does\b",
+        r"\bwhat\s+are\s+the\b",
+    ), ("direct answer", "evidence", "explanation")),
+    (QuestionIntent.PROCEDURAL_QUESTION, (
+        r"\b(?:steps|process|workflow|procedure)\s+to\b",
+        r"\bhow\s+to\b",
+        r"\bstep-by-step\b",
+    ), ("ordered steps", "conditions", "sources")),
+    (QuestionIntent.EVIDENCE_LOOKUP, (
+        r"\b(?:show|find|give|provide)\b.{0,24}\b(?:evidence|passages?|quotes?|citations?)\b",
+        r"\bsupporting\s+(?:passages?|evidence)\b",
+    ), ("excerpts", "source details")),
+    (QuestionIntent.LIST_EXTRACTION, (
+        r"\blist\b",
+        r"\bwhich\s+(?:ones|items|papers|algorithms|authors|datasets|methods)\b",
+        r"\bname\s+(?:the|all)\b",
+    ), ("items", "sources")),
+    (QuestionIntent.FACT_LOOKUP, (
+        r"\bwho\b",
+        r"\bwhich\b",
+        r"\bwhat\b",
+        r"\bidentify\b",
+        r"\bfind\b",
+    ), ("direct answer", "sources")),
+)
+
+
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"[\w]+(?:[-'][\w]+)*", unicodedata.normalize("NFKC", text).casefold(), flags=re.UNICODE)
+
+
+def _entities(question: str) -> list[str]:
+    found: OrderedDict[str, None] = OrderedDict()
+    for match in re.findall(r"[\"“']([^\"”']{2,100})[\"”']", question):
+        found.setdefault(match.strip(), None)
+    for doi in re.findall(r"\b10\.\d{4,9}/[A-Za-z0-9._;()/:-]+", question, flags=re.I):
+        found.setdefault(doi.rstrip(".,;"), None)
+    for acronym in re.findall(r"\b[A-Z][A-Z0-9-]{1,}\b", question):
+        found.setdefault(acronym, None)
+    # Capture a user's explicit research topic phrase, not every capitalized word.
+    topic = re.search(r"\b(?:about|on|related to|regarding|concerning)\s+(.+?)(?:\?|$)", question, re.I)
+    if topic:
+        phrase = re.sub(r"\b(?:please|in the selected documents|in these papers)\b", "", topic.group(1), flags=re.I).strip(" .")
+        if len(_tokens(phrase)) >= 2:
+            found.setdefault(phrase, None)
+    return list(found)[:12]
+
+
+def _expand(terms: Iterable[str]) -> list[str]:
+    output: OrderedDict[str, None] = OrderedDict()
+    for term in terms:
+        if term in STOPWORDS or len(term) < 2:
+            continue
+        output.setdefault(term, None)
+        for expansion in TERM_SYNONYMS.get(term, ()):
+            for token in _tokens(expansion):
+                if token not in STOPWORDS:
+                    output.setdefault(token, None)
+    return list(output)[:40]
+
+
+class QuestionIntentClassifier:
+    """Rule-driven question interpretation with explainable, testable signals."""
+
+    def __init__(self, synonyms: dict[str, tuple[str, ...]] | None = None):
+        self.synonyms = synonyms or TERM_SYNONYMS
+
+    def classify(self, question: str, paper_ids: list[str] | None = None,
+                 document_ids: list[str] | None = None,
+                 conversation_context: str | None = None) -> QueryAnalysis:
+        normalized = unicodedata.normalize("NFKC", question).strip()
+        # Clean leading slash commands (e.g. /table, /pie, /flowchart) from the search query for retrieval
+        stripped_slash = re.sub(r"^\s*/[a-z_]+\s*", "", normalized).strip()
+        search_question = stripped_slash if stripped_slash else "summary overview main topics findings sections"
+
+        # Resolve short follow-ups using the preceding substantive user topic.
+        # Only rewrite the search query for retrieval; never corrupt the intent classification.
+        is_followup = bool(re.search(
+            r"\b(?:more|further|deeper|depth|example|simple|plain|summarize|table|tabular|limitations?|compare)\b",
+            normalized, re.I
+        )) and not bool(re.search(r"\b(?:what\s+is|what\s+are|define|who\s+wrote|who\s+is|author|methodology)\b", normalized, re.I))
+
+        if conversation_context and is_followup:
+            prior_users = re.findall(r"(?im)^\s*user\s*:\s*(.+)$", conversation_context)
+            if prior_users:
+                substantive_prior = [
+                    u.strip() for u in prior_users
+                    if not re.search(r"\b(?:table|concise|more depth|example|simple)\b", u, re.I)
+                ]
+                topic = substantive_prior[-1] if substantive_prior else prior_users[-1].strip()
+                search_question = f"{topic} {normalized}"
+
+        # Intent is determined strictly from the user's current question!
+        lower = normalized.casefold()
+        intent = QuestionIntent.UNKNOWN
+        signals: list[str] = []
+        answer_shape: list[str] = []
+        for candidate, patterns, shape in INTENT_RULES:
+            matches = [pattern for pattern in patterns if re.search(pattern, lower, re.I)]
+            if matches:
+                intent = candidate
+                signals = matches
+                answer_shape = list(shape)
+                break
+
+        tokens = _tokens(search_question)
+        important = list(OrderedDict.fromkeys(
+            token for token in tokens if token not in STOPWORDS and len(token) > 1
+        ))[:30]
+
+        # For generic research queries without topic keywords (e.g. "Use a table"),
+        # provide core academic anchor terms so retrieval finds substantive passages.
+        if len(important) < 2:
+            anchor_terms = ["finding", "method", "result", "experiment", "model", "approach", "conclusion", "table"]
+            important.extend([t for t in anchor_terms if t not in important])
+            important = important[:15]
+
+        self_terms = _expand_with(important, self.synonyms)
+        filters: dict[str, object] = {}
+        if paper_ids:
+            filters["paper_ids"] = list(dict.fromkeys(paper_ids))
+        if document_ids:
+            filters["document_ids"] = list(dict.fromkeys(document_ids))
+        year_mentions = [int(y) for y in re.findall(r"\b(?:19|20)\d{2}\b", search_question)]
+        if year_mentions:
+            filters["mentioned_years"] = year_mentions
+
+        strategies = ["SQLite FTS5 BM25", "local TF-IDF", "reciprocal-rank fusion", "metadata signals", "deduplicate by document and chunk"]
+        if intent in {QuestionIntent.AUTHOR_LOOKUP, QuestionIntent.DATE_LOOKUP}:
+            strategies.insert(0, "bibliographic/title-page evidence preference")
+        if intent == QuestionIntent.METHODOLOGY_EXTRACTION:
+            strategies.insert(0, "methods-section preference")
+        if intent == QuestionIntent.COMPARISON:
+            strategies.insert(0, "balanced per-paper evidence selection")
+        if intent == QuestionIntent.TABLE_SYNTHESIS:
+            strategies.insert(0, "structured tabular synthesis")
+
+        return QueryAnalysis(
+            intent=intent,
+            normalized_question=normalized,
+            search_query=search_question,
+            entities=_entities(search_question),
+            important_terms=important,
+            expanded_terms=self_terms,
+            document_filters=filters,
+            retrieval_strategy=strategies,
+            expected_answer_structure=answer_shape or ["evidence summary", "source passages", "limitations"],
+            intent_signals=signals,
+        )
+
+
+def _expand_with(terms: Iterable[str], synonyms: dict[str, tuple[str, ...]]) -> list[str]:
+    output: OrderedDict[str, None] = OrderedDict()
+    for term in terms:
+        if term in STOPWORDS or len(term) < 2:
+            continue
+        output.setdefault(term, None)
+        normalized = _normalize_term(term)
+        if normalized != term:
+            output.setdefault(normalized, None)
+        for expanded in synonyms.get(term, ()):
+            for token in _tokens(expanded):
+                if token not in STOPWORDS:
+                    output.setdefault(token, None)
+        for expanded in synonyms.get(normalized, ()):
+            for token in _tokens(expanded):
+                if token not in STOPWORDS:
+                    output.setdefault(token, None)
+    return list(output)[:40]
+
+
+def _normalize_term(term: str) -> str:
+    """Small deterministic English inflection normalizer for FTS token matching."""
+    if len(term) > 5 and term.endswith("ies"):
+        return term[:-3] + "y"
+    if len(term) > 4 and term.endswith("s") and not term.endswith(("ss", "us", "is")):
+        return term[:-1]
+    return term
