@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Download, GitCompare, Sparkles } from "lucide-react";
 import { parseComparisonMarkdown, buildResearchBrief, summarizeClaimChecks } from "@/lib/researchWorkspace.mjs";
 
-export function ComparisonSynthesisCard({ result, question, paperTitles = [] }) {
+export function ComparisonSynthesisCard({ result, question, paperTitles = [], outputFormat = "table", documentScope = [], projectTitles = [] }) {
   const answer = result?.answer || "";
   const matrix = parseComparisonMarkdown(answer);
   const research = result?.metadata?.research || {};
@@ -19,11 +19,11 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [] }) 
     const markdown = buildResearchBrief([
       { role: "user", content: question || "Compare the selected research papers." },
       { role: "assistant", content: answer, sources: result?.sources || [], meta: { research: result?.metadata?.research || {} } },
-    ], "Cross-paper research brief");
+    ], "Source comparison report");
     const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "cross-paper-research-brief.md";
+    link.download = "source-comparison-report.md";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -33,7 +33,7 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [] }) 
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--rl-border)] px-4 py-4 sm:px-5">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><GitCompare className="h-4 w-4" aria-hidden="true" /></span>
-          <div><h2 className="text-base font-semibold text-[var(--rl-ink)]">Cross-paper matrix</h2><p className="text-xs text-[var(--rl-muted)]">{question ? `Focus: ${question}` : "Generated from selected papers and linked passages"}</p></div>
+          <div><h2 className="text-base font-semibold text-[var(--rl-ink)]">{outputFormat === "table" ? "Source comparison" : outputFormat === "side_by_side" ? "Evidence side by side" : "Detailed comparison report"}</h2><p className="text-xs text-[var(--rl-muted)]">{question ? `Focus: ${question}` : "Generated from selected documents and linked passages"}</p></div>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1.5 border-[var(--rl-border)] text-xs text-[var(--rl-muted)]"><Sparkles className="h-3 w-3 text-[var(--rl-primary)]" />{result?.sources?.length || 0} evidence passages</Badge>
@@ -57,6 +57,15 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [] }) 
 
       {paperTitles.length > 0 && <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--rl-border)] px-4 py-3 sm:px-5"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Compared sources</span>{paperTitles.map((title) => <span key={title} title={title} className="max-w-64 truncate rounded-full border border-[var(--rl-border)] bg-white px-2.5 py-1 text-[10px] text-[var(--rl-ink)]">{title}</span>)}</div>}
 
+      {documentScope.length > 0 && <section className="border-b border-[var(--rl-border)] px-4 py-3 sm:px-5" aria-label="Selected document coverage">
+        <div className="mb-2 flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Selected scope</span>{projectTitles.map((title, index) => <span key={`${title}-${index}`} className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1 text-[10px] text-[var(--rl-muted)]">{title}</span>)}</div>
+        <ul className="grid gap-1.5 sm:grid-cols-2">{documentScope.map((document) => <li key={document.document_id} className="flex min-w-0 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-2.5 py-2 text-xs">
+          <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${document.contributed_evidence ? "bg-emerald-500" : "bg-amber-500"}`} />
+          <span className="min-w-0 flex-1 truncate text-[var(--rl-ink)]" title={`${document.project_title} · ${document.filename}`}>{document.filename}</span>
+          <span className={`shrink-0 text-[10px] ${document.contributed_evidence ? "text-emerald-700" : "text-amber-700"}`}>{document.contributed_evidence ? "Evidence retrieved" : "No relevant passage retrieved"}</span>
+        </li>)}</ul>
+      </section>}
+
       {matrix ? <>
         <div className="overflow-x-auto" tabIndex={0} aria-label="Scrollable comparison matrix">
           <table className="min-w-[760px] w-full border-collapse text-left text-sm">
@@ -67,7 +76,7 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [] }) 
         {matrix.synthesis && <div className="border-t border-[var(--rl-border)] bg-[var(--rl-tint)]/60 px-4 py-4 sm:px-5"><h3 className="mb-2 text-sm font-semibold text-[var(--rl-ink)]">Synthesis</h3><GroundedAnswer content={matrix.synthesis} sources={result?.sources} /></div>}
       </> : <div className="p-4 sm:p-5"><p className="mb-3 rounded-lg border border-[var(--rl-border)] bg-[var(--rl-tint)] p-3 text-sm text-[var(--rl-muted)]">The provider returned a narrative comparison instead of a matrix. The answer is shown with its citations.</p><GroundedAnswer content={answer} sources={result?.sources} /></div>}
 
-      <footer className="border-t border-slate-100 px-4 py-3 text-xs leading-relaxed text-[var(--rl-muted)] sm:px-5">Cells preserve the generated findings and citation IDs. “Not reported in the selected sources” means the retrieved passages did not provide that information. Open any citation to inspect its document, location, and full excerpt.</footer>
+      <footer className="border-t border-slate-100 px-4 py-3 text-xs leading-relaxed text-[var(--rl-muted)] sm:px-5">This report uses retrieved passages from the selected documents. A missing passage means retrieval did not find supporting text for this focus; it does not establish that the document contains no such information. Open a citation to inspect its document, location, and excerpt.</footer>
     </section>
   );
 }

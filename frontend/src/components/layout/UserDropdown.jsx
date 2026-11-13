@@ -23,16 +23,18 @@ export function UserDropdown() {
         .join("")
         .toUpperCase()
         .slice(0, 2)
+    : user?.username
+    ? user.username.slice(0, 2).toUpperCase()
     : user?.email
     ? user.email.slice(0, 2).toUpperCase()
-    : "RL";
+    : "GO";
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[var(--rl-selected)] p-0 text-xs font-semibold text-[var(--rl-primary)] ring-1 ring-[var(--rl-border)] hover:bg-[#d8ebfa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)] transition-colors select-none cursor-pointer"
+          className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white p-0 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 transition-colors select-none cursor-pointer"
           aria-label="Open account menu"
         >
           <span>{initials}</span>

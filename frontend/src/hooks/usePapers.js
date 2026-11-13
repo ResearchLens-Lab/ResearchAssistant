@@ -61,6 +61,16 @@ export function usePaperDetails(paperId) {
     queryKey: ["paper", paperId],
     queryFn: () => papersService.getById(paperId),
     enabled: !!paperId,
+    initialData: () => {
+      const queries = queryClient.getQueriesData({ queryKey: ["papers"] });
+      for (const [_, cached] of queries) {
+        if (cached?.items) {
+          const found = cached.items.find((p) => p.id === paperId);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    },
   });
 
   const documentsQuery = useQuery({

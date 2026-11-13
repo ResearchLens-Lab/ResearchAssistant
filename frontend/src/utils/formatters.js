@@ -1,3 +1,5 @@
+import { parseResearchTimestamp, RESEARCH_TIME_ZONE } from "./researchTime.mjs";
+
 export function formatBytes(bytes, decimals = 1) {
   if (!bytes || bytes === 0) return "0 B";
   const k = 1024;
@@ -10,12 +12,14 @@ export function formatBytes(bytes, decimals = 1) {
 export function formatDate(dateString) {
   if (!dateString) return "";
   try {
-    const d = new Date(dateString);
-    return d.toLocaleDateString("en-US", {
+    const d = parseResearchTimestamp(dateString);
+    if (!d) return dateString;
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: RESEARCH_TIME_ZONE,
       year: "numeric",
       month: "short",
       day: "numeric",
-    });
+    }).format(d);
   } catch {
     return dateString;
   }

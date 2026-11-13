@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, ShieldCheck, User, LogOut, Check } from "lucide-react";
+import { Settings, ShieldCheck, User, LogOut, Check, Cpu, RefreshCw } from "lucide-react";
 import { formatDate } from "@/utils/formatters";
 
 export default function SettingsPage() {
@@ -31,6 +31,20 @@ export default function SettingsPage() {
     queryKey: ["readinessCheck"],
     queryFn: () => researchService.getReadiness(),
   });
+
+  const { data: modelData, isFetching: modelRefreshing, refetch: refreshModel } = useQuery({
+    queryKey: ["localModelStatus"],
+    queryFn: () => researchService.getLocalModelStatus(),
+    refetchInterval: 15000,
+    retry: 1,
+  });
+
+  const modelState = modelData?.state;
+  const modelBadge = modelState === "ready_loaded" ? ["Loaded and ready", "grounded"]
+    : modelState === "inference_active" ? ["Generating locally", "grounded"]
+    : modelState === "ready_not_loaded" ? ["Installed · not loaded", "secondary"]
+    : modelState === "model_missing" ? ["Model not installed", "warning"]
+    : ["Ollama unavailable", "destructive"];
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -177,6 +191,53 @@ export default function SettingsPage() {
                 1 GiB per file · 1 GiB per batch
               </span>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-zinc-200 shadow-2xs dark:border-zinc-800">
+          <CardHeader className="p-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-blue-600" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                  Local AI Model
+                </CardTitle>
+              </div>
+              <Button type="button" variant="ghost" size="icon" aria-label="Refresh model status"
+                onClick={() => refreshModel()} disabled={modelRefreshing} className="h-7 w-7">
+                <RefreshCw className={`h-3.5 w-3.5 ${modelRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+            <CardDescription className="text-xs">
+              Read-only Ollama status. ResearchLens will not download or load a model from this screen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-zinc-500">Configured model</span>
+              <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-200">{modelData?.model || "qwen3.5:0.8b"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-zinc-500">Runtime and model</span>
+              <Badge variant={modelBadge[1]} className="text-[10px]">{modelBadge[0]}</Badge>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+              <span className="text-zinc-500">Generation limits</span>
+              <span className="text-right font-mono text-zinc-700 dark:text-zinc-300">
+                {modelData?.generation_limits
+                  ? `${modelData.generation_limits.max_output_tokens} output · ${modelData.generation_limits.context_tokens} context tokens`
+                  : "Status unavailable"}
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-zinc-500">
+              {modelState === "ready_not_loaded"
+                ? "The model loads on its first research request and unloads according to Ollama's keep-alive setting."
+                : modelState === "model_missing"
+                  ? "Install the configured model manually in Ollama. No model download has been started."
+                  : modelState === "runtime_unavailable"
+                    ? "Start Ollama to enable local synthesis. Evidence retrieval remains available."
+                    : "Only the final response content is used; private model thinking is not displayed."}
+            </p>
           </CardContent>
         </Card>
       </div>

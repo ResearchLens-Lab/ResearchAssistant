@@ -85,12 +85,14 @@ export function useChat(conversationId = null, searchQuery = "") {
         const labels = {
           planning_started: "Planning the research question…",
           planning_completed: "Research plan ready",
-          retrieval_started: "Searching selected sources…",
+          retrieval_started: "Searching selected sources with SQLite FTS5…",
           additional_retrieval: "Looking for missing evidence…",
           sources_found: `Found ${event.data?.count ?? 0} evidence passages`,
-          evidence_ready: "Evidence collected; preparing an answer…",
-          generation_skipped: "Answering with a directly retrieved passage…",
-          generation_started: event.data?.provider === "ollama" ? "Generating with local Qwen; CPU answers can take a little longer…" : "Drafting an evidence-based answer…",
+          evidence_ready: "Evidence collected; composing response…",
+          generation_skipped: event.data?.reason === "deterministic_structured_composition"
+            ? "Composing deterministic evidence-based response…"
+            : "Answering with verified document evidence…",
+          generation_started: "Drafting an evidence-based answer from indexed passages…",
           verification_started: "Checking claims and citations…",
           verification_completed: "Evidence check complete",
         };

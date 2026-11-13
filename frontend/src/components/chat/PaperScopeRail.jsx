@@ -43,17 +43,17 @@ export function PaperScopeRail({ className = "", onClose }) {
 
   return (
     <aside aria-label="Research sources" className={`flex h-full w-full min-w-0 flex-col border-r border-[var(--rl-border)] bg-[var(--rl-canvas)] ${className}`}>
-      <div className="border-b border-slate-200 bg-white px-3.5 py-3 space-y-2.5 shrink-0">
+      <div className="border-b border-slate-200 bg-white px-4 py-3.5 space-y-3 shrink-0 min-w-0">
         <div className="flex items-center justify-between gap-2 min-w-0">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--rl-primary)]">Research library</p>
-            <h2 className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-[var(--rl-ink)] truncate">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--rl-primary)]">RESEARCH LIBRARY</p>
+            <h2 className="mt-0.5 flex items-center gap-1.5 text-base font-semibold text-[var(--rl-ink)]">
               <Layers className="h-4 w-4 shrink-0 text-[var(--rl-primary)]" />
-              <span>Source Scope</span>
+              <span className="truncate">Sources &amp; projects</span>
             </h2>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button asChild variant="soft" size="sm" className="h-7 gap-1 px-2.5 text-xs">
+            <Button asChild variant="soft" size="sm" className="h-7 gap-1 px-2 text-[11px]">
               <Link href={selectedPaperIds.length === 1 ? `/papers/upload?paper_id=${selectedPaperIds[0]}` : "/papers/upload"} aria-label="Add source documents">
                 <Plus className="h-3 w-3" />
                 <span>Add sources</span>
@@ -72,9 +72,9 @@ export function PaperScopeRail({ className = "", onClose }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-1 text-xs text-slate-600 min-w-0">
-          <span className="font-medium text-slate-700 truncate">{selectedPaperIds.length} project{selectedPaperIds.length === 1 ? "" : "s"} selected</span>
-          <span className="flex gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-1 text-xs text-slate-600 min-w-0">
+          <span className="font-medium text-slate-700">{selectedPaperIds.length} project{selectedPaperIds.length === 1 ? "" : "s"} selected</span>
+          <span className="flex gap-0.5 shrink-0">
             <button
               type="button"
               onClick={() => selectPapers(selectableIds)}
@@ -114,7 +114,7 @@ export function PaperScopeRail({ className = "", onClose }) {
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filter papers or files..."
-            className="h-8 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-primary)]"
+            className="h-8 w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 pl-8 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-primary)]"
           />
         </label>
       </div>
@@ -240,12 +240,12 @@ export function PaperScopeRail({ className = "", onClose }) {
 
                     {/* Project Status Summary Footer */}
                     {indexedCount > 0 && (
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-slate-200/60 pt-1.5 text-[10px] text-slate-500">
-                        <span className="flex items-center gap-1 text-emerald-700 font-medium truncate">
+                      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-200/60 pt-1.5 text-[10px] text-slate-500">
+                        <span className="flex min-w-0 flex-1 items-center gap-1 text-emerald-700 font-medium">
                           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                          <span>{indexedCount} indexed file{indexedCount === 1 ? "" : "s"}</span>
+                          <span className="truncate">{indexedCount} indexed file{indexedCount === 1 ? "" : "s"}</span>
                           {totalChunks > 0 && (
-                            <span className="text-slate-400 font-normal">({totalChunks.toLocaleString()} chunks)</span>
+                            <span className="shrink-0 text-slate-400 font-normal">({totalChunks.toLocaleString()} chunks)</span>
                           )}
                         </span>
                         <Link

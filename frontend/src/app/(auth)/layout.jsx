@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenCheck, FileSearch, GitCompareArrows, Sparkles } from "lucide-react";
+import { BookOpenCheck, FileSearch, GitCompareArrows, HelpCircle } from "lucide-react";
+import { ResearchLensLogo } from "@/components/brand/ResearchLensLogo";
 
 const FEATURES = [
   { icon: BookOpenCheck, text: "Ask questions across your indexed papers" },
@@ -17,8 +18,13 @@ export default function AuthLayout({ children }) {
     <main className="grid min-h-dvh w-full min-w-0 grid-cols-1 bg-[var(--rl-canvas)] lg:h-dvh lg:min-h-0 lg:grid-cols-[minmax(320px,0.85fr)_1.15fr] lg:grid-rows-[minmax(0,1fr)]">
       <section className="relative hidden min-h-0 flex-col justify-between overflow-y-auto bg-[#e8f3fc] p-6 lg:flex lg:p-8 xl:p-10">
         <Link href="/" className="relative z-10 flex items-center gap-3 text-[var(--rl-ink)]">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[var(--rl-primary)] shadow-sm"><Sparkles className="h-5 w-5" aria-hidden="true" /></span>
-          <span className="text-lg font-semibold tracking-tight">ResearchLens</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[var(--rl-primary)] shadow-sm">
+            <ResearchLensLogo className="h-6 w-6" />
+          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-lg font-semibold tracking-tight">ResearchLens</span>
+            <span className="text-[10px] text-[var(--rl-muted)]">Find the evidence. Understand the research.</span>
+          </div>
         </Link>
         <div className="auth-story-content relative z-10 max-w-lg space-y-5">
           <div>
@@ -37,7 +43,7 @@ export default function AuthLayout({ children }) {
           <ol className="auth-story-vignette grid grid-cols-3 gap-2" aria-label="Sources, research question, and cited evidence">
             {[
               { icon: BookOpenCheck, label: "Sources" },
-              { icon: Sparkles, label: "Question" },
+              { icon: HelpCircle, label: "Question" },
               { icon: FileSearch, label: "Evidence" },
             ].map(({ icon: Icon, label }) => <li key={label} className="rounded-xl border border-white/80 bg-white/70 p-2.5 text-center shadow-sm">
               <Icon className="mx-auto h-4 w-4 text-[var(--rl-primary)]" aria-hidden="true" />
@@ -50,7 +56,7 @@ export default function AuthLayout({ children }) {
       <section className="flex min-h-dvh w-full min-w-0 flex-col items-center overflow-y-auto p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:p-5">
         <div className="my-auto w-full min-w-0 max-w-md shrink-0">
           <Link href="/" className="mb-6 flex items-center justify-center gap-2 text-sm font-semibold text-[var(--rl-ink)] lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><Sparkles className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><ResearchLensLogo className="h-5 w-5" /></span>
             ResearchLens
           </Link>
           {children}

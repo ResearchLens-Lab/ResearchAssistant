@@ -1,11 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FlaskConical, GitCompareArrows, Plus, Sparkles } from "lucide-react";
+import { BookOpen, FlaskConical, GitCompareArrows, UploadCloud } from "lucide-react";
 import { UserDropdown } from "./UserDropdown";
+import { ResearchLensLogo } from "@/components/brand/ResearchLensLogo";
 import { cn } from "@/utils/cn";
+import { usePapers } from "@/hooks/usePapers";
+import { AddSourcesModal } from "@/components/upload/AddSourcesModal";
 
 const PRIMARY_DESTINATIONS = [
   { label: "Library", href: "/papers", icon: BookOpen },
@@ -15,22 +18,26 @@ const PRIMARY_DESTINATIONS = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const [addSourcesOpen, setAddSourcesOpen] = useState(false);
+  const { papers = [] } = usePapers(1, 50);
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-[var(--rl-border)] bg-white/95 px-3 backdrop-blur-sm sm:px-5">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-3 sm:gap-6">
-        <Link href="/papers" className="flex shrink-0 items-center gap-2.5 rounded-lg" aria-label="ResearchLens Library">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
+    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200/70 bg-white/95 px-4 backdrop-blur-sm sm:px-6">
+      <div className="mx-auto grid h-16 w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+        {/* Brand identity matching reference */}
+        <Link href="/papers" className="flex min-w-0 shrink-0 items-center gap-3 justify-self-start group" aria-label="ResearchLens Library">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/90 bg-white text-slate-700 shadow-2xs transition-transform group-hover:scale-105">
+            <ResearchLensLogo className="h-4.5 w-4.5" />
           </span>
           <span className="hidden flex-col leading-tight sm:flex">
-            <span className="text-[15px] font-semibold tracking-tight text-[var(--rl-ink)]">ResearchLens</span>
-            <span className="text-[10px] font-medium tracking-wide text-[var(--rl-muted)]">EVIDENCE-FIRST RESEARCH</span>
+            <span className="text-[15px] font-semibold tracking-tight text-slate-900">ResearchLens</span>
+            <span className="text-[11px] italic font-serif text-slate-400">Find the evidence. Understand the research.</span>
           </span>
         </Link>
 
-        <nav aria-label="Main navigation" className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-x-auto">
-          {PRIMARY_DESTINATIONS.map(({ label, href, icon: Icon }) => {
+        {/* Clean typographic navigation matching reference */}
+        <nav aria-label="Main navigation" className="flex min-w-0 items-center justify-self-center gap-6 whitespace-nowrap sm:gap-8">
+          {PRIMARY_DESTINATIONS.map(({ label, href }) => {
             const active = href === "/papers"
               ? pathname === "/papers" || pathname.startsWith("/papers/") || pathname === "/dashboard"
               : pathname === href || pathname.startsWith(`${href}/`);
@@ -40,33 +47,33 @@ export function TopNav() {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-medium transition-colors sm:px-4 sm:text-sm",
+                  "text-xs sm:text-sm transition-colors py-1",
                   active
-                    ? "bg-[var(--rl-selected)] text-[var(--rl-primary)]"
-                    : "text-[var(--rl-muted)] hover:bg-[var(--rl-tint)] hover:text-[var(--rl-ink)]"
+                    ? "font-semibold text-slate-900 border-b-2 border-slate-900"
+                    : "font-normal text-slate-500 hover:text-slate-900"
                 )}
               >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                <span className="hidden md:inline">{label}</span>
-                <span className="md:hidden">{label === "Research Desk" ? "Desk" : label === "Compare & Reports" ? "Compare" : label}</span>
+                <span>{label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {!pathname.startsWith("/papers") && <Link
-            href="/papers/upload"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--rl-primary)] text-white transition-colors hover:bg-[#1f659c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)] focus-visible:ring-offset-2 sm:w-auto sm:gap-2 sm:px-4"
+        {/* Right action area */}
+        <div className="flex shrink-0 items-center justify-self-end gap-2">
+          <button
+            type="button"
+            onClick={() => setAddSourcesOpen(true)}
+            className="inline-flex h-9 items-center justify-center rounded-full bg-[#1d6fc4] px-4 text-white shadow-xs transition-all hover:bg-[#185ea8] hover:-translate-y-0.5 active:translate-y-0 text-xs font-semibold gap-1.5"
             aria-label="Add sources"
-            title="Add sources"
           >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden text-sm font-medium md:inline">Add sources</span>
-          </Link>}
+            <UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Add sources</span>
+          </button>
           <UserDropdown />
         </div>
       </div>
+      <AddSourcesModal isOpen={addSourcesOpen} onClose={() => setAddSourcesOpen(false)} papers={papers} />
     </header>
   );
 }

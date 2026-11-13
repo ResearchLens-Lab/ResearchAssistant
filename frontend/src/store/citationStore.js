@@ -1,9 +1,14 @@
 import { create } from "zustand";
+import { getSourceIdentity } from "@/utils/sourceIdentity";
 
 export const useCitationStore = create((set) => ({
   sources: [],
   researchTrace: null,
   activeSourceId: null,
+  activeSourceKey: null,
+  activeHighlight: null,
+  activeQuestion: "",
+  activeResearchPlan: null,
   activeTab: "sources", // 'sources' | 'library' | 'notes'
   isDrawerOpen: false,
 
@@ -12,13 +17,16 @@ export const useCitationStore = create((set) => ({
       const next = sources || [];
       if (
         state.sources.length === next.length &&
-        state.sources.every((s, i) => s.source_id === next[i]?.source_id)
+        state.sources.every((s, i) => getSourceIdentity(s) === getSourceIdentity(next[i]))
       ) {
         return state;
       }
+      const active = next.find((source) => getSourceIdentity(source) === state.activeSourceKey) || next[0] || null;
       return {
         sources: next,
-        activeSourceId: next.length > 0 ? next[0].source_id : null,
+        activeSourceId: active?.source_id || null,
+        activeSourceKey: active ? getSourceIdentity(active) : null,
+        activeHighlight: active && getSourceIdentity(active) === state.activeSourceKey ? state.activeHighlight : null,
       };
     }),
 
@@ -28,18 +36,49 @@ export const useCitationStore = create((set) => ({
       return { researchTrace: researchTrace || null };
     }),
 
-  setActiveSource: (sourceId) =>
-    set((state) => (state.activeSourceId === sourceId ? state : { activeSourceId: sourceId })),
+  setActiveSource: (sourceOrId, sourceKey = null) =>
+    set((state) => {
+      const sourceId = typeof sourceOrId === "object" ? sourceOrId?.source_id : sourceOrId;
+      const matchingSource = typeof sourceOrId === "object" ? sourceOrId : state.sources.find((source) => source.source_id === sourceId);
+      const key = sourceKey || (matchingSource ? getSourceIdentity(matchingSource) : sourceId ? `source:${sourceId}` : null);
+      return state.activeSourceId === sourceId && state.activeSourceKey === key
+        ? state
+        : {
+            activeSourceId: sourceId || null,
+            activeSourceKey: key,
+            activeHighlight: key === state.activeSourceKey ? state.activeHighlight : null,
+          };
+    }),
 
   setActiveTab: (tab) =>
     set((state) => (state.activeTab === tab ? state : { activeTab: tab })),
 
-  openSource: (sourceId) =>
-    set({
-      activeSourceId: sourceId,
-      activeTab: "sources",
-      isDrawerOpen: true,
+  openSource: (sourceId, highlight = null, sourceKey = null, question = "", researchPlan = null) =>
+    set((state) => {
+      const sameHighlight = state.activeHighlight === highlight || (
+        state.activeHighlight?.headingText === highlight?.headingText &&
+        state.activeHighlight?.claimText === highlight?.claimText &&
+        state.activeHighlight?.fullText === highlight?.fullText
+      );
+      if (
+        state.activeSourceId === sourceId &&
+        state.activeSourceKey === sourceKey &&
+        sameHighlight &&
+        state.activeTab === "sources" &&
+        state.isDrawerOpen && state.activeQuestion === question && state.activeResearchPlan === researchPlan
+      ) return state;
+      return {
+        activeSourceId: sourceId,
+        activeSourceKey: sourceKey,
+        activeHighlight: highlight,
+        activeQuestion: question || "",
+        activeResearchPlan: researchPlan || null,
+        activeTab: "sources",
+        isDrawerOpen: true,
+      };
     }),
+
+  openInspector: () => set({ isDrawerOpen: true }),
 
   openDrawer: () => set((state) => (state.isDrawerOpen ? state : { isDrawerOpen: true })),
 
@@ -47,13 +86,17 @@ export const useCitationStore = create((set) => ({
 
   clearSources: () =>
     set((state) => {
-      if (state.sources.length === 0 && !state.activeSourceId && !state.isDrawerOpen && !state.researchTrace) {
+      if (state.sources.length === 0 && !state.activeSourceId && !state.activeSourceKey && !state.isDrawerOpen && !state.researchTrace && !state.activeHighlight && !state.activeQuestion && !state.activeResearchPlan) {
         return state;
       }
       return {
         sources: [],
         researchTrace: null,
         activeSourceId: null,
+        activeSourceKey: null,
+        activeHighlight: null,
+        activeQuestion: "",
+        activeResearchPlan: null,
         isDrawerOpen: false,
       };
     }),
