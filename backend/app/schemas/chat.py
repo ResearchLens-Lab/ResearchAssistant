@@ -11,7 +11,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     paper_ids: list[str] = Field(min_length=1)
     conversation_id: Optional[str] = None
-    answer_mode: Literal["DOCUMENTS_GENERAL", "DOCUMENTS_ONLY"] = "DOCUMENTS_GENERAL"
+    answer_mode: Literal["EVIDENCE_FIRST", "DOCUMENTS_GENERAL", "OPTIONAL_LOCAL_AI", "DOCUMENTS_ONLY", "INDEPENDENT"] = "EVIDENCE_FIRST"
 
 
 class ChatResponse(BaseModel):

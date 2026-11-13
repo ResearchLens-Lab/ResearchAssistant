@@ -29,6 +29,7 @@ from backend.app.models.user import User
 from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.services.paper_service import PaperService
 from backend.app.utils.validators import validate_document_file
+from rag.config.settings import settings as rag_settings
 
 logger = logging.getLogger("backend.documents")
 
@@ -168,6 +169,7 @@ class DocumentService:
         logger.info("RAG ingestion started document_id=%s", document.id)
         metadata = {
             "document_id": document.id,  # shared ID passed through to RAG/ChromaDB
+            "owner_id": paper.owner_id,  # SEC-001: Paper owner for multi-tenant isolation
             "filename": document.filename,
             "title": paper.title,
             "authors": ", ".join(paper.authors or []),
@@ -269,12 +271,20 @@ class DocumentService:
             expected_count = int(result.get("chunk_count") or 0)
             try:
                 counts = await self.rag.get_document_index_counts(document.id)
-                consistent = (
-                    expected_count > 0
-                    and counts.get("ids_match") is True
-                    and counts.get("chroma_count") == expected_count
-                    and counts.get("fts_count") == expected_count
-                )
+                if rag_settings.rag_engine_mode == "independent":
+                    consistent = (
+                        expected_count > 0
+                        and counts.get("storage_mode") == "sqlite_fts5_only"
+                        and counts.get("fts_count") == expected_count
+                        and counts.get("unique_fts_count") == expected_count
+                    )
+                else:
+                    consistent = (
+                        expected_count > 0
+                        and counts.get("ids_match") is True
+                        and counts.get("chroma_count") == expected_count
+                        and counts.get("fts_count") == expected_count
+                    )
                 if not consistent:
                     success = False
                     error = (

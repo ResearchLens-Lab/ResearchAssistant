@@ -176,3 +176,28 @@ async def test_compare_with_foreign_paper_denied(
         headers=auth_headers,
     )
     assert resp.status_code == 404
+
+
+async def test_create_paper_requires_description(client, auth_headers):
+    resp = await client.post(
+        "/api/v1/papers",
+        json={"title": "Paper Without Description", "description": "   "},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+    assert "description" in resp.text.lower()
+
+
+async def test_create_paper_with_description(client, auth_headers):
+    resp = await client.post(
+        "/api/v1/papers",
+        json={
+            "title": "Quantum Computing Survey",
+            "description": "Comprehensive review of superconducting qubit algorithms.",
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["title"] == "Quantum Computing Survey"
+    assert data["description"] == "Comprehensive review of superconducting qubit algorithms."

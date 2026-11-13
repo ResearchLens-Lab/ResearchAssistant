@@ -44,7 +44,13 @@ class PaperRepository:
         stmt = select(Paper).where(Paper.owner_id == owner_id)
         if q:
             like = f"%{q}%"
-            stmt = stmt.where(or_(Paper.title.ilike(like), Paper.abstract.ilike(like)))
+            stmt = stmt.where(
+                or_(
+                    Paper.title.ilike(like),
+                    Paper.description.ilike(like),
+                    Paper.abstract.ilike(like),
+                )
+            )
         if author:
             stmt = stmt.where(cast(Paper.authors, String).ilike(f"%{author}%"))
         if year is not None:

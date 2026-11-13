@@ -11,6 +11,9 @@ from backend.app.routes import (
     research,
     search,
     users,
+    knowledge_graph,
+    research_memory,
+    research_intelligence,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -21,6 +24,9 @@ api_router.include_router(documents.router)
 api_router.include_router(chat.router)
 api_router.include_router(search.router)
 api_router.include_router(research.router)
+api_router.include_router(knowledge_graph.router)
+api_router.include_router(research_memory.router)
+api_router.include_router(research_intelligence.router)
 api_router.include_router(health.router)
 
 health_router = health.router

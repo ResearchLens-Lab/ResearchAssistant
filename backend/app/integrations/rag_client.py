@@ -15,6 +15,7 @@ from rag.pipelines.query_pipeline import QueryPipeline
 from rag.retrieval.query import QueryFilters
 from rag.citations.citation_formatter import RAGResult
 from rag.vectorstore.vector_repository import VectorRepository
+from rag.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,25 @@ class RAGClient:
         query_pipeline: Optional[QueryPipeline] = None,
         vector_repo: Optional[VectorRepository] = None,
     ):
-        self._ingest_pipeline = ingest_pipeline or IngestionPipeline()
+        # Keep model-backed ingestion lazy so an independent-mode API process
+        # can answer from SQLite FTS5 without constructing FastEmbedder.
+        self._ingest_pipeline = ingest_pipeline
         self._query_pipeline = query_pipeline or QueryPipeline()
         self._vector_repo = vector_repo or VectorRepository()
         self._ingest_locks: dict[str, threading.Lock] = {}
         self._ingest_locks_guard = threading.Lock()
         self._active_ingests: dict[str, str] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+
+    @property
+    def _ingest(self) -> Any:
+        if self._ingest_pipeline is None:
+            if settings.rag_engine_mode == "independent":
+                from rag.independent.ingest_pipeline import IndependentIngestionPipeline
+                self._ingest_pipeline = IndependentIngestionPipeline()
+            else:
+                self._ingest_pipeline = IngestionPipeline()
+        return self._ingest_pipeline
 
     def ingest_document(
         self,
@@ -80,7 +93,7 @@ class RAGClient:
                 cancel_event = threading.Event()
             self._cancel_events[document_id] = cancel_event
         try:
-            result: IngestResult = self._ingest_pipeline.ingest_file(
+            result: IngestResult = self._ingest.ingest_file(
                 file_path=file_path,
                 paper_id=paper_id,
                 metadata=metadata,
@@ -120,7 +133,7 @@ class RAGClient:
         """
         Ingests raw text or markdown research paper content.
         """
-        result: IngestResult = self._ingest_pipeline.ingest_text(
+        result: IngestResult = self._ingest.ingest_text(
             content=content,
             paper_id=paper_id,
             metadata=metadata,
@@ -140,16 +153,33 @@ class RAGClient:
     def ask_question(
         self,
         question: str,
+        user_id: str,  # SEC-001: Made REQUIRED
         paper_ids: Optional[List[str]] = None,
         sections: Optional[List[str]] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
-        user_id: Optional[str] = None,
-        answer_mode: str = "DOCUMENTS_GENERAL",
+        answer_mode: str = "EVIDENCE_FIRST",
+        paper_metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Answers a question grounded in target papers.
+        
+        Args:
+            question: Research question to answer
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            paper_ids: Optional paper IDs to search within user's scope
+            sections: Optional sections to filter
+            top_k: Number of sources to retrieve
+            conversation_context: Optional conversation history
+            progress_callback: Optional callback for progress updates
+            answer_mode: Answer generation mode
+            
+        Returns:
+            Dict with answer, sources, and paper_ids
+            
+        Raises:
+            ValueError: If user_id is not provided
 
         Matches API contract:
         {
@@ -170,46 +200,83 @@ class RAGClient:
             "paper_ids": ["paper_123"]
         }
         """
+        if not user_id:
+            raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
+            
         filters = QueryFilters(sections=sections) if sections else None
         result: RAGResult = self._query_pipeline.answer_question(
             question=question,
+            user_id=user_id,  # SEC-001: Pass as required positional arg
             paper_ids=paper_ids,
             filters=filters,
             top_k=top_k,
             conversation_context=conversation_context,
             progress_callback=progress_callback,
-            user_id=user_id,
             answer_mode=answer_mode,
+            paper_metadata=paper_metadata,
         )
         return result.to_api_dict()
 
     def summarize_paper(
         self,
         paper_id: str,
+        user_id: str,  # SEC-001: Add required user_id
         top_k: int = 8,
     ) -> Dict[str, Any]:
         """
         Produces a structured research paper summary.
+        
+        Args:
+            paper_id: Paper ID to summarize
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            top_k: Number of sources to retrieve
+            
+        Raises:
+            ValueError: If user_id is not provided
         """
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
         result: RAGResult = self._query_pipeline.summarize_paper(
             paper_id=paper_id,
+            user_id=user_id,  # SEC-001: Pass user_id
             top_k=top_k,
         )
         return result.to_api_dict()
 
     def compare_papers(
         self,
-        paper_ids: List[str],
+        paper_ids: Optional[List[str]],
+        user_id: str,  # SEC-001: Add required user_id
         focus_area: Optional[str] = None,
         top_k: int = 10,
+        document_ids: Optional[List[str]] = None,
+        output_format: str = "table",
+        document_labels: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Generates comparative analysis across multiple research papers.
+        
+        Args:
+            paper_ids: Paper IDs to compare
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            focus_area: Optional focus for comparison
+            top_k: Number of sources to retrieve
+            
+        Raises:
+            ValueError: If user_id is not provided
         """
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
         result: RAGResult = self._query_pipeline.compare_papers(
             paper_ids=paper_ids,
+            document_ids=document_ids,
+            user_id=user_id,  # SEC-001: Pass user_id
             focus_area=focus_area,
             top_k=top_k,
+            output_format=output_format,
+            document_labels=document_labels,
         )
         return result.to_api_dict()
 
@@ -220,7 +287,10 @@ class RAGClient:
         with self._ingest_locks_guard:
             if paper_id in self._active_ingests.values():
                 raise RuntimeError("Cannot delete a paper while one of its sources is being indexed.")
-        return self._ingest_pipeline.delete_paper(paper_id)
+        count = self._ingest.delete_paper(paper_id)
+        if settings.rag_engine_mode == "independent":
+            count = max(count, self._vector_repo.delete_paper_chunks(paper_id))
+        return count
 
     def delete_document_chunks(self, document_id: str) -> int:
         """Remove a document's records from the active vector and lexical indexes."""
@@ -231,6 +301,18 @@ class RAGClient:
 
     def get_document_index_counts(self, document_id: str) -> Dict[str, Any]:
         """Return verifiable active-collection counts for both backing indexes."""
+        if settings.rag_engine_mode == "independent":
+            from rag.independent.index_writer import IndependentIndexWriter
+            counts = IndependentIndexWriter().count_document(document_id)
+            return {
+                **counts,
+                "collection_name": IndependentIndexWriter().collection_name,
+                "storage_mode": "sqlite_fts5_only",
+                "chroma_count": 0,
+                "fts_count": counts["lexical_count"],
+                "unique_fts_count": counts["lexical_unique_count"],
+                "ids_match": counts["lexical_count"] == counts["lexical_unique_count"],
+            }
         return self._vector_repo.document_index_counts(document_id)
 
     def health_check(self) -> Dict[str, Any]:
@@ -238,6 +320,11 @@ class RAGClient:
         Returns status of vector storage and pipeline readiness.
         """
         try:
+            if settings.rag_engine_mode == "independent":
+                from rag.independent.index_writer import IndependentIndexWriter
+                count = IndependentIndexWriter().count_all()
+                return {"status": "healthy", "total_indexed_chunks": count,
+                        "vectorstore": "sqlite_fts5", "pretrained_embeddings_used": False}
             count = self._vector_repo.count_chunks()
             return {
                 "status": "healthy",

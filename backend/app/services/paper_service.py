@@ -6,11 +6,13 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.exceptions import PaperNotFoundError
+from backend.app.core.exceptions import DocumentNotFoundError, PaperNotFoundError, RequestValidationAppError
 from backend.app.integrations.rag_gateway import RAGGateway
 from backend.app.models.paper import Paper
+from backend.app.models.document import Document, DocumentStatus
 from backend.app.models.user import User
 from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.repositories.paper_repository import PaperRepository
@@ -92,8 +94,18 @@ class PaperService:
         ]
 
     async def summarize(self, user: User, paper_id: str) -> dict[str, Any]:
+        """
+        Generate paper summary with authenticated user context.
+        
+        SEC-001: user_id is passed to ensure only owned papers can be summarized.
+        Ownership is already validated via get_owned(), but RAG layer also enforces
+        isolation to prevent any vector/lexical leaks.
+        """
         await self.get_owned(user, paper_id)
-        result = await self.rag.summarize_paper(paper_id)
+        result = await self.rag.summarize_paper(
+            paper_id=paper_id,
+            user_id=str(user.id),  # SEC-001: Pass authenticated user ID
+        )
         return {
             "paper_id": paper_id,
             "answer": result.get("answer", ""),
@@ -101,12 +113,72 @@ class PaperService:
         }
 
     async def compare(self, user: User, payload: PaperCompareRequest) -> dict[str, Any]:
-        papers = await self.validate_owned_papers(user, payload.paper_ids)
-        paper_ids = [paper.id for paper in papers]
-        result = await self.rag.compare_papers(paper_ids, focus_area=payload.focus_area)
+        """
+        Compare multiple papers with authenticated user context.
+        
+        SEC-001: user_id is passed to ensure only owned papers can be compared.
+        Ownership is validated for all paper_ids, and RAG layer enforces vector/lexical
+        isolation to prevent cross-user data leaks.
+        """
+        document_ids = list(dict.fromkeys(payload.document_ids or []))
+        document_labels = {}
+        if document_ids:
+            rows = await self.db.execute(
+                select(Document, Paper)
+                .join(Paper, Paper.id == Document.paper_id)
+                .where(Document.id.in_(document_ids), Paper.owner_id == user.id)
+            )
+            document_rows = list(rows.all())
+            if {document.id for document, _paper in document_rows} != set(document_ids):
+                raise DocumentNotFoundError()
+            if any(document.processing_status != DocumentStatus.INDEXED.value for document, _paper in document_rows):
+                raise RequestValidationAppError("Every selected source must be indexed before it can be compared.")
+            paper_ids = list(dict.fromkeys(paper.id for _document, paper in document_rows))
+            documents_by_id = {document.id: (document, paper) for document, paper in document_rows}
+            document_labels = {
+                document_id: f"{documents_by_id[document_id][1].title} · {documents_by_id[document_id][0].filename}"
+                for document_id in document_ids
+            }
+        else:
+            # Keep the old project-scoped request shape working for existing clients.
+            # The current Compare & Reports UI always sends individual document IDs.
+            papers = await self.validate_owned_papers(user, payload.paper_ids or [])
+            paper_ids = [paper.id for paper in papers]
+            documents_by_id = {}
+
+        compare_kwargs = {}
+        if document_ids:
+            compare_kwargs = {
+                "document_ids": document_ids,
+                "document_labels": document_labels,
+                "output_format": payload.output_format,
+            }
+        result = await self.rag.compare_papers(
+            paper_ids=paper_ids,
+            user_id=str(user.id),  # SEC-001: Pass authenticated user ID
+            focus_area=payload.focus_area,
+            **compare_kwargs,
+        )
+        metadata = result.get("metadata", {}) or {}
+        if document_ids:
+            contributed_ids = {source.get("document_id") for source in result.get("sources", []) if source.get("document_id")}
+            metadata["comparison_scope"] = [
+                {
+                    "document_id": document_id,
+                    "paper_id": documents_by_id[document_id][1].id,
+                    "project_title": documents_by_id[document_id][1].title,
+                    "filename": documents_by_id[document_id][0].filename,
+                    "authors": documents_by_id[document_id][1].authors or [],
+                    "publication_year": documents_by_id[document_id][1].publication_year,
+                    "contributed_evidence": document_id in contributed_ids,
+                    "coverage": "evidence found" if document_id in contributed_ids else "no relevant passage retrieved",
+                }
+                for document_id in document_ids
+            ]
         return {
             "paper_ids": paper_ids,
+            "document_ids": document_ids,
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
-            "metadata": result.get("metadata", {}),
+            "metadata": metadata,
         }

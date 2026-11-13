@@ -1,13 +1,14 @@
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.schemas.citation import Source
 
 
 class PaperCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=2000)
     abstract: Optional[str] = None
     authors: Optional[list[str]] = None
     publication_year: Optional[int] = Field(default=None, ge=1000, le=2100)
@@ -15,9 +16,37 @@ class PaperCreate(BaseModel):
     source_url: Optional[str] = Field(default=None, max_length=1000)
     venue: Optional[str] = Field(default=None, max_length=255)
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, value: Any) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Title is required and cannot be empty or only whitespace.")
+        return value.strip()
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def validate_description(cls, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("Description cannot be empty or only whitespace.")
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def ensure_description_present(self) -> "PaperCreate":
+        # New project creation strictly requires a description.
+        # Fall back to abstract for legacy tests that populate abstract.
+        if not self.description:
+            if self.abstract and self.abstract.strip():
+                self.description = self.abstract.strip()
+            else:
+                raise ValueError("Project description is required and cannot be empty.")
+        return self
+
 
 class PaperUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, min_length=1, max_length=2000)
     abstract: Optional[str] = None
     authors: Optional[list[str]] = None
     publication_year: Optional[int] = Field(default=None, ge=1000, le=2100)
@@ -31,6 +60,7 @@ class PaperResponse(BaseModel):
 
     id: str
     title: str
+    description: Optional[str] = None
     abstract: Optional[str] = None
     authors: Optional[list[str]] = None
     publication_year: Optional[int] = None
@@ -48,12 +78,24 @@ class PaperSummaryResponse(BaseModel):
 
 
 class PaperCompareRequest(BaseModel):
-    paper_ids: list[str] = Field(min_length=2)
+    paper_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
+    document_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
     focus_area: Optional[str] = Field(default=None, max_length=500)
+    output_format: Literal["table", "side_by_side", "detailed_report"] = "table"
+
+    @model_validator(mode="after")
+    def validate_comparison_scope(self) -> "PaperCompareRequest":
+        if bool(self.paper_ids) == bool(self.document_ids):
+            raise ValueError("Provide either at least two document_ids or at least two legacy paper_ids.")
+        scope = self.document_ids if self.document_ids is not None else self.paper_ids
+        if len(set(scope or [])) < 2:
+            raise ValueError("Select at least two distinct research sources to compare.")
+        return self
 
 
 class PaperCompareResponse(BaseModel):
     paper_ids: list[str]
+    document_ids: list[str] = Field(default_factory=list)
     answer: str
     sources: list[Source]
     metadata: dict[str, Any] = Field(default_factory=dict)

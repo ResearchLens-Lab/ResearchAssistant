@@ -13,6 +13,7 @@ from backend.app.schemas.paper import (
 )
 from backend.app.services.document_service import DocumentService
 from backend.app.services.paper_service import PaperService
+from backend.app.services.source_verification import SourceVerificationService
 from backend.app.utils.pagination import PageParams
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -52,6 +53,12 @@ async def compare_papers(
 @router.get("/{paper_id}", response_model=PaperResponse, summary="Get a paper")
 async def get_paper(paper_id: str, current_user: CurrentUser, db: DBSession):
     return await PaperService(db).get_owned(current_user, paper_id)
+
+
+@router.post("/{paper_id}/verify-source", summary="Explicitly verify stored bibliographic metadata by DOI")
+async def verify_paper_source(paper_id: str, current_user: CurrentUser, db: DBSession):
+    paper = await PaperService(db).get_owned(current_user, paper_id)
+    return await SourceVerificationService().verify(paper)
 
 
 @router.patch("/{paper_id}", response_model=PaperResponse, summary="Update a paper")

@@ -130,32 +130,93 @@ class RAGGateway:
     async def ask_question(
         self,
         question: str,
+        user_id: str,  # SEC-001: Made REQUIRED
         paper_ids: Optional[list[str]] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
-        user_id: Optional[str] = None,
-        answer_mode: str = "DOCUMENTS_GENERAL",
+        answer_mode: str = "EVIDENCE_FIRST",
+        paper_metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
+        """
+        Execute a query grounded in indexed papers.
+        
+        Args:
+            question: Research question to answer
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            paper_ids: Optional paper IDs to search within user's scope
+            top_k: Number of sources to retrieve
+            conversation_context: Optional conversation history
+            progress_callback: Optional callback for progress updates
+            answer_mode: Answer generation mode
+            
+        Returns:
+            Dict with answer, sources, and paper_ids
+            
+        Raises:
+            ValueError: If user_id is not provided
+        """
+        if not user_id:
+            raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
+            
         return await self._call(
-            "ask_question", question=question, paper_ids=paper_ids, top_k=top_k,
+            "ask_question",
+            question=question,
+            user_id=user_id,  # SEC-001: Always pass user_id (no longer conditional)
+            paper_ids=paper_ids,
+            top_k=top_k,
             answer_mode=answer_mode,
+            paper_metadata=paper_metadata,
             **({"conversation_context": conversation_context} if conversation_context else {}),
             **({"progress_callback": progress_callback} if progress_callback else {}),
-            **({"user_id": user_id} if user_id else {}),
         )
 
-    async def summarize_paper(self, paper_id: str, top_k: int = 8) -> dict[str, Any]:
-        return await self._call("summarize_paper", paper_id=paper_id, top_k=top_k)
+    async def summarize_paper(self, paper_id: str, user_id: str, top_k: int = 8) -> dict[str, Any]:
+        """
+        Summarize a research paper.
+        
+        Args:
+            paper_id: Paper ID to summarize
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            top_k: Number of sources to retrieve
+            
+        Raises:
+            ValueError: If user_id is not provided
+        """
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
+        return await self._call("summarize_paper", paper_id=paper_id, user_id=user_id, top_k=top_k)
 
     async def compare_papers(
         self,
-        paper_ids: list[str],
+        paper_ids: list[str] | None,
+        user_id: str,  # SEC-001: Add required user_id
         focus_area: Optional[str] = None,
         top_k: int = 10,
+        document_ids: list[str] | None = None,
+        output_format: str = "table",
+        document_labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        """
+        Compare multiple research papers.
+        
+        Args:
+            paper_ids: Paper IDs to compare
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            focus_area: Optional focus for comparison
+            top_k: Number of sources to retrieve
+            
+        Raises:
+            ValueError: If user_id is not provided
+        """
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
         return await self._call(
-            "compare_papers", paper_ids=paper_ids, focus_area=focus_area, top_k=top_k
+            "compare_papers", paper_ids=paper_ids, document_ids=document_ids,
+            output_format=output_format, document_labels=document_labels,
+            user_id=user_id, focus_area=focus_area, top_k=top_k
         )
 
     async def delete_paper(self, paper_id: str) -> int:

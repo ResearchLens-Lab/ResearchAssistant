@@ -8,10 +8,29 @@ from backend.app.core.config import get_settings
 from backend.app.core.dependencies import DBSession
 from backend.app.models.document import Document, DocumentStatus
 from rag.config.settings import settings as rag_settings
+from rag.generation.llm_client import OllamaLLMClient
 
 logger = logging.getLogger("backend.health")
 
 router = APIRouter(tags=["health"])
+
+
+@router.get("/system/model", summary="Read-only status of the configured local language model")
+async def system_model_status() -> dict:
+    """Report runtime/model state without loading, pulling, or sending a prompt."""
+    client = OllamaLLMClient(
+        base_url=rag_settings.ollama_base_url,
+        model=rag_settings.ollama_model,
+    )
+    return {
+        **client.status(),
+        "generation_limits": {
+            "max_output_tokens": rag_settings.llm_max_tokens,
+            "context_tokens": 4096,
+            "timeout_seconds": rag_settings.llm_timeout_seconds,
+        },
+        "download_policy": "manual_only",
+    }
 
 
 @router.get("/health", summary="Liveness probe")
