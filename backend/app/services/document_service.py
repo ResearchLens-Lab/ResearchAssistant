@@ -33,6 +33,47 @@ from rag.config.settings import settings as rag_settings
 
 logger = logging.getLogger("backend.documents")
 
+_background_tasks: set[asyncio.Task] = set()
+
+
+def launch_background_ingest(document_id: str, paper_id: str, owner_id: str) -> None:
+    task = asyncio.create_task(_run_background_ingest(document_id, paper_id, owner_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def _run_background_ingest(document_id: str, paper_id: str, owner_id: str) -> None:
+    try:
+        from backend.app.database.session import get_session_factory
+        from backend.app.integrations.rag_gateway import RAGGateway
+
+        async with get_session_factory()() as db:
+            rag = RAGGateway()
+            service = DocumentService(db, rag)
+            doc = await service.documents.get_by_id(document_id)
+            if not doc:
+                logger.warning("Background ingestion aborted: document %s not found", document_id)
+                return
+            if doc.processing_status == DocumentStatus.CANCELLED.value:
+                logger.info("Background ingestion aborted: document %s was cancelled", document_id)
+                return
+            paper = await service.paper_service.papers.get_by_id(paper_id)
+            if not paper:
+                logger.warning("Background ingestion aborted: paper %s not found", paper_id)
+                return
+
+            # If resuming an uncheckpointed job from a prior session, reset progress to page 1
+            checkpoint_file = Path(doc.storage_path).parent / f".ocr-{doc.id}.json"
+            if not checkpoint_file.is_file() and (doc.processing_completed_units or 0) > 0:
+                doc.processing_completed_units = 0
+                doc.processing_progress = 5
+                doc.processing_stage = "inspecting"
+                await db.commit()
+
+            await service._process(doc, paper)
+    except Exception as exc:
+        logger.error("Background ingestion crashed for doc %s: %s", document_id, exc, exc_info=True)
+
 
 class DocumentService:
     def __init__(self, db: AsyncSession, rag: Optional[RAGGateway] = None):
@@ -104,7 +145,7 @@ class DocumentService:
             raise
         logger.info("document uploaded document_id=%s paper_id=%s", document.id, paper.id)
 
-        await self._process(document, paper)
+        launch_background_ingest(document.id, paper.id, paper.owner_id)
         return document
 
     async def upload_batch(self, user: User, paper_id: str, uploads: list[UploadFile]) -> dict:
@@ -217,7 +258,7 @@ class DocumentService:
         def progress_callback(event: dict) -> None:
             if event.get("stage"):
                 try:
-                    asyncio.run_coroutine_threadsafe(persist_progress(event), loop).result(timeout=2.0)
+                    asyncio.run_coroutine_threadsafe(persist_progress(event), loop)
                 except Exception as exc:
                     logger.debug('Progress callback dispatch note: %s', exc)
 
@@ -247,7 +288,7 @@ class DocumentService:
             document.processing_progress_type = "actual"
             document.chunk_count = 0
             document.processing_heartbeat_at = datetime.utcnow()
-            if not isinstance(exc, RAGIngestionTimeoutError):
+            if not isinstance(exc, RAGIngestionTimeoutError) and document.processing_stage != "reindexing":
                 document.processing_error = await self._cleanup_failed_index(document, exc.message)
             status_commit_started = time.perf_counter()
             await self.db.commit()
@@ -264,7 +305,8 @@ class DocumentService:
             logger.info("Ingestion was cancelled during processing document_id=%s", document.id)
             return
 
-        success = result.get("success") and result.get("status") == "indexed"
+        reported_status = str(result.get("status", ""))
+        success = result.get("success") and reported_status in {"indexed", "partial", "needs_review"}
         error = str(result.get("error") or "Indexing did not complete.")
         cleanup_safe = True
         if success:
@@ -297,7 +339,12 @@ class DocumentService:
                 cleanup_safe = False
                 error = f"Index consistency could not be verified: {exc.message}"
         if success:
-            document.processing_status = DocumentStatus.INDEXED.value
+            if reported_status == "partial":
+                document.processing_status = DocumentStatus.PARTIAL.value
+            elif reported_status == "needs_review":
+                document.processing_status = DocumentStatus.NEEDS_REVIEW.value
+            else:
+                document.processing_status = DocumentStatus.INDEXED.value
             document.processing_stage = "ready"
             document.processing_progress = 100
             document.processing_progress_type = "actual"
@@ -311,7 +358,7 @@ class DocumentService:
             document.processing_progress_type = "actual"
             document.processing_heartbeat_at = datetime.utcnow()
             document.chunk_count = 0
-            if cleanup_safe and not result.get("active_attempt"):
+            if cleanup_safe and not result.get("active_attempt") and document.processing_stage != "reindexing":
                 error = await self._cleanup_failed_index(document, error)
             # IngestResult errors contain parser/provider diagnostics, but never
             # expose internal storage paths in the API response.
@@ -337,6 +384,7 @@ class DocumentService:
         except PaperNotFoundError as exc:
             raise DocumentNotFoundError() from exc
         await self._mark_stalled_documents([document])
+        await self._attach_index_health([document])
         return document
 
     async def cancel(self, user: User, document_id: str) -> Document:
@@ -357,13 +405,7 @@ class DocumentService:
             except Exception as e:
                 logger.warning("Could not delete partial chunks on cancel document_id=%s: %s", document.id, e)
 
-        # Remove temporary storage file
-        if document.storage_path and Path(document.storage_path).is_file():
-            try:
-                Path(document.storage_path).unlink(missing_ok=True)
-            except Exception as e:
-                logger.warning("Could not unlink cancelled file: %s", e)
-
+        # Keep stored file intact so the user can retry later without re-uploading
         document.processing_status = DocumentStatus.CANCELLED.value
         document.processing_stage = "cancelled"
         document.processing_progress = 0
@@ -379,18 +421,20 @@ class DocumentService:
         document = await self.get_owned(user, document_id)
         if document.processing_status == DocumentStatus.PROCESSING.value:
             raise RequestValidationAppError("This source is already being processed.")
-        if document.processing_status != DocumentStatus.FAILED.value:
-            raise RequestValidationAppError("Only failed sources can be retried.")
+        if document.processing_status == DocumentStatus.INDEXED.value:
+            return await self.reindex(user, document_id)
+        if document.processing_status not in (DocumentStatus.FAILED.value, DocumentStatus.CANCELLED.value):
+            raise RequestValidationAppError("Only failed, cancelled or indexed sources can be retried.")
         if not Path(document.storage_path).is_file():
             raise RequestValidationAppError("The stored source file is missing and cannot be retried.")
         paper = await self.paper_service.get_owned(user, document.paper_id)
         started_at = datetime.utcnow()
         claim = await self.db.execute(
             update(Document)
-            .where(Document.id == document.id, Document.processing_status == DocumentStatus.FAILED.value)
+            .where(Document.id == document.id, Document.processing_status.in_([DocumentStatus.FAILED.value, DocumentStatus.CANCELLED.value]))
             .values(
                 processing_status=DocumentStatus.PROCESSING.value,
-                processing_stage="extracting_text", processing_progress=0,
+                processing_stage="inspecting", processing_progress=5,
                 processing_progress_type="estimated", processing_completed_units=0,
                 processing_total_units=None, processing_unit=None,
                 processing_started_at=started_at, processing_heartbeat_at=started_at,
@@ -404,8 +448,8 @@ class DocumentService:
                 raise RequestValidationAppError("This source is already being processed.")
             raise RequestValidationAppError("This source changed state; refresh it before retrying.")
         document.processing_status = DocumentStatus.PROCESSING.value
-        document.processing_stage = "extracting_text"
-        document.processing_progress = 0
+        document.processing_stage = "inspecting"
+        document.processing_progress = 5
         document.processing_progress_type = "estimated"
         document.processing_completed_units = 0
         document.processing_total_units = None
@@ -415,13 +459,68 @@ class DocumentService:
         document.processing_error = None
         document.chunk_count = 0
         await self.db.commit()
-        await self._process(document, paper)
+        launch_background_ingest(document.id, paper.id, paper.owner_id)
+        return document
+
+    async def reindex(self, user: User, document_id: str) -> Document:
+        """Safely re-index an existing document with the updated section-aware research engine.
+        
+        Guarantees:
+        1. Preserves original stored file.
+        2. Preserves existing FTS5 index until replacement succeeds.
+        3. Validates section boundaries, page ranges, and SEC-001 owner metadata.
+        4. Atomically replaces old index in FTS5 only after validation.
+        5. If re-indexing fails, leaves old index intact and rolls back safely.
+        """
+        document = await self.get_owned(user, document_id)
+        if document.processing_status == DocumentStatus.PROCESSING.value:
+            raise RequestValidationAppError("This source is already being processed.")
+        if not Path(document.storage_path).is_file():
+            raise RequestValidationAppError("The stored source file is missing and cannot be re-indexed.")
+        paper = await self.paper_service.get_owned(user, document.paper_id)
+
+        previous_chunk_count = document.chunk_count
+        previous_status = document.processing_status
+        previous_stage = document.processing_stage
+
+        started_at = datetime.utcnow()
+        document.processing_status = DocumentStatus.PROCESSING.value
+        document.processing_stage = "reindexing"
+        document.processing_progress = 10
+        document.processing_progress_type = "estimated"
+        document.processing_started_at = started_at
+        document.processing_heartbeat_at = started_at
+        document.processing_error = None
+        await self.db.commit()
+
+        try:
+            await self._process(document, paper)
+            await self.db.refresh(document)
+            if document.processing_status == DocumentStatus.INDEXED.value:
+                setattr(document, "reindex_required", False)
+                setattr(document, "index_version", 2)
+                logger.info("Document re-indexed successfully document_id=%s chunks=%s", document.id, document.chunk_count)
+            else:
+                error_msg = document.processing_error or "Re-indexing could not be verified."
+                raise RuntimeError(error_msg)
+        except Exception as exc:
+            logger.warning("Re-indexing failed for document_id=%s: %s; reverting status", document.id, exc)
+            document.processing_status = previous_status
+            document.processing_stage = previous_stage
+            document.chunk_count = previous_chunk_count
+            document.processing_error = f"Re-indexing failed: {exc}. Previous index was preserved."
+            setattr(document, "reindex_required", True)
+            setattr(document, "index_version", 1)
+            await self.db.commit()
+            raise RequestValidationAppError(f"Re-indexing failed: {exc}. Your existing index was preserved.") from exc
+
         return document
 
     async def list_for_paper(self, user: User, paper_id: str) -> list[Document]:
         await self.paper_service.get_owned(user, paper_id)
         documents = await self.documents.list_by_paper(paper_id)
         await self._mark_stalled_documents(documents)
+        await self._attach_index_health(documents)
         return documents
 
     async def list_for_papers(self, user: User, paper_ids: list[str]) -> dict[str, list[Document]]:
@@ -435,9 +534,30 @@ class DocumentService:
         grouped: dict[str, list[Document]] = defaultdict(list)
         documents = await self.documents.list_by_papers(ids)
         await self._mark_stalled_documents(documents)
+        await self._attach_index_health(documents)
         for document in documents:
             grouped[document.paper_id].append(document)
         return {paper_id: grouped[paper_id] for paper_id in ids}
+
+    async def _attach_index_health(self, documents: list[Document]) -> None:
+        """Inspect indexed documents to identify older incompatible extractions (stale indexes)."""
+        for doc in documents:
+            if doc.processing_status != DocumentStatus.INDEXED.value:
+                setattr(doc, "reindex_required", False)
+                setattr(doc, "index_version", 2)
+                continue
+            is_stale = False
+            if (doc.chunk_count or 0) <= 1 and (doc.file_size or 0) > 8192:
+                is_stale = True
+            elif self.rag:
+                try:
+                    status = await self.rag.get_document_index_status(doc.id)
+                    if status.get("is_stale"):
+                        is_stale = True
+                except Exception:
+                    pass
+            setattr(doc, "reindex_required", is_stale)
+            setattr(doc, "index_version", 1 if is_stale else 2)
 
     async def _mark_stalled_documents(self, documents: list[Document]) -> None:
         """Turn orphaned PROCESSING rows into a visible, retryable failure."""

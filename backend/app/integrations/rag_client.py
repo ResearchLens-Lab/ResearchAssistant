@@ -315,6 +315,13 @@ class RAGClient:
             }
         return self._vector_repo.document_index_counts(document_id)
 
+    def get_document_index_status(self, document_id: str) -> Dict[str, Any]:
+        """Inspect chunk records in lexical_chunks to determine index version and staleness."""
+        if settings.rag_engine_mode == "independent":
+            from rag.independent.index_writer import IndependentIndexWriter
+            return IndependentIndexWriter().get_document_index_status(document_id)
+        return {"exists": True, "chunk_count": 0, "is_stale": False, "index_version": 2}
+
     def health_check(self) -> Dict[str, Any]:
         """
         Returns status of vector storage and pipeline readiness.

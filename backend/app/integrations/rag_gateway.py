@@ -227,3 +227,6 @@ class RAGGateway:
 
     async def get_document_index_counts(self, document_id: str) -> dict[str, Any]:
         return await self._call("get_document_index_counts", document_id)
+
+    async def get_document_index_status(self, document_id: str) -> dict[str, Any]:
+        return await self._call("get_document_index_status", document_id)

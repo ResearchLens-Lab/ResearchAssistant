@@ -7,6 +7,7 @@ The engine is created lazily so importing the app never opens connections
 from collections.abc import AsyncIterator
 from typing import Optional
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -23,7 +24,17 @@ _session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
-        _engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        db_url = get_settings().database_url
+        _engine = create_async_engine(db_url, pool_pre_ping=True)
+        if db_url.startswith("sqlite"):
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _set_sqlite_pragma(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.close()
     return _engine
 
 

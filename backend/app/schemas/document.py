@@ -25,6 +25,8 @@ class DocumentResponse(BaseModel):
     processing_started_at: Optional[datetime] = None
     processing_heartbeat_at: Optional[datetime] = None
     chunk_count: Optional[int] = None
+    reindex_required: bool = False
+    index_version: int = 2
     created_at: datetime
     updated_at: datetime
 

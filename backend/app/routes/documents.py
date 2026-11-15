@@ -65,9 +65,14 @@ async def cancel_document(document_id: str, current_user: CurrentUser, db: DBSes
     return await DocumentService(db, rag).cancel(current_user, document_id)
 
 
-@router.post("/{document_id}/retry", response_model=DocumentResponse, summary="Retry a failed source using its stored original file")
+@router.post("/{document_id}/retry", response_model=DocumentResponse, summary="Retry a failed source or re-index an existing source using its stored original file")
 async def retry_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
     return await DocumentService(db, rag).retry(current_user, document_id)
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentResponse, summary="Re-index an existing document with the latest section-aware research engine")
+async def reindex_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
+    return await DocumentService(db, rag).reindex(current_user, document_id)
 
 
 @router.get("/{document_id}/file", summary="Download an owned source document")
