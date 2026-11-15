@@ -2,12 +2,28 @@ import { tokenStorage } from "@/utils/tokenStorage";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+let _cachedDesktopConfig = null;
+
+export async function resolveDesktopConfig() {
+  if (typeof window === "undefined" || !window["researchLensDesktop"]) return null;
+  if (_cachedDesktopConfig) return _cachedDesktopConfig;
+  try {
+    _cachedDesktopConfig = await window["researchLensDesktop"].getRuntimeConfig();
+    return _cachedDesktopConfig;
+  } catch {
+    return null;
+  }
+}
+
 export async function refreshAccessToken() {
   const refreshToken = tokenStorage.getRefreshToken();
   if (!refreshToken) return null;
-  const response = await fetch(`${BASE_URL}/auth/refresh`, {
+  const desktop = await resolveDesktopConfig();
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (desktop?.requestKey) headers.set("X-ResearchLens-Desktop-Key", desktop.requestKey);
+  const response = await fetch(`${desktop?.apiBaseUrl || BASE_URL}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
   if (!response.ok) {
@@ -45,18 +61,22 @@ const processQueue = (error, token = null) => {
 };
 
 export async function apiClient(endpoint, options = {}) {
+  const desktop = await resolveDesktopConfig();
+  const apiBase = desktop?.apiBaseUrl || BASE_URL;
   const url = endpoint.startsWith("http")
     ? endpoint
-    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+    : `${apiBase}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const headers = new Headers(options.headers || {});
+  if (desktop?.requestKey) headers.set("X-ResearchLens-Desktop-Key", desktop.requestKey);
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
+  const isAuthEndpoint = endpoint.includes("/auth/login") || endpoint.includes("/auth/register");
   const token = tokenStorage.getAccessToken();
-  if (token && !headers.has("Authorization")) {
+  if (token && !headers.has("Authorization") && !isAuthEndpoint) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
@@ -100,9 +120,9 @@ export async function apiClient(endpoint, options = {}) {
       isRefreshing = true;
 
       try {
-        const refreshResp = await fetch(`${BASE_URL}/auth/refresh`, {
+        const refreshResp = await fetch(`${apiBase}/auth/refresh`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(desktop?.requestKey ? { "X-ResearchLens-Desktop-Key": desktop.requestKey } : {}) },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
 

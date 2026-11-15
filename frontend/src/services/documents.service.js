@@ -1,4 +1,5 @@
-import { apiClient, refreshAccessToken, AppApiError } from "./api.client";
+import { apiClient, refreshAccessToken, AppApiError, resolveDesktopConfig } from "./api.client";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -33,12 +34,17 @@ export const documentsService = {
   },
 
   async uploadBatch(files, paperId, onUploadProgress, abortSignal = null) {
+    const desktop = await resolveDesktopConfig();
+    const targetUrl = `${desktop?.apiBaseUrl || API_BASE}/documents/upload/batch`;
+    const desktopKey = desktop?.requestKey;
+
     const formData = new FormData();
     for (const file of files) formData.append("files", file);
     formData.append("paper_id", paperId);
     const send = (token) => new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${API_BASE}/documents/upload/batch`);
+      xhr.open("POST", targetUrl);
+      if (desktopKey) xhr.setRequestHeader("X-ResearchLens-Desktop-Key", desktopKey);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       if (abortSignal) {
         if (abortSignal.aborted) {
@@ -83,6 +89,10 @@ export const documentsService = {
 
   async retry(id) {
     return apiClient(`/documents/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  },
+
+  async reindex(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}/reindex`, { method: "POST" });
   },
 
   async cancel(id) {

@@ -25,6 +25,20 @@ export function DocumentAttachmentsList({
       queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
     },
   });
+  const cancelMutation = useMutation({
+    mutationFn: documentsService.cancel,
+    onSuccess: (document) => {
+      queryClient.invalidateQueries({ queryKey: ["paperDocuments", document.paper_id] });
+      queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
+    },
+  });
+  const reindexMutation = useMutation({
+    mutationFn: documentsService.reindex,
+    onSuccess: (document) => {
+      queryClient.invalidateQueries({ queryKey: ["paperDocuments", document.paper_id] });
+      queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
+    },
+  });
   return (
     <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 space-y-3 font-serif shadow-2xs">
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
@@ -98,12 +112,26 @@ export function DocumentAttachmentsList({
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {doc.chunk_count && <span className="font-mono text-[11px] text-slate-500">{doc.chunk_count} chunks</span>}
+                    {doc.reindex_required && <Badge variant="outline" className="text-[10px] border-amber-300 bg-amber-50 text-amber-800">Update available</Badge>}
                     <Badge variant={isIndexed ? "grounded" : isFailed ? "destructive" : "secondary"} className="text-[10px] capitalize">{isIndexed ? "Ready" : isProcessing ? "Processing" : doc.processing_status}</Badge>
+                    {isProcessing && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={cancelMutation.isPending}
+                        onClick={() => cancelMutation.mutate(doc.id)}
+                        className="h-7 text-[10px] text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2"
+                      >
+                        {cancelMutation.isPending && cancelMutation.variables === doc.id ? "Stopping…" : "Cancel"}
+                      </Button>
+                    )}
                     {isFailed && <Button size="sm" variant="soft" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate(doc.id)} className="h-7 text-[10px]">{retryMutation.isPending && retryMutation.variables === doc.id ? "Retrying…" : "Retry"}</Button>}
+                    {isIndexed && doc.reindex_required && <Button size="sm" variant="outline" disabled={reindexMutation.isPending} onClick={() => reindexMutation.mutate(doc.id)} className="h-7 text-[10px] border-amber-300 text-amber-800 hover:bg-amber-50">{reindexMutation.isPending && reindexMutation.variables === doc.id ? "Updating…" : "Re-index"}</Button>}
                   </div>
                 </div>
                 {isProcessing && <DocumentProcessingProgress document={doc} />}
                 {isFailed && <p role="alert" className="text-xs text-rose-700">{doc.processing_error || "Indexing failed. Retry the source or add a corrected file."}</p>}
+                {reindexMutation.isError && reindexMutation.variables === doc.id && <p role="alert" className="text-xs text-rose-700">{reindexMutation.error?.message || "Re-indexing failed. Previous index preserved."}</p>}
               </div>
             );
           })}

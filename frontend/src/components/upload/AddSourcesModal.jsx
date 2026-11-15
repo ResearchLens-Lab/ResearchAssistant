@@ -35,6 +35,7 @@ export function AddSourcesModal({
   const [targetPaperId, setTargetPaperId] = useState(preselectedPaperId || "");
   const [files, setFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState("idle"); // "idle" | "uploading" | "preparing"
   const [uploadProgress, setUploadProgress] = useState(null);
   const [formError, setFormError] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -44,17 +45,18 @@ export function AddSourcesModal({
       setTargetPaperId(preselectedPaperId || (papers.length > 0 ? papers[0].id : ""));
       setFiles([]);
       setIsUploading(false);
+      setUploadStage("idle");
       setUploadProgress(null);
       setFormError("");
     }
   }, [isOpen, preselectedPaperId, papers]);
 
   const handleClose = () => {
-    if (!isUploading) {
-      setFiles([]);
-      setFormError("");
-      onClose();
-    }
+    setFiles([]);
+    setFormError("");
+    setIsUploading(false);
+    setUploadStage("idle");
+    onClose();
   };
 
   const handleFileSelect = (selectedFiles) => {
@@ -114,13 +116,21 @@ export function AddSourcesModal({
     }
 
     setIsUploading(true);
-    setUploadProgress({ percent: 10 });
+    setUploadStage("uploading");
+    setUploadProgress({ percent: 5 });
 
     try {
       const batch = await documentsService.uploadBatch(
         files,
         targetPaperId,
-        setUploadProgress
+        (progress) => {
+          setUploadProgress(progress);
+          if (progress?.percent >= 100) {
+            setUploadStage("preparing");
+          } else {
+            setUploadStage("uploading");
+          }
+        }
       );
 
       queryClient.invalidateQueries({ queryKey: ["papers"] });
@@ -128,9 +138,10 @@ export function AddSourcesModal({
       queryClient.invalidateQueries({ queryKey: ["paperDocuments", targetPaperId] });
 
       if (onSuccess) onSuccess(batch);
-      onClose();
+      handleClose();
     } catch (err) {
       setIsUploading(false);
+      setUploadStage("idle");
       setFormError(err.message || "Failed to upload documents. Please try again.");
     }
   };
@@ -261,20 +272,27 @@ export function AddSourcesModal({
 
           {/* Upload Progress Bar */}
           {isUploading && (
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
                 <span className="flex items-center gap-1.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1d6fc4]" />
-                  Uploading & extracting passages…
+                  {uploadStage === "preparing" ? (
+                    <span>Upload complete. Preparing document…</span>
+                  ) : (
+                    <span>Uploading document — {uploadProgress?.percent || 0}%</span>
+                  )}
                 </span>
                 <span className="font-mono text-[11px]">{uploadProgress?.percent || 0}%</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
                   className="h-full bg-[#1d6fc4] transition-all duration-300"
-                  style={{ width: `${uploadProgress?.percent || 15}%` }}
+                  style={{ width: `${Math.min(100, uploadProgress?.percent || 10)}%` }}
                 />
               </div>
+              <p className="text-[10px] text-slate-500 italic">
+                Your document will continue processing in the background. You can close this dialog at any time.
+              </p>
             </div>
           )}
 
@@ -283,10 +301,9 @@ export function AddSourcesModal({
               type="button"
               variant="outline"
               onClick={handleClose}
-              disabled={isUploading}
               className="h-9 px-4 text-xs font-semibold font-serif"
             >
-              Cancel
+              {isUploading ? "Continue in background" : "Cancel"}
             </Button>
             <Button
               type="submit"

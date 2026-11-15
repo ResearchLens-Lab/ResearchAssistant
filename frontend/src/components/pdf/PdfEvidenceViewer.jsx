@@ -71,8 +71,14 @@ function selectTextHighlight(root, phrase, pageElement) {
 }
 
 async function getAuthorizedPdf(documentId) {
-  const endpoint = `${API_BASE}/documents/${encodeURIComponent(documentId)}/file`;
-  const request = (token) => fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
+  const desktop = typeof window !== "undefined" && window.researchLensDesktop
+    ? await window.researchLensDesktop.getRuntimeConfig()
+    : null;
+  const endpoint = `${desktop?.apiBaseUrl || API_BASE}/documents/${encodeURIComponent(documentId)}/file`;
+  const request = (token) => fetch(endpoint, { headers: {
+    Authorization: `Bearer ${token}`,
+    ...(desktop?.requestKey ? { "X-ResearchLens-Desktop-Key": desktop.requestKey } : {}),
+  } });
   let response = await request(tokenStorage.getAccessToken());
   if (response.status === 401 && tokenStorage.getRefreshToken()) {
     const token = await refreshAccessToken();

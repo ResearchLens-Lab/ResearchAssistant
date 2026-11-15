@@ -10,10 +10,11 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, ArrowRight, Check, Circle, CircleCheck } from "lucide-react";
 import { isStrongPassword, normalizeUsername, passwordRequirements, validateUsername } from "@/utils/authValidation.mjs";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 function registrationError(error) {
   if (error?.code === "USERNAME_ALREADY_TAKEN") return "That username is already taken. Try another.";
-  if (error?.code === "EMAIL_ALREADY_REGISTERED") return "An account may already use this email. Sign in or use password recovery if available.";
+  if (error?.code === "EMAIL_ALREADY_REGISTERED") return "An account is already registered with this email. Please sign in.";
   if (error?.statusCode === 429) return "Too many account creation attempts. Please wait before trying again.";
   if (error?.statusCode === 422) return "Check your email, username, and password requirements.";
   if (!error?.statusCode) return "We couldn't connect to ResearchLens. Check your connection and try again.";
@@ -41,6 +42,7 @@ export function RegisterForm() {
     if (!isStrongPassword(password)) { setFormError("Meet all five password requirements before continuing."); return; }
     if (password !== confirmPassword) { setFormError("Passwords don't match."); return; }
     try {
+      tokenStorage.clear();
       const canonicalUsername = normalizeUsername(username);
       await register({ username: canonicalUsername, email: email.trim(), password });
       setCreatedUsername(canonicalUsername);
@@ -60,7 +62,7 @@ export function RegisterForm() {
       </CardHeader>
       <CardContent className="text-center text-sm text-[var(--rl-muted)]">Username: <span className="font-semibold text-[var(--rl-ink)]">{createdUsername}</span></CardContent>
       <CardFooter className="flex-col pt-2">
-        <Button type="button" variant="workbench" className="h-11 w-full gap-2 font-semibold" onClick={() => router.push("/login")}>
+        <Button type="button" variant="workbench" className="h-11 w-full gap-2 font-semibold" onClick={() => router.push(`/login?username=${encodeURIComponent(createdUsername)}`)}>
           Continue to sign in <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </Button>
       </CardFooter>

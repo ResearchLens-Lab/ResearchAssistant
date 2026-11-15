@@ -10,12 +10,35 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 
-function loginError(error) {
-  if (error?.statusCode === 401) return "The username or password is incorrect.";
-  if (error?.statusCode === 429) return "Too many sign-in attempts. Please wait before trying again.";
-  if (error?.statusCode === 504 || error?.code === "TIMEOUT") return "Connection timed out. Check that the backend server is running.";
-  if (!error?.statusCode) return "We couldn't connect to ResearchLens. Check your connection and try again.";
-  return "ResearchLens is temporarily unavailable. Please try again shortly.";
+/**
+ * Authoritative Authentication State Machine
+ * IDLE → VALIDATING → AUTHENTICATING → SUCCESS / ERROR
+ */
+export const AuthStatus = {
+  IDLE: "IDLE",
+  VALIDATING: "VALIDATING",
+  AUTHENTICATING: "AUTHENTICATING",
+  SUCCESS: "SUCCESS",
+  ERROR: "ERROR",
+};
+
+function loginErrorMessage(error) {
+  if (error?.message && error.message.includes("Desktop request key")) {
+    return "Connecting to local desktop services... Please retry in a moment.";
+  }
+  if (error?.statusCode === 401) {
+    return "The username or password is incorrect.";
+  }
+  if (error?.statusCode === 429) {
+    return "Too many sign-in attempts. Please wait before trying again.";
+  }
+  if (error?.statusCode === 504 || error?.code === "TIMEOUT") {
+    return "Connection timed out. Check that the local backend service is running.";
+  }
+  if (!error?.statusCode) {
+    return "Could not connect to ResearchLens. Check that local services are active.";
+  }
+  return error?.message || "ResearchLens is temporarily unavailable. Please try again shortly.";
 }
 
 export function LoginForm() {
@@ -23,44 +46,109 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const requestedRedirect = searchParams.get("redirect") || "/papers";
   const redirectUrl = requestedRedirect.startsWith("/") && !requestedRedirect.startsWith("//") ? requestedRedirect : "/papers";
-  const [identifier, setIdentifier] = useState("");
+  const requestedUsername = searchParams.get("username") || "";
+
+  const [authStatus, setAuthStatus] = useState(AuthStatus.IDLE);
+  const [identifier, setIdentifier] = useState(requestedUsername);
   const [password, setPassword] = useState("");
-  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({ identifier: "", password: "" });
+  const [serverError, setServerError] = useState("");
   const [recoveryNotice, setRecoveryNotice] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+
   const { login, isLoggingIn, isAuthenticated } = useAuth();
-  const submittingRef = useRef(false);
+  const isNavigatingRef = useRef(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (requestedUsername && !identifier) {
+      setIdentifier(requestedUsername);
+    }
+  }, [requestedUsername, identifier]);
+
+  useEffect(() => {
+    if (isAuthenticated && !isNavigatingRef.current) {
+      isNavigatingRef.current = true;
       router.replace(redirectUrl);
     }
   }, [isAuthenticated, redirectUrl, router]);
 
+  const isPending =
+    authStatus === AuthStatus.VALIDATING ||
+    authStatus === AuthStatus.AUTHENTICATING ||
+    authStatus === AuthStatus.SUCCESS ||
+    isLoggingIn;
+
+  const handleIdentifierChange = (event) => {
+    setIdentifier(event.target.value);
+    if (authStatus === AuthStatus.ERROR) {
+      setAuthStatus(AuthStatus.IDLE);
+      setServerError("");
+    }
+    if (fieldErrors.identifier) {
+      setFieldErrors((prev) => ({ ...prev, identifier: "" }));
+    }
+  };
+
+  const handlePasswordChange = (event) => {
+    setPassword(event.target.value);
+    if (authStatus === AuthStatus.ERROR) {
+      setAuthStatus(AuthStatus.IDLE);
+      setServerError("");
+    }
+    if (fieldErrors.password) {
+      setFieldErrors((prev) => ({ ...prev, password: "" }));
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (submittingRef.current || isLoggingIn) return;
-    setSubmitted(true);
-    setFormError("");
 
-    const form = event.currentTarget;
-    const rawId = form.elements["login-identifier"]?.value ?? identifier;
-    const rawPass = form.elements["login-password"]?.value ?? password;
-    const trimmedId = (rawId || "").trim();
+    // Guard against duplicate submission while in progress
+    if (isPending) return;
 
-    if (!trimmedId) { setFormError("Enter your username."); return; }
-    if (!rawPass) { setFormError("Enter your password."); return; }
+    // Transition: IDLE -> VALIDATING
+    setAuthStatus(AuthStatus.VALIDATING);
+    setServerError("");
 
-    submittingRef.current = true;
+    const trimmedId = (identifier || "").trim();
+    const cleanPass = password || "";
+
+    const newFieldErrors = {
+      identifier: !trimmedId ? "Enter your username." : "",
+      password: !cleanPass ? "Enter your password." : "",
+    };
+
+    if (newFieldErrors.identifier || newFieldErrors.password) {
+      setFieldErrors(newFieldErrors);
+      setAuthStatus(AuthStatus.ERROR);
+      return;
+    }
+
+    setFieldErrors({ identifier: "", password: "" });
+
+    // Transition: VALIDATING -> AUTHENTICATING
+    setAuthStatus(AuthStatus.AUTHENTICATING);
+
     try {
-      await login({ identifier: trimmedId, password: rawPass });
-      setPassword("");
-      try { sessionStorage.setItem("researchlens.auth.success", "1"); } catch { /* Toast is optional; authentication is complete. */ }
+      await login({ identifier: trimmedId, password: cleanPass });
+
+      // Transition: AUTHENTICATING -> SUCCESS
+      // CRITICAL: DO NOT clear password state here. Clearing password while navigating
+      // would trigger field validation re-renders. Keep inputs controlled and stable.
+      setAuthStatus(AuthStatus.SUCCESS);
+
+      try {
+        sessionStorage.setItem("researchlens.auth.success", "1");
+      } catch {
+        // Optional success banner
+      }
+
+      isNavigatingRef.current = true;
       router.replace(redirectUrl);
     } catch (error) {
-      submittingRef.current = false;
-      setPassword("");
-      setFormError(loginError(error));
+      // Transition: AUTHENTICATING -> ERROR
+      // Preserve the entered password so the user can correct typos rather than losing input.
+      setAuthStatus(AuthStatus.ERROR);
+      setServerError(loginErrorMessage(error));
     }
   };
 
@@ -68,29 +156,105 @@ export function LoginForm() {
     <Card className="w-full max-w-md rounded-2xl border-[var(--rl-border)] shadow-[0_18px_48px_-24px_rgba(38,120,184,0.28)]">
       <CardHeader className="space-y-2 pb-5 text-left">
         <CardTitle className="text-2xl font-semibold tracking-tight text-[var(--rl-ink)]">Welcome back</CardTitle>
-        <CardDescription className="text-sm leading-6 text-[var(--rl-muted)]">Sign in to continue your source-grounded research.</CardDescription>
+        <CardDescription className="text-sm leading-6 text-[var(--rl-muted)]">
+          Sign in to continue your source-grounded research.
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit} noValidate>
         <CardContent className="space-y-4">
-          {formError && <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{formError}</span></div>}
+          {serverError && (
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{serverError}</span>
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            <label htmlFor="login-identifier" className="text-sm font-medium text-[var(--rl-ink)]">Username</label>
-            <Input id="login-identifier" value={identifier} onChange={(event) => { setIdentifier(event.target.value); setFormError(""); }} autoComplete="username" autoCapitalize="none" autoFocus required aria-invalid={submitted && !identifier.trim()} aria-describedby="login-identifier-help login-identifier-error" />
-            <p id="login-identifier-help" className="text-xs leading-5 text-[var(--rl-muted)]">Existing accounts can also sign in with their email address.</p>
-            <p id="login-identifier-error" className="min-h-4 text-xs text-red-700">{submitted && !identifier.trim() ? "Enter your username." : " "}</p>
+            <label htmlFor="login-identifier" className="text-sm font-medium text-[var(--rl-ink)]">
+              Username
+            </label>
+            <Input
+              id="login-identifier"
+              name="login-identifier"
+              value={identifier}
+              onChange={handleIdentifierChange}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoFocus
+              disabled={isPending}
+              required
+              aria-invalid={Boolean(fieldErrors.identifier)}
+              aria-describedby="login-identifier-help login-identifier-error"
+            />
+            <p id="login-identifier-help" className="text-xs leading-5 text-[var(--rl-muted)]">
+              Existing accounts can also sign in with their email address.
+            </p>
+            <p id="login-identifier-error" className="min-h-4 text-xs text-red-700">
+              {fieldErrors.identifier || " "}
+            </p>
           </div>
+
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3"><label htmlFor="login-password" className="text-sm font-medium text-[var(--rl-ink)]">Password</label><button type="button" onClick={() => setRecoveryNotice((shown) => !shown)} className="text-xs font-medium text-[var(--rl-primary)] underline underline-offset-4">Forgot password?</button></div>
-            <PasswordInput id="login-password" value={password} onChange={(event) => { setPassword(event.target.value); setFormError(""); }} autoComplete="current-password" aria-invalid={submitted && !password} aria-describedby="login-password-error" />
-            <p id="login-password-error" className="min-h-4 text-xs text-red-700">{submitted && !password ? "Enter your password." : " "}</p>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="login-password" className="text-sm font-medium text-[var(--rl-ink)]">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => setRecoveryNotice((shown) => !shown)}
+                className="text-xs font-medium text-[var(--rl-primary)] underline underline-offset-4"
+              >
+                Forgot password?
+              </button>
+            </div>
+            <PasswordInput
+              id="login-password"
+              name="login-password"
+              value={password}
+              onChange={handlePasswordChange}
+              autoComplete="current-password"
+              disabled={isPending}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby="login-password-error"
+            />
+            <p id="login-password-error" className="min-h-4 text-xs text-red-700">
+              {fieldErrors.password || " "}
+            </p>
           </div>
-          {recoveryNotice && <p role="status" className="rounded-lg bg-[var(--rl-tint)] p-3 text-xs leading-5 text-[var(--rl-muted)]">Password recovery is not configured in this application yet. Contact your workspace administrator for help.</p>}
+
+          {recoveryNotice && (
+            <div role="status" className="rounded-lg bg-[var(--rl-tint)] p-3 text-xs leading-5 text-[var(--rl-muted)]">
+              <strong>Local Account Notice:</strong> ResearchLens Desktop operates privately on your computer. Credentials are stored securely in your local research library. Passwords cannot be recovered via email. If forgotten, create a new local researcher profile or restore from a library backup.
+            </div>
+          )}
         </CardContent>
+
         <CardFooter className="flex-col space-y-4 pt-2">
-          <Button type="submit" variant="workbench" className="h-11 w-full gap-2 text-sm font-semibold" disabled={isLoggingIn}>
-            {isLoggingIn ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Signing in…</> : <>Sign in<ArrowRight className="h-4 w-4" aria-hidden="true" /></>}
+          <Button
+            type="submit"
+            variant="workbench"
+            className="h-11 w-full gap-2 text-sm font-semibold"
+            disabled={isPending}
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {authStatus === AuthStatus.SUCCESS ? "Signing in…" : "Authenticating…"}
+              </>
+            ) : (
+              <>
+                Sign in
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </>
+            )}
           </Button>
-          <p className="text-center text-sm text-[var(--rl-muted)]">New to ResearchLens? <Link href="/register" className="font-semibold text-[var(--rl-primary)] underline underline-offset-4 hover:text-[#1f659c]">Create an account</Link></p>
+
+          <p className="text-center text-sm text-[var(--rl-muted)]">
+            New to ResearchLens?{" "}
+            <Link href="/register" className="font-semibold text-[var(--rl-primary)] underline underline-offset-4 hover:text-[#1f659c]">
+              Create an account
+            </Link>
+          </p>
         </CardFooter>
       </form>
     </Card>
