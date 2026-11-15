@@ -5,7 +5,13 @@ __pycache__/
 *.so
 .Python
 env/
-build/
+/build/
+desktop/build/app-runtime/
+!desktop/build/icon.ico
+!desktop/build/icon.png
+!desktop/build/installerSidebar.bmp
+!desktop/build/installerHeader.bmp
+!desktop/build/build-manifest.json
 develop-eggs/
 dist/
 downloads/
@@ -25,6 +31,29 @@ wheels/
 .venv/
 venv/
 ENV/
+.venv*/
+
+# Databases & local stores
+*.sqlite
+*.sqlite3
+*.db
+.phase6_schema_tmp*.db
+database.sqlite
+
+# Release & desktop build artifacts
+release/
+desktop/build/app-runtime/
+!desktop/build/icon.ico
+!desktop/build/icon.png
+!desktop/build/installerSidebar.bmp
+!desktop/build/installerHeader.bmp
+!desktop/build/build-manifest.json
+.researchlens-qa/
+test_output.txt
+scratch/
+trusted_ownership_export.json
+test_simple.py
+fix_test_owner_ids.py
 
 # ChromaDB local storage
 .chroma/

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Set up ResearchLens</title>
+  <link rel="stylesheet" href="./onboarding.css" />
+</head>
+<body>
+  <main class="shell">
+    <aside class="rail">
+      <div class="brand-header">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+            <circle cx="10" cy="10" r="7.5" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1.75" />
+            <path d="M8 6.75H11.25L13 8.5V13.25H8V6.75Z" fill="#ffffff" stroke="#0284c7" stroke-width="1.1" />
+            <path d="M11.25 6.75V8.5H13" fill="#bae6fd" stroke="#0284c7" stroke-width="1.1" />
+            <path d="M15.5 15.5L20.5 20.5" stroke="#0284c7" stroke-width="2.2" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">ResearchLens</div>
+          <div class="brand-tagline">Local Evidence-Linked Research</div>
+        </div>
+      </div>
+
+      <nav class="steps" aria-label="Setup steps">
+        <span class="step-item active" data-step-dot="1"><span class="step-num">01</span> <b>Welcome</b></span>
+        <span class="step-item" data-step-dot="2"><span class="step-num">02</span> <b>Research Library</b></span>
+        <span class="step-item" data-step-dot="3"><span class="step-num">03</span> <b>Document Handling</b></span>
+        <span class="step-item" data-step-dot="4"><span class="step-num">04</span> <b>Resource Profile</b></span>
+        <span class="step-item" data-step-dot="5"><span class="step-num">05</span> <b>Privacy Defaults</b></span>
+        <span class="step-item" data-step-dot="6"><span class="step-num">06</span> <b>Ready to Launch</b></span>
+      </nav>
+
+      <div class="rail-note">
+        <span class="dot"></span>
+        <span>Private offline workspace</span>
+      </div>
+    </aside>
+
+    <section class="content">
+      <header class="top">
+        <span class="top-title">FIRST-RUN INITIALIZATION</span>
+        <span class="secure">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12" style="display:inline-block; vertical-align:-1px; margin-right:4px;">
+            <circle cx="8" cy="8" r="6" />
+          </svg>
+          100% Local &bull; No Remote Cloud Required
+        </span>
+      </header>
+
+      <div class="body-scroll-container">
+        <div class="body">
+          <div class="eyebrow" id="step-label">STEP 1 OF 6</div>
+          <h1 id="title">Welcome to ResearchLens</h1>
+          <p class="lead" id="lead">Find the evidence. Understand the research.</p>
+
+          <!-- SCREEN 1: Welcome -->
+          <section class="step-panel" data-step="1">
+            <div class="feature-cards">
+              <div class="card-highlight">
+                <div class="card-icon-box">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" width="20" height="20">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Complete Privacy & Local Security</strong>
+                  <p>All research papers, notes, extracted text, and query responses are processed locally on your machine. Documents never travel across the internet or reach third-party servers.</p>
+                </div>
+              </div>
+              <div class="card-highlight">
+                <div class="card-icon-box">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" width="20" height="20">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Verified, Evidence-Linked Citations</strong>
+                  <p>Answers are computed deterministically from your indexed documents with exact page-level citations and highlighted excerpts. No generative hallucinations or unsourced claims.</p>
+                </div>
+              </div>
+            </div>
+            <p class="hint">Click <b>Continue</b> to choose where your research papers and library databases will reside on this computer.</p>
+          </section>
+
+          <!-- SCREEN 2: Library Location -->
+          <section class="step-panel" data-step="2" hidden>
+            <label class="field-label" for="library-path">LIBRARY STORAGE DIRECTORY</label>
+            <div class="path-picker">
+              <div class="folder-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" width="20" height="20">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div class="path-value" id="library-path">Loading suggested location&hellip;</div>
+              <button class="secondary" id="choose-folder" type="button">Browse Folder</button>
+            </div>
+            <div id="disk-info" class="disk-meta">
+              <span id="disk-space">Checking available disk space&hellip;</span>
+              <span id="path-status" class="status-ok">&check; Local personal storage</span>
+            </div>
+            <p class="hint">Your research database (`library.sqlite3`), imported PDFs, citation indexes, and project notes are saved in this folder.</p>
+            <div class="notice" id="location-notice" hidden></div>
+          </section>
+
+          <!-- SCREEN 3: Document Handling -->
+          <section class="step-panel" data-step="3" hidden>
+            <label class="field-label">DOCUMENT IMPORT MODE</label>
+            <div class="storage-options">
+              <div class="option selected" id="mode-copy">
+                <span class="radio" id="radio-copy"></span>
+                <div>
+                  <strong>Copy documents into library storage (Recommended)</strong>
+                  <small>Creates a verified local copy in your ResearchLens library. Your original files elsewhere remain untouched.</small>
+                </div>
+              </div>
+              <div class="option" id="mode-link">
+                <span class="radio" id="radio-link"></span>
+                <div>
+                  <strong>Link documents in place</strong>
+                  <small>Indexes existing files without duplicating storage space. Automatically monitors source paths for updates.</small>
+                </div>
+              </div>
+            </div>
+            <p class="hint">Import preferences can be customized on a per-project basis at any time.</p>
+          </section>
+
+          <!-- SCREEN 4: Resource Profile -->
+          <section class="step-panel" data-step="4" hidden>
+            <label class="field-label">PROCESSING PACE &amp; CONCURRENCY</label>
+            <div class="profile-options">
+              <button class="profile selected" data-profile="low" type="button">
+                <div class="profile-header">
+                  <strong>Low-Resource Profile</strong>
+                  <span class="check-badge">&check;</span>
+                </div>
+                <small>Processes one paper at a time with bounded RAM and low CPU background utilization. Recommended for laptops and power efficiency.</small>
+              </button>
+              <button class="profile" data-profile="standard" type="button">
+                <div class="profile-header">
+                  <strong>Standard Profile</strong>
+                  <span class="check-badge">&check;</span>
+                </div>
+                <small>Enables parallel document chunking and indexing across multi-core processors. Best for desktop workstations with 16GB+ RAM.</small>
+              </button>
+            </div>
+            <p class="hint">All processing is performed directly by the embedded local Python runtime. No cloud compute is ever used.</p>
+          </section>
+
+          <!-- SCREEN 5: Privacy -->
+          <section class="step-panel" data-step="5" hidden>
+            <label class="field-label">ACTIVE SECURITY &amp; PRIVACY GUARDS</label>
+            <div class="permission-list">
+              <div>
+                <span class="permission-icon">&bull;</span>
+                <span><strong>Local Document Processing</strong><small>Text parsing and lexical retrieval execute entirely on this PC</small></span>
+                <b class="state on">Active</b>
+              </div>
+              <div>
+                <span class="permission-icon">&bull;</span>
+                <span><strong>External Generative AI</strong><small>Strictly disabled &bull; Zero external model API queries</small></span>
+                <b class="state off">Blocked</b>
+              </div>
+              <div>
+                <span class="permission-icon">&bull;</span>
+                <span><strong>Cloud Telemetry &amp; Analytics</strong><small>No user metrics, document text, or crash data transmitted</small></span>
+                <b class="state off">Blocked</b>
+              </div>
+              <div>
+                <span class="permission-icon">&bull;</span>
+                <span><strong>External Scholarly Web Lookups</strong><small>Public scholarly registry lookups disabled in this build</small></span>
+                <b class="state off">Blocked</b>
+              </div>
+              <div>
+                <span class="permission-icon">&bull;</span>
+                <span><strong>Zero Background Services</strong><small>All internal child processes terminate immediately on application close</small></span>
+                <b class="state on">Enforced</b>
+              </div>
+            </div>
+            <p class="hint">Your research data remains confidential under your personal Windows account access permissions.</p>
+          </section>
+
+          <!-- SCREEN 6: Ready -->
+          <section class="step-panel" data-step="6" hidden>
+            <label class="field-label">PRE-FLIGHT VERIFICATION</label>
+            <div class="permission-list" id="ready-checklist">
+              <div>
+                <span class="permission-icon">&check;</span>
+                <span><strong>Library Directory</strong><small id="ready-path-summary">Default Documents directory</small></span>
+                <b class="state on">Ready</b>
+              </div>
+              <div>
+                <span class="permission-icon">&check;</span>
+                <span><strong>SQLite Schema &amp; FTS5 Full-Text Engine</strong><small>Deterministic high-speed lexical search</small></span>
+                <b class="state on">Ready</b>
+              </div>
+              <div>
+                <span class="permission-icon">&check;</span>
+                <span><strong>Local Loopback Security Token</strong><small>Bound to 127.0.0.1 with ephemeral cryptographic key</small></span>
+                <b class="state on">Ready</b>
+              </div>
+              <div>
+                <span class="permission-icon">&check;</span>
+                <span><strong>Research Intelligence Overhaul Engine</strong><small>Topic coverage analyzer and section-aware chunking</small></span>
+                <b class="state on">Ready</b>
+              </div>
+            </div>
+            <p class="hint">Click <b>Initialize &amp; Launch</b> to create your library and open your research workspace.</p>
+          </section>
+
+          <div class="error" id="error" role="alert" hidden></div>
+        </div>
+      </div>
+
+      <footer class="actions">
+        <span class="progress" id="progress-text">Private, evidence-first research workspace</span>
+        <div class="action-buttons">
+          <button class="secondary" id="back" type="button" hidden>Back</button>
+          <button class="primary" id="next" type="button">Continue <span>&rarr;</span></button>
+        </div>
+      </footer>
+
+      <div class="footnote">ResearchLens Desktop &bull; Version 0.1.0 &bull; Private &bull; Windows x64</div>
+    </section>
+  </main>
+  <script src="./onboarding.js"></script>
+</body>
+</html>
