@@ -17,6 +17,7 @@ class Paper(Base, TimestampMixin):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     abstract: Mapped[Optional[str]] = mapped_column(Text)
     authors: Mapped[Optional[list]] = mapped_column(JSONVariant)
     publication_year: Mapped[Optional[int]] = mapped_column(Integer, index=True)

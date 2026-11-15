@@ -311,6 +311,7 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
 
                     meta = ChunkMetadata(
                         chunk_id=chunk_id,
+                        owner_id=document.owner_id,  # SEC-001: Owner from normalized document
                         paper_id=document.paper_id,
                         document_id=document.document_id,
                         page_start=p_start if is_pdf else None,
@@ -362,6 +363,7 @@ class SectionAwareChunkingStrategy(BaseChunkingStrategy):
 
                 meta = ChunkMetadata(
                     chunk_id=chunk_id,
+                    owner_id=document.owner_id,  # SEC-001: Owner from normalized document
                     paper_id=document.paper_id,
                     document_id=document.document_id,
                     page_start=p_start if is_pdf else None,

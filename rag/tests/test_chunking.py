@@ -35,6 +35,7 @@ def test_document_normalizer_section_and_page_extraction():
         paper_id="paper_test",
         document_id="doc_test",
         title="Test Paper",
+        owner_id="test_user_fixture",
     )
     doc = normalizer.normalize(pages=pages, metadata=meta)
 
@@ -90,6 +91,7 @@ def test_chunk_metadata_chroma_serialization():
         chunk_index=1,
         token_count=120,
         title="Attention Paper",
+        owner_id="test_user_fixture",
     )
     chroma_dict = meta.to_chroma_metadata()
     assert chroma_dict["chunk_id"] == "paper_1_c0001_p1-2"

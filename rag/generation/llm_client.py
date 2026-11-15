@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # One pooled HTTP connection manager is reused across local model requests.
 _OLLAMA_HTTP = httpx.Client()
 _OLLAMA_REQUEST_SLOT = threading.BoundedSemaphore(1)
+_OLLAMA_INFERENCE_ACTIVE = threading.Event()
 atexit.register(_OLLAMA_HTTP.close)
 
 
@@ -300,9 +301,9 @@ class OllamaLLMClient(BaseLLMClient):
     Local generation provider via Ollama's HTTP API (http://localhost:11434).
     Uses strict source grounding with zero external network access and zero paid APIs.
     """
-    # Qwen thinking is never streamed to the UI; complete responses are verified
-    # before they are returned to the application.
-    supports_streaming = False
+    # Only message.content deltas are emitted. Ollama's thinking field is ignored,
+    # and the final answer is still citation-checked before persistence.
+    supports_streaming = True
 
     def __init__(
         self,
@@ -326,6 +327,46 @@ class OllamaLLMClient(BaseLLMClient):
                 return res.status_code == 200
         except Exception:
             return False
+
+    def status(self) -> Dict[str, Any]:
+        """Return a safe, read-only snapshot of the configured local model state."""
+        result: Dict[str, Any] = {
+            "provider": "ollama", "model": self.model, "runtime_available": False,
+            "model_installed": False, "model_loaded": False,
+            "inference_active": _OLLAMA_INFERENCE_ACTIVE.is_set(), "state": "runtime_unavailable",
+        }
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                tags_response = client.get(f"{self.base_url}/api/tags")
+                if tags_response.status_code != 200:
+                    return result
+                result["runtime_available"] = True
+                installed = tags_response.json().get("models", [])
+                result["model_installed"] = any(
+                    item.get("name") == self.model or item.get("model") == self.model
+                    for item in installed if isinstance(item, dict)
+                )
+                if result["model_installed"]:
+                    result["state"] = "ready_not_loaded"
+                else:
+                    result["state"] = "model_missing"
+                try:
+                    ps_response = client.get(f"{self.base_url}/api/ps")
+                    if ps_response.status_code == 200:
+                        loaded = ps_response.json().get("models", [])
+                        result["model_loaded"] = any(
+                            item.get("name") == self.model or item.get("model") == self.model
+                            for item in loaded if isinstance(item, dict)
+                        )
+                except (httpx.HTTPError, ValueError):
+                    pass
+                if result["model_loaded"]:
+                    result["state"] = "inference_active" if result["inference_active"] else "ready_loaded"
+                elif result["inference_active"]:
+                    result["state"] = "loading_or_generating"
+        except (httpx.HTTPError, ValueError):
+            pass
+        return result
 
     def generate(
         self,
@@ -351,7 +392,11 @@ class OllamaLLMClient(BaseLLMClient):
         }
         try:
             with _OLLAMA_REQUEST_SLOT:
-                resp = _OLLAMA_HTTP.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
+                _OLLAMA_INFERENCE_ACTIVE.set()
+                try:
+                    resp = _OLLAMA_HTTP.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
+                finally:
+                    _OLLAMA_INFERENCE_ACTIVE.clear()
                 if resp.status_code == 404:
                     raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed. Run 'ollama pull {self.model}'.")
                 resp.raise_for_status()
@@ -387,20 +432,24 @@ class OllamaLLMClient(BaseLLMClient):
         }
         try:
             with _OLLAMA_REQUEST_SLOT:
-                with _OLLAMA_HTTP.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=self.timeout) as response:
-                    if response.status_code == 404:
-                        raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed.")
-                    response.raise_for_status()
-                    for line in response.iter_lines():
-                        if not line:
-                            continue
-                        try:
-                            chunk = httpx.Response(200, content=line).json()
-                            delta = chunk.get("message", {}).get("content", "")
-                            if delta:
-                                yield delta
-                        except Exception:
-                            continue
+                _OLLAMA_INFERENCE_ACTIVE.set()
+                try:
+                    with _OLLAMA_HTTP.stream("POST", f"{self.base_url}/api/chat", json=payload, timeout=self.timeout) as response:
+                        if response.status_code == 404:
+                            raise LLMProviderError("model_not_installed", f"Ollama model '{self.model}' is not installed.")
+                        response.raise_for_status()
+                        for line in response.iter_lines():
+                            if not line:
+                                continue
+                            try:
+                                chunk = httpx.Response(200, content=line).json()
+                                delta = chunk.get("message", {}).get("content", "")
+                                if delta:
+                                    yield delta
+                            except Exception:
+                                continue
+                finally:
+                    _OLLAMA_INFERENCE_ACTIVE.clear()
         except httpx.ConnectError as exc:
             raise LLMProviderError("provider_unavailable", f"Ollama is not running at {self.base_url}.") from exc
         except httpx.TimeoutException as exc:

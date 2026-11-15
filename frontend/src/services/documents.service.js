@@ -1,30 +1,21 @@
 import { apiClient, refreshAccessToken, AppApiError } from "./api.client";
-import { tokenStorage } from "@/utils/tokenStorage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-export async function openAuthenticatedPdfSource(source) {
+export async function openAuthenticatedPdfSource(source, highlightedText = "") {
   if (!source?.document_id || !/\.pdf$/i.test(source.filename || "")) return false;
-  const tab = window.open("about:blank", "_blank");
+  const params = new URLSearchParams({
+    document_id: source.document_id,
+    filename: source.filename || "Research source.pdf",
+    page: String(source.page_start || source.page || 1),
+    end_page: String(source.page_end || source.page_start || source.page || 1),
+  });
+  const text = (highlightedText || source.evidence_excerpt || "").replace(/\s+/g, " ").trim();
+  if (text) params.set("highlight", text);
+  const tab = window.open(`/pdf-viewer?${params.toString()}`, "_blank");
   if (!tab) return false;
-  try {
-    const endpoint = `${API_BASE}/documents/${encodeURIComponent(source.document_id)}/file`;
-    const request = (token) => fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
-    let response = await request(tokenStorage.getAccessToken());
-    if (response.status === 401 && tokenStorage.getRefreshToken()) {
-      const renewed = await refreshAccessToken();
-      if (renewed) response = await request(renewed);
-    }
-    if (!response.ok) throw new Error(`Source request failed (${response.status})`);
-    const url = URL.createObjectURL(await response.blob());
-    const page = source.page_start || source.page;
-    tab.location.href = `${url}${page ? `#page=${page}` : ""}`;
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return true;
-  } catch (error) {
-    tab.close();
-    throw error;
-  }
+  tab.opener = null;
+  return true;
 }
 
 export const documentsService = {

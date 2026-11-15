@@ -13,6 +13,7 @@ import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 function loginError(error) {
   if (error?.statusCode === 401) return "The username or password is incorrect.";
   if (error?.statusCode === 429) return "Too many sign-in attempts. Please wait before trying again.";
+  if (error?.statusCode === 504 || error?.code === "TIMEOUT") return "Connection timed out. Check that the backend server is running.";
   if (!error?.statusCode) return "We couldn't connect to ResearchLens. Check your connection and try again.";
   return "ResearchLens is temporarily unavailable. Please try again shortly.";
 }

@@ -33,6 +33,49 @@ def test_ollama_chat_disables_thinking_and_returns_content_only(monkeypatch):
     client.close()
 
 
+def test_ollama_streams_only_final_content_and_never_thinking(monkeypatch):
+    def respond(request):
+        assert json.loads(request.content)["stream"] is True
+        return httpx.Response(200, content=(
+            b'{"message":{"content":"Grounded ","thinking":"private"},"done":false}\n'
+            b'{"message":{"content":"answer [S1]","thinking":"private"},"done":true}\n'
+        ))
+
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    monkeypatch.setattr(llm_client, "_OLLAMA_HTTP", client)
+    model = OllamaLLMClient()
+    assert model.supports_streaming is True
+    assert list(model.generate_stream("system", "question")) == ["Grounded ", "answer [S1]"]
+    client.close()
+
+
+def test_ollama_status_distinguishes_missing_loaded_and_active_model(monkeypatch):
+    responses = {
+        "/api/tags": {"models": [{"name": "qwen3.5:0.8b"}]},
+        "/api/ps": {"models": [{"name": "qwen3.5:0.8b"}]},
+    }
+
+    class FakeResponse:
+        status_code = 200
+        def json(self): return responses[self.path]
+
+    class FakeClient:
+        def __init__(self, **_kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def get(self, url):
+            response = FakeResponse()
+            response.path = url.rsplit("/", 2)[-2:]
+            response.path = "/" + "/".join(response.path)
+            return response
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    status = OllamaLLMClient().status()
+    assert status["state"] == "ready_loaded"
+    assert status["runtime_available"] and status["model_installed"] and status["model_loaded"]
+    assert "api_key" not in status
+
+
 def test_general_knowledge_is_separate_and_has_no_document_citations(monkeypatch):
     class EmptyRetriever:
         def retrieve(self, _request):

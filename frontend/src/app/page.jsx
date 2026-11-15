@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Check, FileSearch, GitCompareArrows, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Check, FileSearch, GitCompareArrows, HelpCircle } from "lucide-react";
+import { ResearchLensLogo } from "@/components/brand/ResearchLensLogo";
 
 const CAPABILITIES = [
   {
@@ -24,9 +25,14 @@ export default function HomePage() {
     <main className="min-h-dvh bg-[var(--rl-canvas)]">
       <header className="border-b border-[var(--rl-border)] bg-white/90 px-4 sm:px-6">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2.5 rounded-lg text-[var(--rl-ink)]" aria-label="ResearchLens home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><Sparkles className="h-5 w-5" aria-hidden="true" /></span>
-            <span className="text-base font-semibold tracking-tight">ResearchLens</span>
+          <Link href="/" className="flex items-center gap-3 rounded-lg text-[var(--rl-ink)]" aria-label="ResearchLens home">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)] shadow-2xs">
+              <ResearchLensLogo className="h-5 w-5" />
+            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-base font-semibold tracking-tight">ResearchLens</span>
+              <span className="text-[10px] text-[var(--rl-muted)]">Find the evidence. Understand the research.</span>
+            </div>
           </Link>
           <nav aria-label="Main navigation" className="flex items-center gap-2">
             <Link href="/login" className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-medium text-[var(--rl-muted)] hover:bg-[var(--rl-tint)] hover:text-[var(--rl-ink)]">Sign in</Link>
@@ -59,7 +65,7 @@ export default function HomePage() {
               </li>
               <li className="workflow-connector flex justify-center text-[var(--rl-sky)]" aria-hidden="true"><span className="h-5 border-l border-dashed border-[var(--rl-sky)]" /></li>
               <li className="workflow-stage flex items-center gap-3 rounded-xl bg-[var(--rl-tint)] p-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--rl-primary)]"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--rl-primary)]"><HelpCircle className="h-4 w-4" aria-hidden="true" /></span>
                 <span><strong className="block text-sm font-semibold text-[var(--rl-ink)]">Research question</strong><span className="mt-0.5 block text-xs text-[var(--rl-muted)]">Scope the question to selected projects.</span></span>
               </li>
               <li className="workflow-connector flex justify-center text-[var(--rl-sky)]" aria-hidden="true"><span className="h-5 border-l border-dashed border-[var(--rl-sky)]" /></li>

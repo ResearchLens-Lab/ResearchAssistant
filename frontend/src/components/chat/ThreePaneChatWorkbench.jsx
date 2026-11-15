@@ -34,8 +34,6 @@ import {
   Layers,
   Pencil,
   BookOpen,
-  CheckCircle2,
-  ChevronRight,
   ArrowRight,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -82,7 +80,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   } = useCitationStore();
 
   // Library papers for scope resolution
-  const { papers, isLoading: isLoadingPapers } = usePapers(1, 50);
+  const { papers, isLoading: isLoadingPapers, updatePaper, deletePaper, isDeleting: isDeletingPaper } = usePapers(1, 50);
   const paperIds = useMemo(() => papers.map((p) => p.id), [papers]);
   const documentsQuery = useQuery({
     queryKey: ["paperDocumentsByPapers", paperIds],
@@ -104,14 +102,34 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   // Layout UI states
   const [leftTab, setLeftTab] = useState("history"); // "history" | "scope"
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(268);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // null | "history" | "scope" | "evidence"
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [inlineTitle, setInlineTitle] = useState("");
-  const [answerMode, setAnswerMode] = useState("DOCUMENTS_GENERAL");
+  const [answerMode, setAnswerMode] = useState("EVIDENCE_FIRST");
+  const [isOpeningFirstConversation, setIsOpeningFirstConversation] = useState(false);
 
   const messagesEndRef = useRef(null);
   const lastSyncedMsgIdRef = useRef(null);
+
+  useEffect(() => {
+    const savedWidth = Number(window.localStorage.getItem("research-desk-sidebar-width"));
+    if (Number.isFinite(savedWidth) && savedWidth >= 250 && savedWidth <= 280) {
+      setLeftSidebarWidth(savedWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncDesktopEvidenceLayout = () => setIsRightSidebarOpen(window.innerWidth >= 1100);
+    syncDesktopEvidenceLayout();
+    window.addEventListener("resize", syncDesktopEvidenceLayout);
+    return () => window.removeEventListener("resize", syncDesktopEvidenceLayout);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("research-desk-sidebar-width", String(Math.max(250, Math.min(280, leftSidebarWidth))));
+  }, [leftSidebarWidth]);
 
   // 1. Sync query param paper_id if present
   useEffect(() => {
@@ -155,22 +173,38 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   }, [conversationId, clearSources, closeDrawer]);
 
   // 5. Aggregate all conversation sources across assistant turns
+  const conversationSources = useMemo(() => {
+    return aggregateConversationSources(messages);
+  }, [messages]);
+  const { latestAssistantMessageId, questionByAssistantId } = useMemo(() => {
+    let latestQuestion = "";
+    const questionById = new Map();
+    let latestId = null;
+    for (const message of messages) {
+      if (message.role === "user") latestQuestion = message.content || "";
+      else if (message.role === "assistant") {
+        latestId = message.id;
+        questionById.set(message.id, latestQuestion);
+      }
+    }
+    return { latestAssistantMessageId: latestId, questionByAssistantId: questionById };
+  }, [messages]);
+
   useEffect(() => {
     if (!isLoadingMessages && messages.length > 0) {
+      if (conversationSources.length > 0) {
+        setSources(conversationSources);
+      }
       const lastAssistantMsg = [...messages]
         .reverse()
         .find((m) => m.role === "assistant" && !m.pending);
 
       if (lastAssistantMsg && lastAssistantMsg.id !== lastSyncedMsgIdRef.current) {
         lastSyncedMsgIdRef.current = lastAssistantMsg.id;
-        const allAggregated = aggregateConversationSources(messages);
-        setSources(
-          allAggregated.length > 0 ? allAggregated : lastAssistantMsg.sources || []
-        );
         setResearchTrace(lastAssistantMsg.meta?.research || null);
       }
     }
-  }, [messages, isLoadingMessages, setSources, setResearchTrace]);
+  }, [messages, isLoadingMessages, conversationSources, setSources, setResearchTrace]);
 
   // Auto-scroll to bottom of chat on new message or streaming token
   useEffect(() => {
@@ -179,6 +213,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
 
   // Handlers
   const handleSendMessage = async (question) => {
+    if (!conversationId) setIsOpeningFirstConversation(true);
     try {
       const res = await sendMessage({
         question,
@@ -189,9 +224,12 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
 
       if (!conversationId && res.conversation_id) {
         router.push(`/chat/${res.conversation_id}`);
+      } else {
+        setIsOpeningFirstConversation(false);
       }
       if (res.metadata?.research) setResearchTrace(res.metadata.research);
     } catch (error) {
+      setIsOpeningFirstConversation(false);
       throw error;
     }
   };
@@ -216,6 +254,13 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     await deleteConversation(id);
     if (conversationId === id) {
       router.push("/chat");
+    }
+  };
+
+  const handleDeletePaper = async (id) => {
+    await deletePaper(id);
+    if (selectedPaperIds.includes(id)) {
+      selectPapers(selectedPaperIds.filter((paperId) => paperId !== id));
     }
   };
 
@@ -278,7 +323,8 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     if (selectedPaperIds.length === 0) return "0 projects selected (select below)";
     if (selectedPaperIds.length === 1 && selectedPapersList[0]) {
       const p = selectedPapersList[0];
-      return `${p.title} (${totalIndexedChunksInScope.toLocaleString()} chunks in scope)`;
+      const sourceCount = (documentsByPaper[p.id] || []).filter((doc) => doc.processing_status === "indexed").length;
+      return `${p.title} · ${sourceCount} source${sourceCount === 1 ? "" : "s"} · ${totalIndexedChunksInScope.toLocaleString()} ${totalIndexedChunksInScope === 1 ? "chunk" : "chunks"}`;
     }
     return `${selectedPaperIds.length} projects in scope (${totalIndexedChunksInScope.toLocaleString()} chunks)`;
   }, [
@@ -288,59 +334,48 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     selectedPaperIds.length,
     selectedPapersList,
     totalIndexedChunksInScope,
+    documentsByPaper,
   ]);
+
+  const activeProjectTitle = selectedPapersList.length === 1
+    ? selectedPapersList[0].title
+    : selectedPapersList.length > 1
+      ? `${selectedPapersList[0].title} + ${selectedPapersList.length - 1} more`
+      : "your research library";
+  const indexedSourceCount = useMemo(
+    () => selectedPaperIds.reduce((count, id) => count + (documentsByPaper[id] || []).filter((doc) => doc.processing_status === "indexed").length, 0),
+    [selectedPaperIds, documentsByPaper]
+  );
+
+  const handleOpenScope = () => {
+    setIsLeftSidebarOpen(true);
+    setLeftTab("scope");
+    if (window.innerWidth < 1024) setMobilePanel("scope");
+    else setMobilePanel(null);
+  };
 
   return (
     <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-[var(--rl-canvas)]">
-      {/* Pane 1: Desktop Left Persistent Sidebar (History & Scope tabs) */}
-      {isLeftSidebarOpen && (
-        <div className="hidden lg:flex h-full w-84 xl:w-88 min-w-0 shrink-0 flex-col border-r border-[var(--rl-border)] bg-white z-10 shadow-xs">
-          {/* Top Switcher Tabs */}
-          <div className="flex border-b border-slate-200 bg-slate-50/80 p-2 gap-1.5 shrink-0">
-            <button
+      {/* Pane 1: Desktop research navigation */}
+      <div className={`relative hidden lg:flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--rl-border)] bg-white z-10 transition-[width] duration-200 ${isLeftSidebarOpen ? "min-w-0" : "w-16"}`} style={isLeftSidebarOpen ? { width: leftSidebarWidth } : undefined}>
+          <div className="shrink-0 border-b border-slate-100 p-3">
+            <Button
               type="button"
-              onClick={() => setLeftTab("history")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
-                leftTab === "history"
-                  ? "bg-white text-[var(--rl-primary)] shadow-2xs border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              }`}
+              onClick={handleNewResearch}
+              className="h-9 w-full justify-center gap-2 rounded-xl bg-[var(--rl-primary)] text-sm font-semibold text-white shadow-sm hover:bg-[#1f659c]"
             >
-              <Clock className="h-3.5 w-3.5" />
-              <span>Sessions</span>
-              {conversations.length > 0 && (
-                <span className="rounded-full bg-slate-100 px-1.5 py-0.2 text-[10px] text-slate-600">
-                  {conversations.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setLeftTab("scope")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
-                leftTab === "scope"
-                  ? "bg-white text-[var(--rl-primary)] shadow-2xs border border-slate-200"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span>Source Scope</span>
-              <span
-                className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                  selectedPaperIds.length > 0
-                    ? "bg-emerald-100 text-emerald-800 font-bold"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {selectedPaperIds.length}
-              </span>
-            </button>
+              <Plus className="h-4 w-4" />
+              {isLeftSidebarOpen && <span>New research</span>}
+            </Button>
           </div>
-
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-hidden">
-            {leftTab === "history" ? (
+            {!isLeftSidebarOpen ? (
+              <div className="flex flex-col items-center gap-2 p-2">
+                <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("history"); }} title="Recent sessions" aria-label="Recent sessions" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Clock className="h-4 w-4" /></button>
+                <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("scope"); }} title="Projects and sources" aria-label="Projects and sources" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Layers className="h-4 w-4" /></button>
+              </div>
+            ) : leftTab === "history" ? (
               <ResearchHistorySidebar
                 conversations={conversations}
                 isLoading={isLoadingConversations}
@@ -352,13 +387,42 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                 isDeleting={isDeletingConversation}
                 isUpdating={isUpdatingConversation}
                 className="w-full min-w-0 border-r-0"
+                papers={papers}
+                documentsByPaper={documentsByPaper}
+                selectedPaperIds={selectedPaperIds}
+                onSelectPaper={(id) => selectPapers([id])}
+                onUpdatePaper={updatePaper}
+                onDeletePaper={handleDeletePaper}
+                isDeletingPaper={isDeletingPaper}
               />
             ) : (
               <PaperScopeRail className="w-full min-w-0 border-r-0" />
             )}
           </div>
+          <div
+            hidden={!isLeftSidebarOpen}
+            role="separator"
+            aria-label="Resize research sidebar"
+            aria-orientation="vertical"
+            aria-valuemin={250}
+            aria-valuemax={280}
+            aria-valuenow={leftSidebarWidth}
+            tabIndex={0}
+            onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+            onPointerMove={(event) => {
+              if (event.buttons !== 1) return;
+              const bounds = event.currentTarget.parentElement.getBoundingClientRect();
+              setLeftSidebarWidth(Math.max(250, Math.min(280, event.clientX - bounds.left)));
+            }}
+            onKeyDown={(event) => {
+              const direction = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
+              if (!direction) return;
+              event.preventDefault();
+              setLeftSidebarWidth((width) => Math.max(250, Math.min(280, width + direction)));
+            }}
+            className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize touch-none border-r border-transparent transition-colors hover:border-sky-400 hover:bg-sky-100/60 focus-visible:bg-sky-100"
+          />
         </div>
-      )}
 
       {/* Pane 2: Center Thread Canvas */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -378,7 +442,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
 
             {/* Conversation Title & Inline Rename */}
             <div className="flex items-center gap-1.5 truncate">
-              <span className="truncate text-sm font-semibold text-[var(--rl-ink)]">
+              <span title={conversation?.title || "Research Desk"} className="truncate text-sm font-semibold text-[var(--rl-ink)]">
                 {conversation?.title || (conversationId ? "Research Session" : "Research Desk")}
               </span>
               {conversationId && (
@@ -396,11 +460,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             {/* Active Scope Pill Button */}
             <button
               type="button"
-              onClick={() => {
-                setIsLeftSidebarOpen(true);
-                setLeftTab("scope");
-                setMobilePanel("scope");
-              }}
+              onClick={handleOpenScope}
               title="Click to configure source scope"
               className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs truncate max-w-xs transition-colors ${
                 selectedPaperIds.length > 0
@@ -429,38 +489,22 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
               </Button>
             )}
 
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={handleNewResearch}
-              className="h-8 text-xs gap-1.5 bg-[var(--rl-primary)] text-white hover:bg-[#1f659c]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">New Research</span>
-              <span className="sm:hidden">New</span>
-            </Button>
-
-            {/* Desktop Evidence Inspector Toggle */}
-            <button
-              type="button"
-              onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-              aria-label={isRightSidebarOpen ? "Collapse evidence trail" : "Expand evidence trail"}
-              title={isRightSidebarOpen ? "Collapse evidence trail" : "Expand evidence trail"}
-              className={`hidden lg:inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs border transition-colors ${
-                isRightSidebarOpen || sources.length > 0
-                  ? "border-slate-300 bg-slate-50 text-[var(--rl-ink)]"
-                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              <PanelRight className="h-3.5 w-3.5" />
-              <span>Evidence ({sources.length})</span>
-            </button>
           </div>
         </div>
 
         {/* Mobile / Tablet Quick Navigation Bar */}
         <div className="flex lg:hidden items-center gap-1.5 border-b border-[var(--rl-border)] bg-[var(--rl-tint)] px-3 py-2 overflow-x-auto shrink-0">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={handleNewResearch}
+            className="h-7 gap-1 border-0 bg-[var(--rl-primary)] text-xs text-white hover:bg-[#1f659c] shrink-0"
+          >
+            <Plus className="h-3 w-3" />
+            <span>New</span>
+          </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -536,117 +580,45 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
 
         {/* Messages Stream */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--rl-canvas)]">
-          {isLoadingMessages ? (
+          {isLoadingMessages || (isOpeningFirstConversation && messages.length === 0) ? (
             <div className="space-y-4 p-6" aria-label="Loading research messages">
               <div className="h-12 w-3/4 rounded-lg bg-slate-100 animate-pulse" />
               <div className="h-28 w-full rounded-lg bg-slate-100 animate-pulse" />
               <div className="h-12 w-2/3 rounded-lg bg-slate-100 animate-pulse" />
             </div>
-          ) : messages.length === 0 && !sendError ? (
+          ) : messages.length === 0 && !sendError && !isSendingMessage ? (
             /* Welcome / New Research Workspace Hero */
-            <div className="min-h-full flex flex-col justify-center items-center py-6 px-4 sm:px-6 pb-36 text-center text-slate-500 space-y-4 max-w-xl mx-auto">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 shadow-2xs mx-auto">
-                <Sparkles className="h-6 w-6 text-sky-600" />
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-lg font-semibold text-slate-900 tracking-tight">
-                  Evidence-First Research Desk
+            <div className="min-h-full flex flex-col justify-center items-center px-5 text-center pb-8">
+              <div className="w-full max-w-2xl space-y-3">
+                <h3 className="max-w-full truncate text-lg sm:text-2xl font-semibold tracking-tight text-slate-900" title={`What would you like to research in ${activeProjectTitle}?`}>
+                  What would you like to research in <span className="text-[var(--rl-primary)]">{activeProjectTitle}</span>?
                 </h3>
-                <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
-                  Ask targeted research inquiries across your indexed documents. Every answer is grounded in retrieved passages with verified citations and exact page numbers.
-                </p>
-              </div>
-
-              {/* Active Scope Card */}
-              <div className="w-full rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs text-left space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5 text-[var(--rl-primary)]" />
-                    Active Source Scope
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsLeftSidebarOpen(true);
-                      setLeftTab("scope");
-                      setMobilePanel("scope");
-                    }}
-                    className="text-[11px] text-[var(--rl-primary)] hover:underline flex items-center gap-0.5"
-                  >
-                    Change sources <ChevronRight className="h-3 w-3" />
-                  </button>
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <span>{selectedPaperIds.length ? `${selectedPaperIds.length} project${selectedPaperIds.length === 1 ? "" : "s"}` : "No project selected"}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{indexedSourceCount} indexed source{indexedSourceCount === 1 ? "" : "s"}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{totalIndexedChunksInScope.toLocaleString()} searchable chunks</span>
+                  <button type="button" onClick={handleOpenScope} className="ml-1 font-medium text-[var(--rl-primary)] hover:underline">Change scope</button>
                 </div>
-
-                {selectedPaperIds.length > 0 ? (
-                  <div className="space-y-1 text-xs">
-                    {selectedPapersList.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between py-1 px-2 rounded bg-slate-50 text-slate-700 font-medium"
-                      >
-                        <span className="truncate">{p.title}</span>
-                        <span className="text-[10px] text-emerald-700 shrink-0 ml-2 font-mono flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Ready
-                        </span>
-                      </div>
-                    ))}
-                    <p className="text-[10px] text-slate-400 pt-0.5">
-                      {totalIndexedChunksInScope.toLocaleString()} indexed chunks available for vector retrieval.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 border border-amber-200 flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">No research sources selected</p>
-                      <p className="text-[11px] text-amber-700 mt-0.5">
-                        Select one or more indexed projects from the Scope tab or upload files in the Research Library.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Starter Question Prompts */}
-              <div className="space-y-1.5 w-full pt-1">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
-                  Starter research prompts
-                </span>
-                <div className="flex flex-col gap-1.5">
-                  {[
-                    "What main contribution do the indexed passages describe, and what evidence supports it?",
-                    "Compare the methods and experimental conditions described in the selected sources.",
-                    "Extract the reported algorithms, datasets, metrics, and limitations with cited locators.",
-                  ].map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => handleSendMessage(prompt).catch(() => {})}
-                      disabled={selectedPaperIds.length === 0}
-                      className="group flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors shadow-2xs disabled:opacity-50"
-                    >
-                      <span className="truncate">&ldquo;{prompt}&rdquo;</span>
-                      <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-slate-700 shrink-0 ml-2" />
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs text-slate-400">Ask a question about your sources. Answers include evidence and citations.</p>
               </div>
             </div>
           ) : (
             /* Rendered Messages Stream */
-            <div className="divide-y divide-zinc-100 pb-8 dark:divide-zinc-900">
+            <div className="pb-8">
               {messages.map((msg) =>
                 msg.pending ? (
                   <div key={msg.id}>
                     {msg.content ? (
                       <MessageItem
                         message={msg}
+                        autoSelectFirstCitation={msg.id === latestAssistantMessageId}
+                        researchQuestion={questionByAssistantId.get(msg.id) || ""}
                         onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
                       />
                     ) : null}
-                    <div className="flex items-center gap-3 px-4 pb-3 bg-zinc-50/50">
+                    <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 pb-3 text-slate-600">
                       <Sparkles className="h-4 w-4 animate-spin text-[var(--rl-primary)]" />
                       <p className="text-xs text-zinc-600">
                         {msg.progress || "Searching selected sources…"}
@@ -657,13 +629,15 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                   <MessageItem
                     key={msg.id}
                     message={msg}
+                    autoSelectFirstCitation={msg.id === latestAssistantMessageId}
+                    researchQuestion={questionByAssistantId.get(msg.id) || ""}
                     onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
                   />
                 )
               )}
 
               {sendError && (
-                <div className="m-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <div className="mx-auto my-3 flex max-w-3xl items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>
                     {sendError?.message ||
@@ -684,21 +658,25 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
           isLoading={isSendingMessage}
           answerMode={answerMode}
           onAnswerModeChange={setAnswerMode}
+          activeProjectName={activeProjectTitle}
         />
       </div>
 
       {/* Pane 3: Desktop Right Evidence & Source Inspector Rail */}
-      {isRightSidebarOpen && (
-        <div className="hidden lg:flex h-full w-96 shrink-0 border-l border-[var(--rl-border)] bg-white shadow-xs">
-          <SourceInspectorRail
-            className="w-full border-l-0"
-            onClose={() => setIsRightSidebarOpen(false)}
-          />
+      <div className="hidden min-[1100px]:flex h-full w-[min(22.5rem,24vw)] min-w-[330px] max-w-[360px] shrink-0 border-l border-[var(--rl-border)] bg-white">
+        <SourceInspectorRail className="w-full border-l-0" />
+      </div>
+
+      {isDrawerOpen && (
+        <div className="fixed inset-y-16 right-0 z-40 hidden w-full justify-end bg-slate-950/25 min-[1024px]:flex min-[1100px]:hidden">
+          <div className="h-full w-[min(23rem,90vw)] border-l border-[var(--rl-border)] bg-white shadow-xl">
+            <SourceInspectorRail />
+          </div>
         </div>
       )}
 
       {/* Mobile / Tablet Drawers */}
-      {(mobilePanel || isDrawerOpen) && (
+      {(mobilePanel || (isDrawerOpen && !isRightSidebarOpen)) && (
         <div
           role="dialog"
           aria-modal="true"
@@ -709,7 +687,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
               ? "Research sources"
               : "Evidence Trail"
           }
-          className="fixed inset-x-0 bottom-0 top-16 z-40 flex bg-slate-950/35"
+          className="fixed inset-x-0 bottom-0 top-16 z-40 flex bg-slate-950/35 min-[1024px]:hidden"
           onClick={() => {
             setMobilePanel(null);
             closeDrawer();
@@ -725,7 +703,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             className={
               mobilePanel === "evidence" || isDrawerOpen
                 ? "ml-auto h-full w-[min(26rem,94vw)] shadow-xl min-w-0"
-                : "h-full w-[min(24rem,92vw)] shadow-xl min-w-0"
+                : "h-full w-[min(28rem,94vw)] max-w-[28rem] shadow-xl min-w-0"
             }
             onClick={(event) => event.stopPropagation()}
           >

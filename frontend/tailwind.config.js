@@ -68,6 +68,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-sans)", "Inter", "sans-serif"],
         mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
+        serif: ["Georgia", "Cambria", "'Times New Roman'", "Times", "serif"],
       },
       keyframes: {
         "accordion-down": {

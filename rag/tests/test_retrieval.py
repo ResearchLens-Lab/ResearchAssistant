@@ -12,18 +12,23 @@ from rag.chunking.metadata import DocumentChunk, ChunkMetadata
 
 
 def test_filter_builder():
-    # Single paper
-    f1 = FilterBuilder.build_where_filter(paper_ids=["p1"])
-    assert f1 == {"paper_id": "p1"}
+    # Single paper with owner_id
+    f1 = FilterBuilder.build_where_filter(owner_id="u1", paper_ids=["p1"])
+    assert "$and" in f1
+    assert {"owner_id": "u1"} in f1["$and"]
+    assert {"paper_id": "p1"} in f1["$and"]
 
-    # Multiple papers
-    f2 = FilterBuilder.build_where_filter(paper_ids=["p1", "p2"])
-    assert f2 == {"paper_id": {"$in": ["p1", "p2"]}}
+    # Multiple papers with owner_id
+    f2 = FilterBuilder.build_where_filter(owner_id="u1", paper_ids=["p1", "p2"])
+    assert "$and" in f2
+    assert {"owner_id": "u1"} in f2["$and"]
+    assert {"paper_id": {"$in": ["p1", "p2"]}} in f2["$and"]
 
-    # Section filter + paper
+    # Section filter + paper with owner_id
     filters = QueryFilters(sections=["Methodology"])
-    f3 = FilterBuilder.build_where_filter(paper_ids=["p1"], filters=filters)
+    f3 = FilterBuilder.build_where_filter(owner_id="u1", paper_ids=["p1"], filters=filters)
     assert "$and" in f3
+    assert {"owner_id": "u1"} in f3["$and"]
     assert {"paper_id": "p1"} in f3["$and"]
     assert {"section": "Methodology"} in f3["$and"]
 
@@ -68,8 +73,7 @@ def test_research_retriever_end_to_end(vector_repo, mock_embedder):
                 page_start=3,
                 page_end=3,
                 section="Methodology",
-                chunk_index=1,
-            )
+                chunk_index=1, owner_id="test_user_fixture")
         )
     ]
     embeddings = mock_embedder.embed_documents([c.text for c in chunks])
@@ -81,7 +85,7 @@ def test_research_retriever_end_to_end(vector_repo, mock_embedder):
         paper_ids=["p_att"],
         top_k=3,
     )
-    sources = retriever.retrieve(req)
+    sources = retriever.retrieve(req, owner_id="test_user_fixture")
     assert len(sources) == 1
     assert sources[0].source_id == "S1"
     assert sources[0].page_start == 3

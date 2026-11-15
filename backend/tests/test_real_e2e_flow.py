@@ -11,8 +11,17 @@ from sqlalchemy.pool import StaticPool
 from backend.app.main import app
 from backend.app.database.base import Base
 from backend.app.database.session import get_db
+from backend.app.core.dependencies import get_rag_gateway
 from backend.app.integrations.rag_gateway import RAGGateway
+from backend.app.integrations.rag_client import RAGClient
 from rag.config.settings import settings
+from rag.embeddings.model_registry import EmbeddingModelRegistry
+from rag.pipelines.ingest_pipeline import IngestionPipeline
+from rag.pipelines.query_pipeline import QueryPipeline
+from rag.retrieval.retriever import ResearchRetriever
+from rag.vectorstore.chroma_client import ChromaClientFactory
+from rag.vectorstore.collection_manager import CollectionManager
+from rag.vectorstore.vector_repository import VectorRepository
 
 
 # 2-Page PDF document with academic sections and text content
@@ -109,8 +118,18 @@ async def test_real_end_to_end_upload_and_chat_flow(tmp_path, monkeypatch):
             yield session
 
     app.dependency_overrides[get_db] = _get_db
-    # We do NOT override RAGGateway -> test real RAG integration
-    real_rag_gateway = RAGGateway()
+    # Exercise the real RAG path in a per-test Chroma directory. The app-level
+    # singleton is created before this test changes settings and would otherwise
+    # write the fixture PDF into the developer's persistent .chroma store.
+    monkeypatch.setattr(settings, "rag_engine_mode", "legacy")
+    test_chroma = ChromaClientFactory.get_client(persist_dir=str(chroma_dir), force_new=True)
+    test_repository = VectorRepository(CollectionManager(client=test_chroma))
+    test_embedder = EmbeddingModelRegistry.get_embedder()
+    test_ingest = IngestionPipeline(embedder=test_embedder, vector_repo=test_repository)
+    test_query = QueryPipeline(retriever=ResearchRetriever(embedder=test_embedder, vector_repo=test_repository))
+    test_rag_client = RAGClient(ingest_pipeline=test_ingest, query_pipeline=test_query, vector_repo=test_repository)
+    real_rag_gateway = RAGGateway(client=test_rag_client)
+    app.dependency_overrides[get_rag_gateway] = lambda: real_rag_gateway
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:

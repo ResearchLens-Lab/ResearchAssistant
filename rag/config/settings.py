@@ -24,6 +24,8 @@ class RAGSettings(BaseSettings):
     rag_mode: str = "local"
     llm_enabled: bool = False
     retrieval_mode: Literal["hybrid", "dense", "bm25"] = "hybrid"
+    # `independent` is a strict deterministic path: no embedder and no generator.
+    rag_engine_mode: Literal["legacy", "independent"] = "independent"
 
     # ChromaDB
     chroma_persist_dir: str = ".chroma"
@@ -44,13 +46,13 @@ class RAGSettings(BaseSettings):
 
     # LLM Settings
     # Answer Generation Mode (EXTRACTIVE or LOCAL_QWEN)
-    rag_answer_mode: Literal["EXTRACTIVE", "LOCAL_QWEN"] = "LOCAL_QWEN"
+    rag_answer_mode: str = "INDEPENDENT"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:0.8b"
 
     # LLM Settings
-    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai"] = "ollama"
-    llm_model: str = "qwen3.5:0.8b"
+    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai", "none"] = "none"
+    llm_model: str = "none"
     llm_api_key: str = Field(default="", repr=False)
     llm_temperature: float = 0.1
     llm_max_tokens: int = 512

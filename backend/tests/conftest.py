@@ -119,7 +119,10 @@ class FakeRAGGateway:
         count = self.indexed_chunks.get(document_id, 0)
         return {"chroma_count": count, "fts_count": count, "ids_match": True}
 
-    async def ask_question(self, question, paper_ids=None, top_k=None, progress_callback=None):
+    async def ask_question(self, question, user_id, paper_ids=None, top_k=None, progress_callback=None, **kwargs):
+        """Mock ask_question with SEC-001 user_id parameter."""
+        if not user_id:
+            raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
         self.calls.append(("ask_question", tuple(paper_ids or [])))
         self._check_available()
         if progress_callback:
@@ -132,7 +135,10 @@ class FakeRAGGateway:
             "paper_ids": pids,
         }
 
-    async def summarize_paper(self, paper_id, top_k=8):
+    async def summarize_paper(self, paper_id, user_id, top_k=8):
+        """Mock summarize_paper with SEC-001 user_id parameter."""
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
         self._check_available()
         return {
             "answer": f"Summary of {paper_id}.",
@@ -140,7 +146,10 @@ class FakeRAGGateway:
             "paper_ids": [paper_id],
         }
 
-    async def compare_papers(self, paper_ids, focus_area=None, top_k=10):
+    async def compare_papers(self, paper_ids, user_id, focus_area=None, top_k=10):
+        """Mock compare_papers with SEC-001 user_id parameter."""
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
         self._check_available()
         return {
             "answer": "Comparison result.",
@@ -179,6 +188,21 @@ async def db_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def db(db_engine):
+    """Async database session for service-level tests."""
+    factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+        await session.rollback()
+
+
+@pytest.fixture
+def test_app():
+    """FastAPI application instance for testing."""
+    return app
 
 
 @pytest_asyncio.fixture

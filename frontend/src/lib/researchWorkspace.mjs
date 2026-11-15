@@ -1,9 +1,16 @@
+import { parseResearchTimestamp, researchDayKey, shiftResearchDay } from "../utils/researchTime.mjs";
+
 export function projectHref(paperId) {
   return `/papers/${encodeURIComponent(paperId)}`;
 }
 
-export function buildProjectCreatePayload(title = "") {
-  return { title: String(title).trim() };
+export function buildProjectCreatePayload(title = "", description = "") {
+  const payload = { title: String(title).trim() };
+  const trimmedDesc = String(description).trim();
+  if (trimmedDesc) {
+    payload.description = trimmedDesc;
+  }
+  return payload;
 }
 
 export function indexedPaperIds(entries = []) {
@@ -144,7 +151,7 @@ export function formatUploadSize(bytes = 0) {
 
 export function applyChatStreamEvent(message, event) {
   if (event.type === "token") return { ...message, content: message.content + (event.data?.text || ""), progress: "Draft answer · checking evidence…", provisional: true };
-  if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {}, answer_mode: event.data?.metadata?.answer_mode, generation_reason: event.data?.metadata?.generation_reason, generation_provider: event.data?.metadata?.generation_provider, cache_hit: event.data?.metadata?.cache_hit }, progress: "Saved answer · evidence check complete", provisional: false };
+  if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {}, answer_mode: event.data?.metadata?.answer_mode, generation_reason: event.data?.metadata?.generation_reason, generation_provider: event.data?.metadata?.generation_provider, cache_hit: event.data?.metadata?.cache_hit, follow_up_suggestions: event.data?.metadata?.follow_up_suggestions || [] }, progress: "Saved answer · evidence check complete", provisional: false };
   return message;
 }
 
@@ -155,19 +162,19 @@ export function groupConversationsByDate(conversations = [], now = new Date()) {
   const last7DaysItems = [];
   const olderItems = [];
 
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const startOfYesterday = startOfToday - oneDayMs;
-  const startOf7Days = startOfToday - 6 * oneDayMs;
+  const today = researchDayKey(now);
+  const yesterday = shiftResearchDay(today, -1);
+  const startOf7Days = shiftResearchDay(today, -6);
 
   for (const conv of conversations) {
     const rawTime = conv.updated_at || conv.created_at;
-    const time = rawTime ? new Date(rawTime).getTime() : 0;
-    if (time >= startOfToday) {
+    const date = parseResearchTimestamp(rawTime);
+    const day = date ? researchDayKey(date) : "";
+    if (day === today) {
       todayItems.push(conv);
-    } else if (time >= startOfYesterday) {
+    } else if (day === yesterday) {
       yesterdayItems.push(conv);
-    } else if (time >= startOf7Days) {
+    } else if (day && day >= startOf7Days) {
       last7DaysItems.push(conv);
     } else {
       olderItems.push(conv);
@@ -212,7 +219,7 @@ export function aggregateConversationSources(messages = []) {
   for (const msg of messages) {
     if (msg.role === "assistant" && Array.isArray(msg.sources)) {
       for (const src of msg.sources) {
-        const key = src.source_id || src.chunk_id || `${src.filename}:${src.page_start}`;
+        const key = src.chunk_id || `${src.document_id || src.paper_id || src.filename}:${src.page_start || src.page || ""}:${src.page_end || ""}:${src.source_id || ""}`;
         if (!map.has(key)) {
           map.set(key, src);
         }

@@ -4,7 +4,6 @@ The backend never invents answers or citations; everything grounded comes from
 the RAG boundary, and its source metadata is persisted verbatim."""
 
 import logging
-import inspect
 import asyncio
 import uuid
 from datetime import timedelta
@@ -41,6 +40,15 @@ class ChatService:
         logger.info("chat request started user_id=%s", user.id)
         papers = await self.paper_service.validate_owned_papers(user, payload.paper_ids)
         paper_ids = [paper.id for paper in papers]
+        paper_metadata = {
+            paper.id: {
+                "title": paper.title,
+                "authors": paper.authors if isinstance(paper.authors, list) else ([paper.authors] if paper.authors else []),
+                "year": paper.publication_year,
+                "venue": paper.venue,
+            }
+            for paper in papers
+        }
 
         if payload.conversation_id:
             conversation = await self.conversation_service.get_owned(
@@ -73,19 +81,18 @@ class ChatService:
             f"{message.role}: {message.content[:1200]}" for message in prior_turns
         ) or None
 
+        # SEC-001: Always pass authenticated user ID to RAG for owner isolation.
         # A RAG failure raises before the commit below, so the failed request
         # persists nothing and the client receives a structured 503.
-        rag_kwargs = {"question": payload.question, "paper_ids": paper_ids,
-                      "answer_mode": payload.answer_mode}
-        if "user_id" in inspect.signature(self.rag.ask_question).parameters:
-            rag_kwargs["user_id"] = str(user.id)
-        if "answer_mode" not in inspect.signature(self.rag.ask_question).parameters:
-            rag_kwargs.pop("answer_mode", None)
-        if conversation_context and "conversation_context" in inspect.signature(self.rag.ask_question).parameters:
-            rag_kwargs["conversation_context"] = conversation_context
-        if progress_callback and "progress_callback" in inspect.signature(self.rag.ask_question).parameters:
-            rag_kwargs["progress_callback"] = progress_callback
-        result = await self.rag.ask_question(**rag_kwargs)
+        result = await self.rag.ask_question(
+            question=payload.question,
+            user_id=str(user.id),  # SEC-001: Pass authenticated user ID (REQUIRED)
+            paper_ids=paper_ids,
+            conversation_context=conversation_context,
+            progress_callback=progress_callback,
+            answer_mode=payload.answer_mode,
+            paper_metadata=paper_metadata,
+        )
         if progress_callback and getattr(progress_callback, "is_cancelled", lambda: False)():
             raise asyncio.CancelledError()
 

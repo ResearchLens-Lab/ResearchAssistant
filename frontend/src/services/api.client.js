@@ -60,10 +60,28 @@ export async function apiClient(endpoint, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = typeof AbortController !== "undefined" && !options.signal ? new AbortController() : null;
+  const timeoutMs = options.timeout ?? 20000;
+  const timeoutId = controller ? setTimeout(() => controller.abort(new Error("Request timed out")), timeoutMs) : null;
+  const signal = options.signal || controller?.signal;
+
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError" || err.message === "Request timed out") {
+      throw new AppApiError("Connection to ResearchLens timed out. Please check your backend connection.", "TIMEOUT", 504);
+    }
+    throw err;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 
   if (response.status === 401 && !endpoint.includes("/auth/login") && !endpoint.includes("/auth/refresh")) {
     const refreshToken = tokenStorage.getRefreshToken();

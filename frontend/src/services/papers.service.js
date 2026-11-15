@@ -13,6 +13,10 @@ export const papersService = {
     });
   },
 
+  async verifySource(id) {
+    return apiClient(`/papers/${id}/verify-source`, { method: "POST" });
+  },
+
   async create(payload) {
     return apiClient("/papers", {
       method: "POST",

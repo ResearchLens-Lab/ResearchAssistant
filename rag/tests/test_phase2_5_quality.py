@@ -61,6 +61,7 @@ def test_local_fastembed_retrieval_quality_and_provenance(tmp_path, monkeypatch)
                 chunk_id=passage["chunk_id"], paper_id=document["paper_id"],
                 document_id=document["document_id"], page_start=passage["page"],
                 page_end=passage["page"], section=passage["section"], chunk_index=len(chunks),
+                owner_id="test_user_fixture",
                 title=document["title"], filename=document["filename"],
                 locator=f"{passage['section']} · page {passage['page']}",
             ))
@@ -84,7 +85,10 @@ def test_local_fastembed_retrieval_quality_and_provenance(tmp_path, monkeypatch)
     abstention_correct = abstention_total = 0
     case_results = []
     for case in data["cases"]:
-        ranked = retriever.retrieve(QueryRequest(question=case["question"], paper_ids=case["scope"], top_k=5))
+        ranked = retriever.retrieve(
+            QueryRequest(question=case["question"], paper_ids=case["scope"], top_k=5),
+            owner_id="test_user_fixture",
+        )
         ranked_ids = [source.chunk_id for source in ranked]
         expected = set(case["relevant_chunk_ids"])
         assert all(source.paper_id in case["scope"] for source in ranked)
@@ -93,7 +97,7 @@ def test_local_fastembed_retrieval_quality_and_provenance(tmp_path, monkeypatch)
             reciprocal_ranks.append(1 / (min((ranked_ids.index(cid) + 1 for cid in expected if cid in ranked_ids), default=math.inf)))
 
         pipeline = QueryPipeline(retriever=retriever)
-        result = pipeline.answer_question(case["question"], paper_ids=case["scope"], top_k=5)
+        result = pipeline.answer_question(case["question"], user_id="test_user_fixture", paper_ids=case["scope"], top_k=5)
         cited_ids = {source.chunk_id for source in result.sources}
         if expected:
             citation_tp += len(cited_ids & expected)
@@ -221,7 +225,7 @@ def test_isolated_chroma_concurrent_query_upsert_delete_retry_and_second_client(
     embedder = DeterministicMockEmbedder(384)
     chunks = [DocumentChunk(text=f"Concurrency fixture passage {i} with unique token marker{i}.", metadata=ChunkMetadata(
         chunk_id=f"stress-{i}", paper_id="stress-paper", document_id="stress-document", page_start=i + 1,
-        page_end=i + 1, section="Results", chunk_index=i, filename="stress.pdf", locator=f"Page {i+1}"))
+        page_end=i + 1, section="Results", chunk_index=i, filename="stress.pdf", locator=f"Page {i+1}", owner_id="test_user_fixture"))
         for i in range(4)]
     vectors = embedder.embed_documents([chunk.text for chunk in chunks])
     repository.upsert_chunks(chunks, vectors)
@@ -299,7 +303,7 @@ def test_direct_fact_quotes_all_requested_top_k_evidence_and_abstains_on_partial
     monkeypatch.setattr(settings, "llm_provider", "gemini")
 
     class TwoPassageRetriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return [
                 RetrievedSource(source_id="S1", chunk_id="id-p1", paper_id="p", document_id="d", page_start=1,
                     page_end=1, section="Methods", text="Atlas identifier is AX-17A.", score=.9, filename="atlas.pdf", locator="Methods · page 1"),
@@ -312,7 +316,7 @@ def test_direct_fact_quotes_all_requested_top_k_evidence_and_abstains_on_partial
             return ResearchPlan(question=question, intent="direct", search_queries=[question], max_retrieval_rounds=1)
 
     pipeline = QueryPipeline(retriever=TwoPassageRetriever(), planner=FixedPlanner())
-    direct = pipeline.answer_question("What identifier and accuracy were reported?", paper_ids=["p"], top_k=5)
+    direct = pipeline.answer_question("What identifier and accuracy were reported?", user_id="u", paper_ids=["p"], top_k=5)
     assert {source.chunk_id for source in direct.sources} == {"id-p1", "id-p2"}
     assert {source.page_start for source in direct.sources} == {1, 2}
 
@@ -346,7 +350,7 @@ def test_comparison_uses_configured_generation_adapter_and_valid_citations(tmp_p
             return "Atlas reported 91.2 percent accuracy [S1]. Boreal reported 87.6 percent accuracy [S2]."
 
     class FixedRetriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return [
                 RetrievedSource(source_id="S1", chunk_id="atlas-p2", paper_id="paper-atlas-01", document_id="doc-atlas-01",
                     page_start=2, page_end=2, section="Results", text="Atlas reported an accuracy of 91.2 percent on 2024-03-14 using 64 nodes.",

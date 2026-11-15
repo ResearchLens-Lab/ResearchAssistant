@@ -50,11 +50,19 @@ class Settings(BaseSettings):
     max_zip_compression_ratio: int = 200
 
     rag_mode: str = "local"
+    rag_engine_mode: str = "independent"
     llm_enabled: bool = False
     retrieval_mode: str = "hybrid"
-    rag_answer_mode: str = "LOCAL_QWEN"
+    rag_answer_mode: str = "INDEPENDENT"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:0.8b"
+
+    research_max_documents: int = 10
+    research_max_evidence: int = 50
+    research_max_evidence_per_source: int = 8
+    research_max_comparison_papers: int = 4
+    research_graph_max_depth: int = 2
+    research_external_timeout_seconds: float = 8.0
 
     @property
     def cors_origin_list(self) -> list[str]:

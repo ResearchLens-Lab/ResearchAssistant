@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 def make_chunk_id(paper_id: str, document_id: str, chunk_index: int,
                   page_start: Optional[int] = None, page_end: Optional[int] = None,
-                  is_pdf: bool = False) -> str:
+                  is_pdf: bool = False, owner_id: Optional[str] = None) -> str:
     """Build a stable chunk key scoped to both project and uploaded source."""
     chunk_id = f"{paper_id}_c{chunk_index:04d}_d{document_id}"
     if is_pdf:
@@ -19,6 +19,7 @@ def make_chunk_id(paper_id: str, document_id: str, chunk_index: int,
 
 class ChunkMetadata(BaseModel):
     chunk_id: str = Field(..., description="Deterministic unique identifier for the chunk")
+    owner_id: str = Field(..., description="User ID who owns this document (REQUIRED for multi-tenant isolation)")
     paper_id: str = Field(..., description="ID of the research paper")
     document_id: str = Field(..., description="ID of the source document")
     page_start: Optional[int] = Field(default=None, ge=1, description="First physical PDF page containing this chunk")
@@ -37,6 +38,7 @@ class ChunkMetadata(BaseModel):
         """
         data = {
             "chunk_id": self.chunk_id,
+            "owner_id": self.owner_id,  # CRITICAL: Enables multi-tenant isolation
             "paper_id": self.paper_id,
             "document_id": self.document_id,
             "section": self.section,
@@ -56,6 +58,7 @@ class ChunkMetadata(BaseModel):
     def from_chroma_metadata(cls, meta: Dict[str, Any]) -> "ChunkMetadata":
         return cls(
             chunk_id=str(meta.get("chunk_id", "")),
+            owner_id=str(meta.get("owner_id", "")),  # CRITICAL: Load owner_id from vector store
             paper_id=str(meta.get("paper_id", "")),
             document_id=str(meta.get("document_id", "")),
             page_start=int(meta["page_start"]) if meta.get("page_start") is not None else None,
@@ -67,7 +70,7 @@ class ChunkMetadata(BaseModel):
             filename=str(meta.get("filename", "")) or None,
             locator=str(meta.get("locator", "")) or None,
             extra={k: v for k, v in meta.items() if k not in {
-                "chunk_id", "paper_id", "document_id", "page_start", "page_end", "section", "chunk_index", "token_count", "title", "filename", "locator"
+                "chunk_id", "owner_id", "paper_id", "document_id", "page_start", "page_end", "section", "chunk_index", "token_count", "title", "filename", "locator"
             }},
         )
 

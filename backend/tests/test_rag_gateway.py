@@ -109,19 +109,21 @@ async def test_ingestion_progress_callback_crosses_worker_thread():
 async def test_gateway_preserves_actionable_gemini_configuration_errors():
     class InvalidGeminiClient:
         def ask_question(self, **kwargs):
+            """Mock that raises configuration error."""
             raise ValueError("Gemini API key is missing. Set GEMINI_API_KEY.")
 
     gateway = RAGGateway(client=InvalidGeminiClient())
     with pytest.raises(RAGUnavailableError, match="Set GEMINI_API_KEY"):
-        await gateway._call("ask_question")
+        await gateway.ask_question(question="test", user_id="user_test")
 
 
 @pytest.mark.asyncio
 async def test_gateway_exposes_unsupported_generation_provider_clearly():
     class LocalIngestionOnlyClient:
         def ask_question(self, **kwargs):
+            """Mock that raises provider error."""
             raise ValueError("Unsupported LLM provider 'local'. Choose 'gemini' or 'mock'.")
 
     gateway = RAGGateway(client=LocalIngestionOnlyClient())
     with pytest.raises(RAGUnavailableError, match="Unsupported LLM provider 'local'"):
-        await gateway._call("ask_question")
+        await gateway.ask_question(question="test", user_id="user_test")

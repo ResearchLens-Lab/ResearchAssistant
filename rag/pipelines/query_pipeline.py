@@ -84,7 +84,15 @@ class QueryPipeline:
         planner: Optional[QueryPlanner] = None,
         sufficiency_checker: Optional[EvidenceSufficiencyChecker] = None,
     ):
-        self.retriever = retriever or ResearchRetriever()
+        self._independent_engine = None
+        if settings.rag_engine_mode == "independent":
+            # Do not construct ResearchRetriever here: its default constructor
+            # obtains the configured pretrained embedder.
+            from rag.independent.engine import IndependentResearchEngine
+            self._independent_engine = IndependentResearchEngine()
+            self.retriever = retriever
+        else:
+            self.retriever = retriever or ResearchRetriever()
         self.context_builder = context_builder or ContextBuilder()
         # Generation is only needed after retrieval has established that the
         # selected evidence is sufficient. Keep ingestion/local retrieval usable
@@ -103,17 +111,37 @@ class QueryPipeline:
     def answer_question(
         self,
         question: str,
+        user_id: str,  # SEC-001: Made REQUIRED (moved before optional params)
         paper_ids: Optional[List[str]] = None,
         filters: Optional[QueryFilters] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
-        user_id: Optional[str] = None,
         answer_mode: Optional[str] = None,
+        paper_metadata: Optional[Dict[str, Any]] = None,
     ) -> RAGResult:
         """
         Answers a research question grounded in indexed papers with verified citations.
+        
+        Args:
+            question: Research question to answer
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            paper_ids: Optional paper IDs to search within user's scope
+            filters: Optional additional filters
+            top_k: Number of sources to retrieve
+            conversation_context: Optional conversation history
+            progress_callback: Optional callback for progress updates
+            answer_mode: Optional answer generation mode
+            
+        Returns:
+            RAGResult with answer, sources, and metadata
+            
+        Raises:
+            ValueError: If user_id is not provided
         """
+        if not user_id:
+            raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
+            
         start_time = time.time()
         k = top_k or settings.retrieval_top_k
 
@@ -130,6 +158,31 @@ class QueryPipeline:
         if scope_conflict:
             return RAGResult(answer="The selected-paper filter does not match the requested paper scope.",
                              sources=[], paper_ids=[], metadata={"error": "scope_conflict", "total_retrieved": 0})
+        use_independent = (
+            settings.rag_engine_mode == "independent"
+            or answer_mode in ("EVIDENCE_FIRST", "DOCUMENTS_ONLY", "INDEPENDENT")
+        ) and answer_mode not in ("OPTIONAL_LOCAL_AI", "LOCAL_QWEN")
+
+        if use_independent:
+            if self._independent_engine is None:
+                from rag.independent.engine import IndependentResearchEngine
+                self._independent_engine = IndependentResearchEngine()
+            return self._independent_engine.answer(
+                question=question,
+                paper_ids=selected_ids or None,
+                document_ids=(filters.document_ids if filters else None),
+                output_format=(filters.extra.get("output_format") if filters else None),
+                document_labels=(filters.extra.get("document_labels") if filters else None),
+                section_names=(filters.sections if filters else None),
+                top_k=k,
+                conversation_context=conversation_context,
+                progress_callback=progress_callback,
+                user_id=user_id,
+                paper_metadata=paper_metadata,
+            )
+
+        if self.retriever is None:
+            self.retriever = ResearchRetriever()
         plan_started = time.perf_counter()
         plan = self.planner.plan(question, selected_ids, conversation_context)
         research_question = getattr(plan, "resolved_question", None) or question
@@ -149,7 +202,7 @@ class QueryPipeline:
                                filters=effective_filters, top_k=per_query_k,
                                min_score=settings.retrieval_min_score,
                                intent=plan.intent)
-            for source in self.retriever.retrieve(req):
+            for source in self.retriever.retrieve(req, owner_id=user_id):  # SEC-001: Pass user_id as owner_id
                 if source.chunk_id not in found and len(found) < settings.research_max_total_candidates:
                     found[source.chunk_id] = source
         retrieved_sources = list(found.values())
@@ -197,7 +250,7 @@ class QueryPipeline:
             req = QueryRequest(question=retry_query, paper_ids=selected_ids or None,
                                filters=effective_filters, top_k=per_query_k,
                                min_score=settings.retrieval_min_score)
-            for source in self.retriever.retrieve(req):
+            for source in self.retriever.retrieve(req, owner_id=user_id):  # SEC-001: Pass user_id as owner_id
                 if source.chunk_id not in found and len(found) < settings.research_max_total_candidates:
                     found[source.chunk_id] = source
             retrieved_sources = list(found.values())
@@ -427,11 +480,11 @@ class QueryPipeline:
                 call_token, call_counter = start_call_tracking()
                 try:
                     if plan.intent == "comparison":
-                        gen_result = qwen_generator.generate_comparison(focus_area=question, context=assembled_context)
+                        gen_result = qwen_generator.generate_comparison(focus_area=question, context=assembled_context, on_token=emit)
                     elif plan.intent == "summary":
-                        gen_result = qwen_generator.generate_summary(context=assembled_context, focus=research_question)
+                        gen_result = qwen_generator.generate_summary(context=assembled_context, focus=research_question, on_token=emit)
                     else:
-                        gen_result = qwen_generator.generate_answer(question=research_question, context=assembled_context, intent=plan.intent)
+                        gen_result = qwen_generator.generate_answer(question=research_question, context=assembled_context, intent=plan.intent, on_token=emit)
                 finally:
                     stop_call_tracking(call_token)
                 generation_seconds = time.perf_counter() - generation_started
@@ -682,13 +735,29 @@ class QueryPipeline:
     def summarize_paper(
         self,
         paper_id: str,
+        user_id: str,  # SEC-001: Add required user_id
         top_k: int = 8,
     ) -> RAGResult:
         """
         Generates a comprehensive, structured summary for an indexed research paper.
+        
+        Args:
+            paper_id: Paper ID to summarize
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            top_k: Number of sources to retrieve
+            
+        Returns:
+            RAGResult with summary
+            
+        Raises:
+            ValueError: If user_id is not provided
         """
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
         result = self.answer_question(
-            question="Summarize the research objective, methodology, experimental setup and datasets, findings, reported limitations, and conclusion.",
+            question="Summarize the main topics, sections, core concepts, and findings.",
+            user_id=user_id,  # SEC-001: Pass user_id
             paper_ids=[paper_id], top_k=top_k,
         )
         result.metadata.update({"task": "summarize", "paper_id": paper_id})
@@ -696,14 +765,47 @@ class QueryPipeline:
 
     def compare_papers(
         self,
-        paper_ids: List[str],
+        paper_ids: Optional[List[str]],
+        user_id: str,  # SEC-001: Add required user_id
         focus_area: Optional[str] = None,
         top_k: int = 10,
+        document_ids: Optional[List[str]] = None,
+        output_format: str = "table",
+        document_labels: Optional[Dict[str, str]] = None,
     ) -> RAGResult:
         """
         Generates structured multi-paper comparison between two or more research papers.
+        
+        Args:
+            paper_ids: Paper IDs to compare
+            user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
+            focus_area: Optional focus for comparison
+            top_k: Number of sources to retrieve
+            
+        Returns:
+            RAGResult with comparison
+            
+        Raises:
+            ValueError: If user_id is not provided
         """
-        focus = focus_area or "Compare methodologies, datasets, architectures, and key findings."
-        result = self.answer_question(question=focus, paper_ids=paper_ids, top_k=top_k)
-        result.metadata.update({"task": "compare", "focus_area": focus})
+        if not user_id:
+            raise ValueError("user_id is required (SEC-001 compliance)")
+            
+        selected_documents = list(dict.fromkeys(document_ids or []))
+        selected_papers = list(dict.fromkeys(paper_ids or []))
+        if len(selected_documents or selected_papers) < 2:
+            raise ValueError("At least two distinct research documents are required for comparison.")
+        focus = focus_area or "Compare the objectives, methods, findings, and limitations explicitly reported in the selected sources."
+        retrieval_question = focus if re.search(r"\bcompar(?:e|ison|ing)|\bversus\b|\bvs\.?\b", focus, re.I) else f"Compare the selected documents regarding: {focus}"
+        filters = QueryFilters(
+            paper_ids=selected_papers or None,
+            document_ids=selected_documents or None,
+            extra={"output_format": output_format, "document_labels": document_labels or {}},
+        )
+        result = self.answer_question(
+            question=retrieval_question, user_id=user_id, paper_ids=selected_papers or None,
+            filters=filters, top_k=top_k, answer_mode="DOCUMENTS_ONLY",
+        )
+        result.metadata.update({"task": "compare", "focus_area": focus, "output_format": output_format,
+                                "selected_document_ids": selected_documents})
         return result

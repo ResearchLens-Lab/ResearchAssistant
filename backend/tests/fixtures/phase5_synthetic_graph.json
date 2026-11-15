@@ -1,0 +1,16 @@
+{
+  "fixture": "synthetic-only; never imported into a user library",
+  "owner_scope": "isolated test database only",
+  "nodes": [
+    {"id": "paper-synthetic-01", "type": "PAPER", "name": "Synthetic Graph Fixture"},
+    {"id": "person-synthetic-01", "type": "PERSON", "name": "Example Researcher"},
+    {"id": "method-synthetic-01", "type": "METHOD", "name": "Example Method"},
+    {"id": "dataset-synthetic-01", "type": "DATASET", "name": "Example Dataset"}
+  ],
+  "relationships": [
+    {"source": "paper-synthetic-01", "type": "AUTHORED_BY", "target": "person-synthetic-01"},
+    {"source": "paper-synthetic-01", "type": "PROPOSES", "target": "method-synthetic-01"},
+    {"source": "paper-synthetic-01", "type": "EVALUATED_ON", "target": "dataset-synthetic-01"}
+  ],
+  "evidence": "Synthetic fixture descriptions only; not scientific evidence."
+}

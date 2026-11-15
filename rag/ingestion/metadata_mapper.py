@@ -25,6 +25,14 @@ class MetadataMapper:
 
         resolved_paper_id = paper_id or data.get("paper_id") or f"paper_{uuid.uuid4().hex[:8]}"
         resolved_doc_id = document_id or data.get("document_id") or f"doc_{resolved_paper_id}"
+        
+        # SEC-001: owner_id is REQUIRED for multi-tenant isolation
+        owner_id = data.get("owner_id")
+        if not owner_id:
+            raise ValueError(
+                f"owner_id is required for document ingestion (SEC-001 compliance). "
+                f"Document ID: {resolved_doc_id}, Paper ID: {resolved_paper_id}"
+            )
 
         title = data.get("title") or "Untitled Research Paper"
         authors = data.get("authors") or []
@@ -41,12 +49,13 @@ class MetadataMapper:
         doi = data.get("doi")
 
         # Reserve remaining keys in extra dict
-        reserved_keys = {"paper_id", "document_id", "title", "authors", "year", "doi", "file_path"}
+        reserved_keys = {"paper_id", "document_id", "owner_id", "title", "authors", "year", "doi", "file_path"}
         extra = {k: v for k, v in data.items() if k not in reserved_keys}
 
         return DocumentMetadata(
             paper_id=str(resolved_paper_id),
             document_id=str(resolved_doc_id),
+            owner_id=str(owner_id),  # SEC-001: Required field
             title=str(title),
             authors=authors,
             year=year,

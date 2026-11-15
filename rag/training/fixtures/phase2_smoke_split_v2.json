@@ -1,0 +1,52 @@
+{
+  "seed": 17,
+  "dataset_sha256": "91afc54fbc426e3cda817776536d86f99981394452174ea10be9376c3d6e9687",
+  "train_ids": [
+    "smoke-intent-2-0",
+    "smoke-intent-2-1",
+    "smoke-intent-2-2",
+    "smoke-rank-2-support",
+    "smoke-rank-2-distractor",
+    "smoke-intent-3-0",
+    "smoke-intent-3-1",
+    "smoke-intent-3-2",
+    "smoke-rank-3-support",
+    "smoke-rank-3-distractor",
+    "smoke-intent-6-0",
+    "smoke-intent-6-1",
+    "smoke-intent-6-2",
+    "smoke-rank-6-support",
+    "smoke-rank-6-distractor",
+    "smoke-intent-1-0",
+    "smoke-intent-1-1",
+    "smoke-intent-1-2",
+    "smoke-rank-1-support",
+    "smoke-rank-1-distractor"
+  ],
+  "validation_ids": [
+    "smoke-intent-5-0",
+    "smoke-intent-5-1",
+    "smoke-intent-5-2",
+    "smoke-rank-5-support",
+    "smoke-rank-5-distractor"
+  ],
+  "test_ids": [
+    "smoke-intent-4-0",
+    "smoke-intent-4-1",
+    "smoke-intent-4-2",
+    "smoke-rank-4-support",
+    "smoke-rank-4-distractor"
+  ],
+  "train_groups": [
+    "synthetic-paper-01",
+    "synthetic-paper-02",
+    "synthetic-paper-03",
+    "synthetic-paper-06"
+  ],
+  "validation_groups": [
+    "synthetic-paper-05"
+  ],
+  "test_groups": [
+    "synthetic-paper-04"
+  ]
+}

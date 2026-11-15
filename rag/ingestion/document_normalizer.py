@@ -26,6 +26,7 @@ class Section(BaseModel):
 class DocumentMetadata(BaseModel):
     paper_id: str = Field(..., min_length=1)
     document_id: str = Field(..., min_length=1)
+    owner_id: str = Field(..., min_length=1, description="User ID who owns this document (REQUIRED for multi-tenant isolation)")
     title: str = Field(default="Untitled Research Paper")
     authors: List[str] = Field(default_factory=list)
     year: Optional[int] = None
@@ -39,6 +40,7 @@ class DocumentMetadata(BaseModel):
 class NormalizedDocument(BaseModel):
     document_id: str
     paper_id: str
+    owner_id: str  # SEC-001: User ID for multi-tenant isolation
     title: str
     authors: List[str] = Field(default_factory=list)
     year: Optional[int] = None
@@ -88,6 +90,7 @@ class DocumentNormalizer:
             return NormalizedDocument(
                 document_id=metadata.document_id,
                 paper_id=metadata.paper_id,
+                owner_id=metadata.owner_id,  # SEC-001: Propagate owner_id
                 title=metadata.title,
                 authors=metadata.authors,
                 year=metadata.year,
@@ -119,6 +122,7 @@ class DocumentNormalizer:
         return NormalizedDocument(
             document_id=metadata.document_id,
             paper_id=metadata.paper_id,
+            owner_id=metadata.owner_id,  # SEC-001: Propagate owner_id
             title=metadata.title,
             authors=metadata.authors,
             year=metadata.year,

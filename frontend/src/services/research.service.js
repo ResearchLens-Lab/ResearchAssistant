@@ -30,4 +30,10 @@ export const researchService = {
       method: "GET",
     });
   },
+
+  async getLocalModelStatus() {
+    return apiClient("/system/model", {
+      method: "GET",
+    });
+  },
 };

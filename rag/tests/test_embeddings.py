@@ -54,8 +54,7 @@ def test_batch_embedding_generator(mock_embedder):
                 page_start=1,
                 page_end=1,
                 section="Intro",
-                chunk_index=i,
-            )
+                chunk_index=i, owner_id="test_user_fixture")
         )
         for i in range(5)
     ]

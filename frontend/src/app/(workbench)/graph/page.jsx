@@ -1,64 +1,162 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowDown, ArrowRight, ArrowUpRight, BookOpenCheck, CheckCircle2, CircleHelp, FileSearch, GitBranch, LoaderCircle, Map, PanelRight, Sparkles } from "lucide-react";
+import {
+  AlertCircle, ArrowUpRight, BookOpen, CheckCircle2, CircleHelp, FileSearch,
+  FileText, Focus, LoaderCircle, Map as MapIcon, Minus, Plus, Search, Sparkles, X,
+} from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { chatService } from "@/services/chat.service";
+import { openAuthenticatedPdfSource } from "@/services/documents.service";
 import { useCitationStore } from "@/store/citationStore";
-import { SourceInspectorRail } from "@/components/citations/SourceInspectorRail";
 import { GroundedAnswer } from "@/components/chat/GroundedAnswer";
+import { SourceInspectorRail } from "@/components/citations/SourceInspectorRail";
 
-const STATUS_STYLE = {
-  supported: "bg-emerald-50 text-emerald-800",
-  partial: "bg-amber-50 text-amber-900",
-  contradicted: "bg-rose-50 text-rose-800",
-  unsupported: "bg-slate-100 text-slate-700",
-  invalid_reference: "bg-slate-100 text-slate-700",
-};
-
-function buildResearchTurns(messages) {
+function buildResearchTurns(messages = []) {
   const turns = [];
   let pendingQuestion = null;
+  let savedSummary = null;
   for (const message of messages) {
-    if (message.role === "user") {
-      pendingQuestion = message;
-    } else if (message.role === "assistant") {
-      turns.push({
-        id: message.id,
-        question: pendingQuestion?.content || "Research response",
-        userMessage: pendingQuestion,
-        message,
-        research: message.meta?.research || message.metadata?.research || {},
-      });
+    if (message.role === "user") pendingQuestion = message;
+    else if (message.role === "assistant") {
+      const question = pendingQuestion?.content || "Research response";
+      const summaryPrompt = question.toLowerCase().startsWith("summarize the selected source's main subject");
+      if (summaryPrompt) savedSummary = { answer: message.content, sources: message.sources || [], metadata: message.meta || message.metadata || {} };
+      else turns.push({
+          id: String(message.id), question, userMessage: pendingQuestion, message,
+          research: message.meta?.research || message.metadata?.research || {},
+        });
       pendingQuestion = null;
     }
   }
-  if (pendingQuestion) turns.push({ id: pendingQuestion.id, question: pendingQuestion.content, userMessage: pendingQuestion, message: null, research: {} });
-  return turns;
+  if (pendingQuestion) turns.push({ id: String(pendingQuestion.id), question: pendingQuestion.content, userMessage: pendingQuestion, message: null, research: {} });
+  return { turns, savedSummary };
+}
+
+function shortText(value, max = 48) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function messageTimestamp(message) {
+  const value = message?.created_at || message?.createdAt || message?.timestamp;
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+function sourceKey(source, index) {
+  return String(source.source_id || source.chunk_id || source.id || `${source.document_id || source.paper_id || source.filename || "source"}-${source.page_start || source.page || 1}-${index}`);
+}
+
+function displayTitle(title, turns) {
+  const rawTitle = String(title || turns[0]?.question || "Research session").trim();
+  const cleaned = rawTitle.replace(/^\/(?:table|pie|flowchart|compare|summary)\b\s*/i, "").trim();
+  return cleaned ? cleaned[0].toLocaleUpperCase() + cleaned.slice(1) : "Research session";
+}
+
+function wrapWords(value, maxChars = 20, maxLines = 3) {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (candidate.length > maxChars && line) { lines.push(line); line = word; }
+    else line = candidate;
+    if (lines.length === maxLines) break;
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  if (words.join(" ").length > lines.join(" ").length && lines.length) lines[lines.length - 1] = shortText(lines[lines.length - 1], maxChars - 1);
+  return lines;
+}
+
+function makeMindMap(turns, title, summaryExists, width, height) {
+  const center = { x: width / 2, y: height / 2 };
+  const count = Math.max(turns.length, 1);
+  const questionRadius = count <= 4 ? 88 : count <= 8 ? 76 : 62;
+  const radius = Math.min(width * 0.38, height / 2 - questionRadius - 28, 195 + count * 9);
+  const questions = turns.map((turn, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count;
+    return { id: `question:${turn.id}`, type: "question", turn, index, x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius, angle, radius: questionRadius };
+  });
+  const evidenceMap = new Map();
+  turns.forEach((turn, index) => {
+    (turn.message?.sources || []).forEach((source, sourceIndex) => {
+      const id = sourceKey(source, sourceIndex);
+      const record = evidenceMap.get(id) || { id: `evidence:${id}`, type: "evidence", source, turns: [], anchorTurn: turn.id, anchorIndex: sourceIndex };
+      record.turns.push(turn.id);
+      evidenceMap.set(id, record);
+    });
+  });
+  const evidence = [...evidenceMap.values()].map((node) => {
+    const question = questions.find((item) => item.turn.id === node.anchorTurn);
+    const localCount = question?.turn.message?.sources?.length || 1;
+    const slot = node.anchorIndex - (localCount - 1) / 2;
+    const tangentOffset = slot * 150;
+    const inward = 42;
+    const radial = question?.angle ?? 0;
+    const tangent = radial + Math.PI / 2;
+    return {
+      ...node,
+      x: (question?.x ?? center.x) - Math.cos(radial) * inward + Math.cos(tangent) * tangentOffset,
+      y: (question?.y ?? center.y) - Math.sin(radial) * inward + Math.sin(tangent) * tangentOffset,
+    };
+  });
+  const summaryAngle = -Math.PI / 2 + Math.PI / count;
+  const summary = summaryExists ? [{ id: "summary", type: "summary", x: center.x + Math.cos(summaryAngle) * 155, y: center.y + Math.sin(summaryAngle) * 155, title: "Research summary" }] : [];
+  return { title: displayTitle(title, turns), center, width, height, questions, evidence, summary };
+}
+
+function curve(from, to, bend = 0) {
+  const mx = (from.x + to.x) / 2;
+  const my = (from.y + to.y) / 2;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.max(Math.hypot(dx, dy), 1);
+  const offset = Math.min(54, length * 0.12) * (bend || 1);
+  const cx = mx - (dy / length) * offset;
+  const cy = my + (dx / length) * offset;
+  return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
 }
 
 export default function ResearchMapPage() {
-  const { conversations, isLoadingConversations } = useChat();
+  const { conversations = [], isLoadingConversations } = useChat();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const canvasRef = useRef(null);
+  const svgRef = useRef(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 760 });
   const [conversationId, setConversationId] = useState(searchParams.get("conversation_id") || "");
   const [summaryResult, setSummaryResult] = useState(null);
   const [summaryProgress, setSummaryProgress] = useState("");
+  const [selectedId, setSelectedId] = useState("session");
+  const [hoveredId, setHoveredId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [drag, setDrag] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
   const { setSources, setResearchTrace, isDrawerOpen, openDrawer, closeDrawer } = useCitationStore();
+
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element) return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) setCanvasSize((current) => Math.abs(current.width - width) > 1 || Math.abs(current.height - height) > 1 ? { width, height } : current);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!conversationId && conversations.length) setConversationId(conversations[0].id);
   }, [conversationId, conversations]);
-
   useEffect(() => {
-    closeDrawer();
-    setSources([]);
-    setResearchTrace(null);
-    setSummaryResult(null);
-    setSummaryProgress("");
+    closeDrawer(); setSources([]); setResearchTrace(null); setSummaryResult(null); setSummaryProgress(""); setSelectedId("session"); setZoom(1); setPan({ x: 0, y: 0 });
   }, [conversationId, closeDrawer, setSources, setResearchTrace]);
 
   const conversationQuery = useQuery({
@@ -73,141 +171,199 @@ export default function ResearchMapPage() {
     enabled: !!conversationId,
   });
   const messages = Array.isArray(messageQuery.data) ? messageQuery.data : messageQuery.data?.items || [];
-  const turns = useMemo(() => buildResearchTurns(messages), [messages]);
+  const parsedMessages = useMemo(() => buildResearchTurns(messages), [messages]);
+  const turns = parsedMessages.turns;
+  const activeSummary = summaryResult || parsedMessages.savedSummary;
+  const scopedSources = (conversationQuery.data?.paper_ids || []).length;
   const summaryMutation = useMutation({
     mutationFn: () => chatService.streamQuestion({
-        conversation_id: conversationId,
-        paper_ids: conversationQuery.data?.paper_ids || [],
-        answer_mode: "DOCUMENTS_ONLY",
-        question: "Summarize the selected source's main subject, core ideas, organization, and progression of concepts using its passages. For a textbook, cover multiple substantive sections when evidence supports it. If the passages cover only part of the source, label this a partial overview and name the sections represented. Cite every factual point and use no knowledge outside the selected sources.",
-      }, (event) => {
-        const status = {
-          planning_started: "Planning the summary…",
-          planning_completed: "Summary plan ready",
-          retrieval_started: "Searching selected books…",
-          additional_retrieval: "Checking for supporting passages…",
-          sources_found: `Found ${event.data?.count ?? 0} evidence passages`,
-          evidence_ready: "Evidence collected; drafting summary…",
-          generation_started: "Writing the source-grounded summary…",
-          verification_started: "Checking citations…",
-          verification_completed: "Finalizing evidence checks…",
-        };
-        if (status[event.type]) setSummaryProgress(status[event.type]);
-      }),
-    onMutate: () => { setSummaryResult(null); setSummaryProgress("Starting research summary…"); },
-    onSuccess: (result) => {
-      setSummaryResult(result);
-      queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    },
+      conversation_id: conversationId,
+      paper_ids: conversationQuery.data?.paper_ids || [],
+      answer_mode: "DOCUMENTS_ONLY",
+      question: "Summarize the selected source's main subject, core ideas, organization, and progression of concepts using its passages. For a textbook, cover multiple substantive sections when evidence supports it. If the passages cover only part of the source, label this a partial overview and name the sections represented. Cite every factual point and use no knowledge outside the selected sources.",
+    }, (event) => {
+      const status = { planning_started: "Planning summary…", retrieval_started: "Searching selected sources…", evidence_ready: "Evidence collected…", generation_started: "Writing cited summary…", verification_started: "Checking citations…" };
+      if (status[event.type]) setSummaryProgress(status[event.type]);
+    }),
+    onMutate: () => { setSummaryResult(null); setSummaryProgress("Starting summary…"); },
+    onSuccess: (result) => { setSummaryResult(result); queryClient.invalidateQueries({ queryKey: ["messages", conversationId] }); queryClient.invalidateQueries({ queryKey: ["conversations"] }); },
     onSettled: () => setSummaryProgress(""),
   });
 
-  const inspectSources = (entry) => {
-    setSources(entry.message?.sources || []);
-    setResearchTrace(entry.research);
-    openDrawer();
+  const map = useMemo(() => makeMindMap(turns, conversationQuery.data?.title, !!activeSummary, canvasSize.width, canvasSize.height), [turns, conversationQuery.data?.title, activeSummary, canvasSize]);
+  const allNodes = [...map.questions, ...map.evidence, ...map.summary];
+  const selectedNode = selectedId === "session" ? { id: "session", type: "session" } : allNodes.find((node) => node.id === selectedId) || null;
+  const hoveredNode = allNodes.find((node) => node.id === hoveredId) || null;
+  const selectedTurn = selectedNode?.type === "question" ? selectedNode.turn : selectedNode?.type === "evidence" ? turns.find((turn) => turn.id === selectedNode.turns[0]) : null;
+  const matchingIds = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return new Set(query ? map.questions.filter(({ turn }) => turn.question.toLowerCase().includes(query)).map(({ id }) => id) : []);
+  }, [map.questions, search]);
+
+  const inspectSources = useCallback((entry) => {
+    if (!entry) return;
+    setSources(entry.message?.sources || []); setResearchTrace(entry.research || {}); openDrawer();
+  }, [setSources, setResearchTrace, openDrawer]);
+  const focusNode = (node) => { setSelectedId(node.id); if (node.type === "evidence") setSelectedId(node.id); };
+  const fitView = () => {
+    const boundsNodes = [...map.questions.map((node) => ({ x: node.x, y: node.y, rx: node.radius, ry: node.radius })), ...map.evidence.map((node) => ({ x: node.x, y: node.y, rx: 82, ry: 38 })), ...map.summary.map((node) => ({ x: node.x, y: node.y, rx: 60, ry: 60 })), { x: map.center.x, y: map.center.y, rx: 120, ry: 120 }];
+    const left = Math.min(...boundsNodes.map((node) => node.x - node.rx));
+    const right = Math.max(...boundsNodes.map((node) => node.x + node.rx));
+    const top = Math.min(...boundsNodes.map((node) => node.y - node.ry));
+    const bottom = Math.max(...boundsNodes.map((node) => node.y + node.ry));
+    const scale = Math.min(1.25, (map.width - 40) / Math.max(1, right - left), (map.height - 40) / Math.max(1, bottom - top));
+    setZoom(scale);
+    setPan({ x: (map.center.x - (left + right) / 2) * scale, y: (map.center.y - (top + bottom) / 2) * scale });
   };
-  const scopedSources = (conversationQuery.data?.paper_ids || []).length;
+  useEffect(() => { fitView(); }, [conversationId, canvasSize.width, canvasSize.height, turns.length, map.evidence.length, map.summary.length]);
+  const zoomBy = (factor) => setZoom((current) => Math.min(2.4, Math.max(0.45, current * factor)));
+  const handlePointerDown = (event) => {
+    if (event.target === svgRef.current || event.target.dataset?.mapBackground === "true") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDrag({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
+    }
+  };
+  const handlePointerMove = (event) => {
+    if (drag) {
+      const rect = svgRef.current?.getBoundingClientRect();
+      const sx = rect?.width ? map.width / rect.width : 1;
+      const sy = rect?.height ? map.height / rect.height : 1;
+      setPan({ x: drag.panX + (event.clientX - drag.x) * sx, y: drag.panY + (event.clientY - drag.y) * sy });
+    }
+  };
+
+  useEffect(() => {
+    const firstMatch = map.questions.find((node) => matchingIds.has(node.id));
+    if (firstMatch && search.trim()) {
+      setSelectedId(firstMatch.id);
+      setZoom(1.15);
+      setPan({ x: (map.center.x - firstMatch.x) * 1.15, y: (map.center.y - firstMatch.y) * 1.15 });
+    }
+  }, [matchingIds, search, map]);
+
+  const openEvidence = async (source) => {
+    if (!source) return;
+    const excerpt = source.evidence_excerpt || source.text || source.passage || "";
+    await openAuthenticatedPdfSource(source, excerpt);
+  };
 
   return (
-    <div className="page-shell relative min-h-full space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--rl-border)] pb-5">
-        <div>
-          <p className="eyebrow text-[var(--rl-primary)]">Research Workspace</p>
-          <h1 className="page-heading mt-1 flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><Map className="h-5 w-5" aria-hidden="true" /></span>Research Map</h1>
-          <p className="page-description">Follow the conversation from question to answer, retrieval plan, and cited evidence.</p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-3 sm:px-6">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--rl-border)] pb-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--rl-selected)] text-[var(--rl-primary)]"><MapIcon className="h-5 w-5" /></span>
+          <div className="min-w-0"><p className="eyebrow text-[var(--rl-primary)]">Research workspace</p><h1 className="truncate text-xl font-semibold text-[var(--rl-ink)]">{map.title}</h1><p className="text-xs text-[var(--rl-muted)]">{turns.length} {turns.length === 1 ? "question" : "questions"} · {map.evidence.length} cited sources</p></div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => summaryMutation.mutate()} disabled={!conversationId || !scopedSources || summaryMutation.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-4 text-sm font-medium text-white hover:bg-[#1f659c] disabled:cursor-not-allowed disabled:opacity-50" title={!scopedSources ? "Add an indexed source to this conversation first" : "Create a cited summary using the selected documents"}>
-            {summaryMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {summaryMutation.isPending ? (summaryProgress || "Summarizing…") : "Summarize this research"}
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button type="button" onClick={() => summaryMutation.mutate()} disabled={!conversationId || !scopedSources || summaryMutation.isPending} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-3 text-xs font-medium text-white hover:bg-[#1f659c] disabled:opacity-50" title={!scopedSources ? "Add an indexed source to this conversation first" : "Create a cited summary using selected documents"}>
+            {summaryMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{summaryMutation.isPending ? summaryProgress || "Summarizing…" : "Summarize"}
           </button>
-          <Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--rl-border)] bg-white px-4 text-sm font-medium text-[var(--rl-primary)] hover:bg-[var(--rl-tint)]">Open Research Desk <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
+          <Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] bg-white px-3 text-xs font-medium text-[var(--rl-primary)] hover:bg-[var(--rl-tint)]">Open Research Desk <ArrowUpRight className="h-4 w-4" /></Link>
+          <select aria-label="Saved conversation" value={conversationId} onChange={(event) => setConversationId(event.target.value)} disabled={isLoadingConversations || !conversations.length} className="h-9 max-w-[260px] min-w-[170px] rounded-lg border border-[var(--rl-border)] bg-white px-3 text-xs text-[var(--rl-ink)]">
+            {!conversations.length && <option value="">No saved conversations</option>}
+            {conversations.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.title || "Untitled research"}</option>)}
+          </select>
         </div>
       </header>
 
-      <section className="surface-card flex flex-wrap items-center gap-3 p-4">
-        <label htmlFor="research-map-conversation" className="text-sm font-medium text-[var(--rl-ink)]">Saved conversation</label>
-        <select id="research-map-conversation" value={conversationId} onChange={(event) => setConversationId(event.target.value)} disabled={isLoadingConversations || !conversations.length} className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--rl-border)] bg-white px-3 text-sm text-[var(--rl-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rl-sky)]">
-          {!conversations.length && <option value="">No saved conversations</option>}
-          {conversations.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.title || "Untitled research"}</option>)}
-        </select>
-        <span className="text-xs text-[var(--rl-muted)]">{turns.length} {turns.length === 1 ? "turn" : "turns"} · {scopedSources} selected {scopedSources === 1 ? "source" : "sources"}</span>
+      {messageQuery.isError && <div role="alert" className="mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800"><AlertCircle className="h-4 w-4" />{messageQuery.error?.message || "Could not load this conversation."}</div>}
+      {summaryMutation.isError && <div role="alert" className="mt-2 flex shrink-0 items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800"><AlertCircle className="h-4 w-4" />{summaryMutation.error?.message || "The summary could not be generated."}</div>}
+
+      <section className="relative mt-2 flex min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--rl-border)] bg-white shadow-sm" aria-label="Interactive research mind map">
+        {messageQuery.isLoading ? <div className="m-auto flex items-center gap-2 text-sm text-[var(--rl-muted)]"><LoaderCircle className="h-4 w-4 animate-spin" />Loading saved research…</div> : turns.length === 0 ? <div className="m-auto max-w-md px-6 text-center"><CircleHelp className="mx-auto h-9 w-9 text-[var(--rl-sky)]" /><h2 className="mt-3 text-base font-semibold text-[var(--rl-ink)]">No questions to map yet</h2><p className="mt-1 text-sm text-[var(--rl-muted)]">Ask a question in the Research Desk and your saved questions and cited evidence will appear here.</p><Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="mt-4 inline-flex h-9 items-center rounded-lg bg-[var(--rl-primary)] px-3 text-sm text-white">Open Research Desk</Link></div> : <>
+          <div ref={canvasRef} className="relative min-w-0 flex-1 overflow-hidden bg-[#f8fbfe]">
+            <div className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-xl border border-[var(--rl-border)] bg-white/95 p-1 shadow-sm backdrop-blur-sm">
+              <label className="relative block w-40 sm:w-52"><Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[var(--rl-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a question" aria-label="Search questions" className="h-8 w-full rounded-lg bg-transparent pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-[var(--rl-sky)]" /></label>
+              <span className="h-5 w-px bg-slate-200" />
+              <button type="button" onClick={() => zoomBy(1.2)} className="map-control" aria-label="Zoom in" title="Zoom in"><Plus className="h-4 w-4" /></button>
+              <button type="button" onClick={() => zoomBy(1 / 1.2)} className="map-control" aria-label="Zoom out" title="Zoom out"><Minus className="h-4 w-4" /></button>
+              <button type="button" onClick={fitView} className="map-control" aria-label="Fit map to screen" title="Fit to screen"><Focus className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedId("session"); }} className="map-control" aria-label="Reset map view" title="Reset view"><MapIcon className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setCollapsed((value) => !value)} className={`map-control ${collapsed ? "!bg-[var(--rl-selected)] !text-[var(--rl-primary)]" : ""}`} aria-pressed={collapsed} title={collapsed ? "Expand evidence branches" : "Collapse evidence branches"}><BookOpen className="h-4 w-4" /></button>
+            </div>
+            <svg ref={svgRef} viewBox={`0 0 ${map.width} ${map.height}`} className={`h-full w-full touch-none ${drag ? "cursor-grabbing" : "cursor-grab"}`} role="img" aria-label="Radial map of this research conversation" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)} onWheel={(event) => { if (event.deltaY) zoomBy(event.deltaY < 0 ? 1.08 : 1 / 1.08); }}>
+              <defs><pattern id="research-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#dceaf5" /></pattern><filter id="map-node-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#28628f" floodOpacity="0.12" /></filter></defs>
+              <rect data-map-background="true" width={map.width} height={map.height} fill="url(#research-dots)" />
+              <g transform={`translate(${pan.x} ${pan.y}) translate(${map.center.x} ${map.center.y}) scale(${zoom}) translate(${-map.center.x} ${-map.center.y})`}>
+                {/* All connectors are drawn first so they stay behind their nodes. */}
+                {map.questions.map((node) => {
+                  const active = selectedId === node.id || (selectedNode?.type === "evidence" && selectedNode.turns.includes(node.turn.id));
+                  return <path key={`root-${node.id}`} d={curve(map.center, node, node.index % 2 ? -1 : 1)} fill="none" stroke={active ? "#1d6fc4" : "#92c8ee"} strokeOpacity={selectedId && selectedId !== "session" && !active ? 0.25 : 1} strokeWidth={active ? 3 : 2} strokeDasharray="3 8" />;
+                })}
+                {!collapsed && map.evidence.map((node) => node.turns.map((turnId, index) => {
+                  const question = map.questions.find((item) => item.turn.id === turnId);
+                  const active = selectedId === node.id || (selectedNode?.type === "question" && selectedNode.turn.id === turnId);
+                  return question ? <path key={`${node.id}-${turnId}`} d={curve(question, node, index % 2 ? -1 : 1)} fill="none" stroke={active ? "#1d6fc4" : "#bdd9ef"} strokeOpacity={selectedId && selectedId !== "session" && !active ? 0.18 : 1} strokeWidth={active ? 2.5 : 1.5} strokeDasharray="2 7" /> : null;
+                }))}
+                {map.summary.map((node) => <path key="summary-connector" d={curve(map.center, node)} fill="none" stroke="#69a8d8" strokeWidth="2" strokeDasharray="4 7" />)}
+
+                <g tabIndex={0} role="button" aria-label={`Research session: ${map.title}. ${turns.length} questions.`} onClick={() => setSelectedId("session")} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId("session"); } }} className="cursor-pointer">
+                  <circle cx={map.center.x} cy={map.center.y} r="116" fill="#eaf5fd" stroke="#1d6fc4" strokeWidth="3" filter="url(#map-node-shadow)" />
+                  <circle cx={map.center.x} cy={map.center.y} r="102" fill="white" stroke="#b9dcf5" strokeWidth="1.5" />
+                  <text x={map.center.x} y={map.center.y - 24} textAnchor="middle" className="fill-[#1d6fc4] text-[12px] font-semibold tracking-[2px]">RESEARCH SESSION</text>
+                  <text x={map.center.x} y={map.center.y + 5} textAnchor="middle" className="fill-slate-900 text-[19px] font-semibold">{shortText(map.title, 23)}</text>
+                  <text x={map.center.x} y={map.center.y + 32} textAnchor="middle" className="fill-slate-600 text-[13px]">{turns.length} {turns.length === 1 ? "question" : "questions"}</text>
+                  <text x={map.center.x} y={map.center.y + 54} textAnchor="middle" className="fill-slate-500 text-[12px]">{map.evidence.length} cited sources</text>
+                </g>
+
+                {map.questions.map((node) => {
+                  const selected = selectedId === node.id;
+                  const match = matchingIds.has(node.id);
+                  const radius = node.radius;
+                  const questionLines = wrapWords(node.turn.question, 20, 3);
+                  const answerPreview = shortText(node.turn.message?.content || "Awaiting saved answer", 28);
+                  const connected = selectedId === node.id || (selectedNode?.type === "evidence" && selectedNode.turns.includes(node.turn.id));
+                  return <g key={node.id} tabIndex={0} role="button" aria-label={`Turn ${node.index + 1}: ${node.turn.question}`} onClick={() => focusNode(node)} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId((current) => current === node.id ? null : current)} onFocus={() => setHoveredId(node.id)} onBlur={() => setHoveredId(null)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusNode(node); } }} className="cursor-pointer outline-none transition-opacity" opacity={selectedId && selectedId !== "session" && !connected ? 0.3 : 1}>
+                    <circle cx={node.x} cy={node.y} r={radius + (selected ? 5 : 0)} fill={selected ? "#e5f3fc" : match ? "#eff8ff" : "white"} stroke={selected || match ? "#1d6fc4" : "#9bc9ea"} strokeWidth={selected ? 4 : match ? 3 : 2} filter="url(#map-node-shadow)" />
+                    <text x={node.x} y={node.y - 51} textAnchor="middle" className="fill-[#1d6fc4] text-[11px] font-semibold tracking-[1px]">TURN {node.index + 1}</text>
+                    <text x={node.x} y={node.y - 27} textAnchor="middle" className="fill-slate-800 text-[14px] font-semibold">{questionLines.map((line, lineIndex) => <tspan key={lineIndex} x={node.x} dy={lineIndex === 0 ? 0 : 17}>{line}</tspan>)}</text>
+                    <text x={node.x} y={node.y + 39} textAnchor="middle" className="fill-slate-500 text-[10px]">{answerPreview}</text>
+                    <text x={node.x} y={node.y + 58} textAnchor="middle" className="fill-[#1d6fc4] text-[10px] font-medium">{(node.turn.message?.sources || []).length} cited</text>
+                    <title>{node.turn.question}</title>
+                  </g>;
+                })}
+
+                {!collapsed && map.evidence.map((node) => {
+                  const selected = selectedId === node.id;
+                  const filename = node.source.filename || node.source.paper_title || node.source.title || "Cited document";
+                  const pageStart = node.source.page_start || node.source.page;
+                  const pageEnd = node.source.page_end || pageStart;
+                  const pages = pageStart ? `p. ${pageStart}${pageEnd && pageEnd !== pageStart ? `–${pageEnd}` : ""}` : "page unavailable";
+                  const connected = selectedId === node.id || (selectedNode?.type === "question" && node.turns.includes(selectedNode.turn.id)) || (selectedNode?.type === "evidence" && selectedNode.turns.some((turnId) => node.turns.includes(turnId)));
+                  return <g key={node.id} tabIndex={0} role="button" aria-label={`${filename}, ${pages}`} onClick={() => focusNode(node)} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId((current) => current === node.id ? null : current)} onFocus={() => setHoveredId(node.id)} onBlur={() => setHoveredId(null)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusNode(node); } }} className="cursor-pointer transition-opacity" opacity={selectedId && selectedId !== "session" && !connected ? 0.3 : 1}>
+                    <rect x={node.x - 76} y={node.y - 34} width="152" height="68" rx="14" fill={selected ? "#e5f3fc" : "white"} stroke={selected ? "#1d6fc4" : "#b7d7ef"} strokeWidth={selected ? 3 : 1.5} filter="url(#map-node-shadow)" />
+                    <text x={node.x} y={node.y - 5} textAnchor="middle" className="fill-slate-800 text-[11px] font-semibold">{shortText(filename, 23)}</text>
+                    <text x={node.x} y={node.y + 16} textAnchor="middle" className="fill-[#1d6fc4] text-[10px] font-medium">{pages}</text>
+                    <title>{filename} · {pages}</title>
+                  </g>;
+                })}
+
+                {map.summary.map((node) => <g key={node.id} tabIndex={0} role="button" aria-label="Research summary" onClick={() => setSelectedId(node.id)} onKeyDown={(event) => { if (event.key === "Enter") setSelectedId(node.id); }} className="cursor-pointer">
+                  <circle cx={node.x} cy={node.y} r="58" fill="#f0f7fd" stroke="#7db7e2" strokeWidth="2.5" filter="url(#map-node-shadow)" /><text x={node.x} y={node.y - 4} textAnchor="middle" className="fill-[#1d6fc4] text-[13px] font-semibold">Summary</text><text x={node.x} y={node.y + 17} textAnchor="middle" className="fill-slate-500 text-[10px]">{activeSummary?.sources?.length || 0} passages</text>
+                </g>)}
+              </g>
+            </svg>
+
+            {hoveredNode && <div className="pointer-events-none absolute right-3 top-3 z-10 w-[min(24rem,calc(100%-1.5rem))] rounded-xl border border-[var(--rl-border)] bg-white/95 p-3 shadow-md backdrop-blur-sm" role="status">
+              {hoveredNode.type === "question" ? <><p className="text-xs font-semibold text-[var(--rl-ink)]">Turn {hoveredNode.index + 1} · {hoveredNode.turn.question}</p><p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--rl-muted)]">{hoveredNode.turn.message?.content || "No saved answer yet."}</p><p className="mt-1 text-[10px] text-[var(--rl-muted)]">{messageTimestamp(hoveredNode.turn.userMessage)}{messageTimestamp(hoveredNode.turn.userMessage) ? " · " : ""}{(hoveredNode.turn.message?.sources || []).length} cited passages</p></> : hoveredNode.type === "evidence" ? <><p className="text-xs font-semibold text-[var(--rl-ink)]">{hoveredNode.source.filename || hoveredNode.source.paper_title || "Cited source"}</p><p className="mt-1 text-xs text-[var(--rl-muted)]">Page {hoveredNode.source.page_start || hoveredNode.source.page || "not recorded"}</p></> : <p className="text-xs font-semibold text-[var(--rl-ink)]">Research summary</p>}
+            </div>}
+          </div>
+
+          {selectedNode && <aside className="absolute inset-y-0 right-0 z-10 flex w-[min(23rem,30%)] shrink-0 flex-col border-l border-[var(--rl-border)] bg-white shadow-[-10px_0_28px_-24px_rgba(15,53,87,0.45)] max-md:w-[min(23rem,88vw)] md:static md:shadow-none" aria-label="Selected map item details">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--rl-border)] px-4 py-3"><div className="flex items-center gap-2 text-sm font-semibold text-[var(--rl-ink)]"><FileSearch className="h-4 w-4 text-[var(--rl-primary)]" />{selectedNode.type === "question" ? `Turn ${selectedNode.index + 1}` : selectedNode.type === "evidence" ? "Cited source" : selectedNode.type === "summary" ? "Summary" : "Session overview"}</div><button type="button" onClick={() => setSelectedId(null)} aria-label="Close details" className="rounded-md p-1 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {selectedNode.type === "question" && <><h2 className="text-base font-semibold leading-6 text-[var(--rl-ink)]">{selectedTurn.question}</h2><div className="mt-3 text-sm leading-6 text-[var(--rl-ink)]">{selectedTurn.message ? <GroundedAnswer compact content={selectedTurn.message.content} sources={selectedTurn.message.sources || []} /> : <p className="text-[var(--rl-muted)]">This question has no saved answer yet.</p>}</div><p className="mt-4 text-xs text-[var(--rl-muted)]">{(selectedTurn.message?.sources || []).length} cited passages</p>{selectedTurn.message?.sources?.length > 0 && <><div className="mt-3 space-y-2">{selectedTurn.message.sources.map((source, index) => <div key={sourceKey(source, index)} className="rounded-lg border border-[var(--rl-border)] bg-slate-50 p-3"><p className="break-words text-xs font-semibold text-[var(--rl-ink)]">{source.paper_title || source.filename || source.title || "Cited document"}</p><p className="mt-0.5 text-[11px] text-[var(--rl-muted)]">{source.filename || ""}{source.page_start || source.page ? ` · Page ${source.page_start || source.page}${source.page_end && source.page_end !== (source.page_start || source.page) ? `–${source.page_end}` : ""}` : ""}</p>{(source.evidence_excerpt || source.text || source.passage) && <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-slate-600">{source.evidence_excerpt || source.text || source.passage}</p>}</div>)}</div><button type="button" onClick={() => inspectSources(selectedTurn)} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs font-medium text-[var(--rl-primary)] hover:bg-[var(--rl-tint)]"><BookOpen className="h-4 w-4" />Inspect evidence</button></>}
+                <Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-3 text-xs font-medium text-white">Open in Research Desk <ArrowUpRight className="h-4 w-4" /></Link></>}
+              {selectedNode.type === "evidence" && <><h2 className="break-words text-sm font-semibold text-[var(--rl-ink)]">{selectedNode.source.paper_title || selectedNode.source.title || selectedNode.source.filename || "Cited document"}</h2><p className="mt-1 break-all text-xs text-[var(--rl-muted)]">{selectedNode.source.filename || "Filename not recorded"}</p>{(selectedNode.source.authors || selectedNode.source.author) && <p className="mt-1 text-xs text-[var(--rl-muted)]">{Array.isArray(selectedNode.source.authors) ? selectedNode.source.authors.join(", ") : selectedNode.source.authors || selectedNode.source.author}</p>}<p className="mt-2 text-xs text-[var(--rl-muted)]">{selectedNode.source.page_start || selectedNode.source.page ? `Page ${selectedNode.source.page_start || selectedNode.source.page}${selectedNode.source.page_end && selectedNode.source.page_end !== (selectedNode.source.page_start || selectedNode.source.page) ? `–${selectedNode.source.page_end}` : ""}` : "Page not recorded"}</p><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{selectedNode.source.evidence_excerpt || selectedNode.source.text || selectedNode.source.passage || "No passage excerpt was saved for this citation."}</p><button type="button" onClick={() => openEvidence(selectedNode.source)} className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-3 text-xs font-medium text-white hover:bg-[#1f659c]"><FileText className="h-4 w-4" />Open PDF at cited page</button>{selectedTurn && <button type="button" onClick={() => inspectSources(selectedTurn)} className="mt-2 inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs font-medium text-[var(--rl-primary)]"><CheckCircle2 className="h-4 w-4" />Inspect answer citations</button>}</>}
+              {selectedNode.type === "summary" && <>{activeSummary?.answer ? <GroundedAnswer compact content={activeSummary.answer} sources={activeSummary.sources || []} /> : <p className="text-sm leading-6 text-[var(--rl-muted)]">No summary is available for this conversation yet. Use “Summarize” to create one from the selected source passages.</p>}{activeSummary?.sources?.length > 0 && <button type="button" onClick={() => { setSources(activeSummary.sources || []); setResearchTrace(activeSummary.metadata?.research || {}); openDrawer(); }} className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs text-[var(--rl-primary)]">Inspect summary evidence</button>}</>}
+              {selectedNode.type === "session" && <><h2 className="text-base font-semibold text-[var(--rl-ink)]">Session overview</h2><p className="mt-1 text-sm font-medium text-[var(--rl-ink)]">{map.title}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-[var(--rl-tint)] p-3"><p className="text-lg font-semibold text-[var(--rl-primary)]">{turns.length}</p><p className="text-[11px] text-[var(--rl-muted)]">Questions</p></div><div className="rounded-lg bg-[var(--rl-tint)] p-3"><p className="text-lg font-semibold text-[var(--rl-primary)]">{map.evidence.length}</p><p className="text-[11px] text-[var(--rl-muted)]">Cited sources</p></div></div>{activeSummary?.answer && <div className="mt-4 rounded-lg border border-[var(--rl-border)] p-3"><p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--rl-ink)]"><Sparkles className="h-3.5 w-3.5 text-[var(--rl-primary)]" />Research summary</p><p className="mt-2 line-clamp-5 text-xs leading-5 text-[var(--rl-muted)]">{shortText(activeSummary.answer, 260)}</p><button type="button" onClick={() => setSelectedId("summary")} className="mt-2 text-xs font-medium text-[var(--rl-primary)] hover:underline">Read summary</button></div>}<h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Question branches</h3><div className="mt-2 space-y-1">{map.questions.map((node) => <button key={node.id} type="button" onClick={() => setSelectedId(node.id)} className="block w-full rounded-lg px-2.5 py-2 text-left text-xs leading-5 text-[var(--rl-ink)] hover:bg-[var(--rl-tint)]"><span className="mr-2 text-[var(--rl-primary)]">{node.index + 1}.</span>{node.turn.question}</button>)}</div><h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Cited documents</h3>{map.evidence.length ? <div className="mt-2 space-y-1">{map.evidence.map((node) => <button key={node.id} type="button" onClick={() => setSelectedId(node.id)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-[var(--rl-ink)] hover:bg-[var(--rl-tint)]"><FileText className="h-4 w-4 shrink-0 text-[var(--rl-primary)]" /><span className="min-w-0 flex-1 truncate">{node.source.filename || node.source.paper_title || node.source.title || "Cited document"}</span></button>)}</div> : <p className="mt-2 text-xs text-[var(--rl-muted)]">No citation records are saved for these answers.</p>}<Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="mt-5 inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs text-[var(--rl-primary)]">Open Research Desk <ArrowUpRight className="h-4 w-4" /></Link></>}
+            </div>
+          </aside>}
+        </>}
       </section>
 
-      {messageQuery.isError && <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><AlertCircle className="h-4 w-4" />{messageQuery.error?.message || "Could not load this conversation."}</div>}
-      {summaryMutation.isError && <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{summaryMutation.error?.message || "The summary could not be generated. Please try again."}</span></div>}
-      {summaryResult && <section className="surface-card border-l-4 border-l-[var(--rl-primary)] p-5" aria-live="polite">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--rl-ink)]"><Sparkles className="h-5 w-5 text-[var(--rl-primary)]" />Source-grounded summary</h2><p className="mt-1 text-xs text-[var(--rl-muted)]">Based only on retrieved passages from the selected source scope</p></div><button type="button" disabled={!summaryResult.sources?.length} onClick={() => { setSources(summaryResult.sources || []); setResearchTrace(summaryResult.metadata?.research || {}); openDrawer(); }} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs font-medium text-[var(--rl-ink)] hover:bg-[var(--rl-tint)] disabled:cursor-not-allowed disabled:opacity-50"><PanelRight className="h-3.5 w-3.5" />View evidence ({summaryResult.sources?.length || 0})</button></div>
-        {!summaryResult.sources?.length && <div role="status" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">No passages could be cited for this summary. The answer below is an evidence limitation, not a verified overview of the book.</div>}
-        <div className="mt-4 min-w-0 text-sm leading-7 text-[var(--rl-ink)]"><GroundedAnswer compact content={summaryResult.answer} sources={summaryResult.sources || []} /></div>
-        <p className="mt-4 border-t border-[var(--rl-border)] pt-3 text-xs text-[var(--rl-muted)]">Saved to this conversation · {summaryResult.sources?.length || 0} cited passages · {summaryResult.metadata?.research?.evidence_count ?? 0} evidence records checked</p>
-      </section>}
-      {messageQuery.isLoading && <div className="surface-card h-28 animate-pulse" aria-label="Loading saved research" />}
-      {!messageQuery.isLoading && !messageQuery.isError && turns.length === 0 && <div className="surface-card px-6 py-14 text-center">
-        <CircleHelp className="mx-auto h-8 w-8 text-[var(--rl-sky)]" aria-hidden="true" />
-        <h2 className="mt-3 text-lg font-semibold text-[var(--rl-ink)]">No research turns saved here yet</h2>
-        <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-[var(--rl-muted)]">Ask a question in the Research Desk. Each saved turn will appear here with its answer, plan, and evidence trail.</p>
-        <Link href={conversationId ? `/chat/${conversationId}` : "/chat"} className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-[var(--rl-primary)] px-4 text-sm font-medium text-white hover:bg-[#1f659c]">Go to Research Desk</Link>
-      </div>}
-
-      <div className="space-y-1">
-        {turns.map((entry, index) => {
-          const plan = entry.research.plan || {};
-          const sufficiency = entry.research.sufficiency || {};
-          const claims = entry.research.claim_verification?.items || [];
-          const ledger = entry.research.evidence_ledger || [];
-          const sources = entry.message?.sources || [];
-          return <div key={entry.id} className="relative pl-8 sm:pl-10">
-            {index < turns.length - 1 && <div aria-hidden="true" className="absolute bottom-0 left-[13px] top-8 w-px bg-[var(--rl-border)] sm:left-[17px]" />}
-            <span aria-hidden="true" className="absolute left-1 top-5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[var(--rl-primary)] bg-white text-[10px] font-semibold text-[var(--rl-primary)] sm:left-1.5">{index + 1}</span>
-            <article className="surface-card mb-5 overflow-hidden">
-              <div className="border-b border-[var(--rl-border)] px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="eyebrow flex items-center gap-1.5 text-[var(--rl-primary)]"><GitBranch className="h-3.5 w-3.5" />{entry.message ? `Turn ${index + 1} · ${plan.intent || "Research"}` : "Awaiting answer"}</p>
-                  {entry.message && <button type="button" disabled={!sources.length} title={!sources.length ? "This saved answer has no citation records to inspect" : undefined} onClick={() => inspectSources(entry)} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-3 text-xs font-medium text-[var(--rl-ink)] hover:bg-[var(--rl-tint)] disabled:cursor-not-allowed disabled:opacity-50"><PanelRight className="h-3.5 w-3.5" />Inspect evidence ({sources.length})</button>}
-                </div>
-                <h2 className="mt-2 text-lg font-semibold leading-7 text-[var(--rl-ink)]">{entry.question}</h2>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-[var(--rl-muted)]" aria-label={`Research flow: question to answer to ${sources.length} evidence passages`}>
-                  <span className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1 text-[var(--rl-primary)]">Question</span><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1 text-[var(--rl-primary)]">Answer</span><ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1">{sources.length} evidence {sources.length === 1 ? "passage" : "passages"}</span>
-                </div>
-              </div>
-
-              <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
-                <section>
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--rl-ink)]"><BookOpenCheck className="h-4 w-4 text-[var(--rl-primary)]" />Answer & research path</h3>
-                  {entry.message ? <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-[var(--rl-muted)]">{entry.message.content}</p> : <p className="mt-2 text-sm text-[var(--rl-muted)]">This question has no saved answer yet.</p>}
-                  {plan.subquestions?.length > 0 && <><p className="mt-4 text-xs font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Planned retrieval branches</p><ul className="mt-2 space-y-2">{plan.subquestions.map((subquestion, subIndex) => <li key={`${subquestion}-${subIndex}`} className="flex items-start gap-2 text-sm leading-6 text-[var(--rl-muted)]"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--rl-sky)]" /><span>{subquestion}</span></li>)}</ul></>}
-                </section>
-
-                <section className="rounded-xl bg-[var(--rl-tint)] p-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--rl-ink)]"><FileSearch className="h-4 w-4 text-[var(--rl-primary)]" />Evidence & verification</h3>
-                  <p className="mt-2 text-sm text-[var(--rl-muted)]">{sources.length} cited passages{ledger.length ? ` · ${ledger.length} retrieval records` : ""}</p>
-                  {sufficiency.status && <p className="mt-2 text-xs text-[var(--rl-muted)]">Evidence check: <span className="font-medium text-[var(--rl-ink)]">{sufficiency.status}</span></p>}
-                  {sufficiency.method && <p className="mt-2 text-xs leading-5 text-[var(--rl-muted)]">{sufficiency.method}</p>}
-                  {sources.length > 0 ? <div className="mt-3 flex flex-wrap gap-1.5">{sources.map((source, sourceIndex) => <button key={`${source.id || source.source_id || sourceIndex}`} type="button" onClick={() => inspectSources(entry)} className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white px-2.5 py-1 text-xs font-medium text-sky-800 hover:border-sky-400"><CheckCircle2 className="h-3 w-3" />{source.source_id || source.id || `Source ${sourceIndex + 1}`}</button>)}</div> : <p className="mt-3 text-xs text-[var(--rl-muted)]">No cited passages were saved for this answer.</p>}
-                </section>
-              </div>
-
-              {claims.length > 0 && <section className="border-t border-[var(--rl-border)] px-5 py-4">
-                <h3 className="text-sm font-semibold text-[var(--rl-ink)]">Claim checks</h3>
-                <ul className="mt-3 space-y-3">{claims.map((claim, claimIndex) => <li key={`${claim.claim_text}-${claimIndex}`} className="rounded-xl border border-[var(--rl-border)] p-3">
-                  <div className="flex flex-wrap items-start gap-2"><span className={`rounded-full px-2 py-1 text-[11px] font-medium ${STATUS_STYLE[claim.status] || "bg-slate-100 text-slate-700"}`}>{(claim.status || "unreviewed").replaceAll("_", " ")}</span><p className="min-w-0 flex-1 text-sm leading-6 text-[var(--rl-ink)]">{claim.claim_text}</p></div>
-                  {claim.reason && <p className="mt-1.5 text-xs leading-5 text-[var(--rl-muted)]">{claim.reason}</p>}
-                  {claim.source_ids?.length > 0 && <button type="button" onClick={() => inspectSources(entry)} className="mt-2 text-xs font-medium text-[var(--rl-primary)] underline underline-offset-4">Inspect {claim.source_ids.join(", ")}</button>}
-                </li>)}</ul>
-                <p className="mt-3 text-xs leading-5 text-[var(--rl-muted)]">{entry.research.claim_verification?.method || "Claim verification method not recorded."}</p>
-              </section>}
-            </article>
-            {index < turns.length - 1 && <div aria-hidden="true" className="-mt-3 mb-2 flex h-4 items-center pl-0.5 text-[var(--rl-sky)]"><ArrowDown className="h-4 w-4" /></div>}
-          </div>;
-        })}
-      </div>
-
       {isDrawerOpen && <div role="dialog" aria-modal="true" aria-label="Evidence Trail" className="fixed inset-x-0 bottom-0 top-16 z-40 flex justify-end bg-slate-950/35" onClick={closeDrawer} onKeyDown={(event) => { if (event.key === "Escape") closeDrawer(); }}><div className="h-full w-[min(26rem,94vw)] shadow-xl" onClick={(event) => event.stopPropagation()}><SourceInspectorRail onClose={closeDrawer} /></div></div>}
+      <style jsx>{`.map-control{display:inline-flex;height:2rem;min-width:2rem;align-items:center;justify-content:center;gap:.35rem;border:1px solid var(--rl-border);border-radius:.5rem;background:white;padding:0 .5rem;color:var(--rl-ink);font-size:.7rem}.map-control:hover{background:var(--rl-tint)}`}</style>
     </div>
   );
 }

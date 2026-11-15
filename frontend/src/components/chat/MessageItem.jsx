@@ -3,8 +3,9 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
-import { User, ShieldCheck, Sparkles, Copy, Check } from "lucide-react";
+import { Sparkles, Copy, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatResearchTimestamp } from "@/utils/researchTime.mjs";
 
 const GroundedAnswer = dynamic(
   () => import("./GroundedAnswer").then((mod) => mod.GroundedAnswer),
@@ -19,7 +20,11 @@ const GroundedAnswer = dynamic(
   }
 );
 
-export function MessageItem({ message, onFollowUp }) {
+function formatTimestamp(timestamp) {
+  return formatResearchTimestamp(timestamp);
+}
+
+export function MessageItem({ message, onFollowUp, autoSelectFirstCitation = false, researchQuestion = "" }) {
   const isAssistant = message.role === "assistant";
   const [copied, setCopied] = useState(false);
 
@@ -29,122 +34,80 @@ export function MessageItem({ message, onFollowUp }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const formattedTime = formatTimestamp(message.created_at);
+
   return (
-    <div
-      className={`group flex w-full gap-3 py-4 transition-colors ${
-        isAssistant
-          ? "border-b border-zinc-100 bg-transparent dark:border-zinc-850"
-          : "border-b border-zinc-100/70 bg-zinc-50/50 dark:border-zinc-900 dark:bg-zinc-950/40"
-      } px-4 md:px-6`}
-    >
-      {/* Avatar */}
-      <div className="shrink-0 pt-0.5">
-        {isAssistant ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--rl-selected)] text-[var(--rl-primary)]">
-            <Sparkles className="h-4 w-4" />
-          </div>
-        ) : (
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-200 text-zinc-700 font-semibold text-xs dark:bg-zinc-800 dark:text-zinc-300">
-            <User className="h-4 w-4" />
-          </div>
+    <div className="group w-full px-4 py-3 sm:px-6">
+      <div className={`mx-auto flex w-full max-w-3xl ${isAssistant ? "items-start gap-3" : "justify-end"}`}>
+        {isAssistant && (
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[var(--rl-primary)]">
+            <Sparkles className="h-3.5 w-3.5" />
+          </span>
         )}
-      </div>
 
-      {/* Message Content */}
-      <div className="flex-1 space-y-2 overflow-hidden">
-        {/* Header Ribbon */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-              {isAssistant ? "ResearchLens Assistant" : "Researcher"}
-            </span>
-
-            {isAssistant && message.sources && message.sources.length > 0 && (
-              <Badge variant="grounded" className="text-[9px] px-1.5 py-0 gap-1">
-                <ShieldCheck className="h-2.5 w-2.5" />
-                {message.sources.length} sources cited
-              </Badge>
-            )}
-            {isAssistant && (message.meta?.answer_mode || message.metadata?.answer_mode) && (() => {
-              const mode = message.meta?.answer_mode || message.metadata?.answer_mode;
-              const provider = message.meta?.generation_provider || message.metadata?.generation_provider || message.meta?.llm_provider || message.metadata?.llm_provider;
-              const reason = message.meta?.generation_reason || message.metadata?.generation_reason;
-              let label = "Extractive Mode";
-              let badgeVariant = "outline";
-              if (mode === "general_knowledge") {
-                label = "General knowledge · not from documents";
-                badgeVariant = "outline";
-              } else if (mode === "general_knowledge_unavailable") {
-                label = "Documents checked · local model unavailable";
-                badgeVariant = "outline";
-              } else if (mode === "LOCAL_QWEN" || provider === "ollama") {
-                label = "Local Qwen (qwen3.5:0.8b)";
-                badgeVariant = "secondary";
-              } else if (mode === "generated" || provider === "gemini") {
-                label = "Gemini synthesis";
-              } else if (mode === "EXTRACTIVE" || mode === "evidence_only") {
-                label = "Extractive Mode";
-              } else if (mode === "evidence_fallback") {
-                label = "Extractive Fallback";
-              } else if (mode === "mock") {
-                label = "Test Response";
-              }
-              return (
-                <Badge
-                  variant={badgeVariant}
-                  title={reason ? `Reason: ${reason.replaceAll("_", " ")}` : undefined}
-                  className="text-[9px] px-1.5 py-0 font-medium"
-                >
-                  {label}
+        <div className={`min-w-0 ${isAssistant ? "flex-1" : "max-w-[88%] sm:max-w-[78%]"}`}>
+          {isAssistant ? (
+            <div className="mb-2 flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-xs font-semibold text-slate-800">
+                ResearchLens
+              </span>
+              {formattedTime && <span className="text-[10px] text-slate-400">{formattedTime}</span>}
+              {message.sources?.length > 0 && (
+                <Badge variant="grounded" className="text-[10px] px-1.5 py-0 gap-1">
+                  {message.sources.length} source{message.sources.length === 1 ? "" : "s"} cited
                 </Badge>
-              );
-            })()}
-          </div>
-
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-zinc-400 hover:text-zinc-700"
-              onClick={handleCopy}
-              title="Copy message"
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-emerald-600" />
-              ) : (
-                <Copy className="h-3 w-3" />
               )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Body */}
-        {isAssistant ? (
-          <div>
-            <GroundedAnswer content={message.content} sources={message.sources} />
-            {/* Interactive Contextual Follow-Up Chips */}
-            {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions)?.length > 0 && (
-              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-medium mr-0.5">Explore further:</span>
-                {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions).map((chip, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => onFollowUp && onFollowUp(chip)}
-                    className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50/80 px-2.5 py-0.5 text-[11px] font-medium text-sky-800 hover:bg-sky-100 hover:border-sky-300 transition-colors shadow-2xs cursor-pointer active:scale-95"
-                  >
-                    <span>{chip}</span>
-                    <span className="text-sky-500 font-bold text-xs">&rarr;</span>
-                  </button>
-                ))}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto h-6 w-6 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-700"
+                onClick={handleCopy}
+                title="Copy answer"
+              >
+                {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-2xl rounded-br-md bg-[var(--rl-primary)] px-4 py-3 text-sm leading-relaxed text-white shadow-sm whitespace-pre-wrap">
+                {message.content}
               </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-800 leading-relaxed dark:text-zinc-200 whitespace-pre-wrap">
-            {message.content}
-          </p>
-        )}
+              <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-slate-400">
+                {formattedTime && <><Clock className="h-3 w-3" /><span>{formattedTime}</span></>}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-700"
+                  onClick={handleCopy}
+                  title="Copy question"
+                >
+                  {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {isAssistant ? (
+            <div className="min-w-0">
+              <GroundedAnswer content={message.content} sources={message.sources} autoSelectFirstCitation={autoSelectFirstCitation} question={researchQuestion} researchPlan={message.meta?.research || message.metadata?.research || null} />
+              {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions)?.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-0.5 text-[10px] font-medium text-slate-400">Explore further:</span>
+                  {(message.meta?.follow_up_suggestions || message.metadata?.follow_up_suggestions).map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => onFollowUp?.(chip)}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-medium text-sky-800 transition-colors hover:border-sky-300 hover:bg-sky-50"
+                    >
+                      <span>{chip}</span><span className="text-sky-500">&rarr;</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

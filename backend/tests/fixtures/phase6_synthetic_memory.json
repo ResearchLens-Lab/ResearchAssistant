@@ -1,0 +1,32 @@
+{
+  "fixture_id": "phase6-memory-v1",
+  "synthetic": true,
+  "retrieval_cases": [
+    {"case_id": "algorithm-definition", "ranked_results": [
+      {"memory_id": "m-definition", "score": 0.9, "relevant": true},
+      {"memory_id": "m-paper-method", "score": 0.6, "relevant": true},
+      {"memory_id": "m-author", "score": 0.2, "relevant": false}]},
+    {"case_id": "method-dataset", "ranked_results": [
+      {"memory_id": "m-dataset", "score": 0.8, "relevant": true},
+      {"memory_id": "m-unrelated", "score": 0.7, "relevant": false}]}
+  ],
+  "association_cases": [
+    {"reviewed_confirmed": true, "presented_as_established": true},
+    {"reviewed_confirmed": false, "presented_as_established": false},
+    {"reviewed_confirmed": false, "presented_as_established": false}
+  ],
+  "contradiction_cases": [
+    {"expected_candidate": true, "detected_candidate": true, "expected_outcome": "TRUE_CONFLICT", "actual_outcome": "TRUE_CONFLICT"},
+    {"expected_candidate": true, "detected_candidate": false},
+    {"expected_candidate": false, "detected_candidate": false, "expected_outcome": "CONTEXTUAL_DIFFERENCE", "actual_outcome": "CONTEXTUAL_DIFFERENCE"},
+    {"expected_candidate": false, "detected_candidate": true}
+  ],
+  "gap_cases": [
+    {"expected_recorded": true, "actual_recorded": true, "expected_type": "LIBRARY_EVIDENCE_GAP", "actual_type": "LIBRARY_EVIDENCE_GAP"},
+    {"expected_recorded": true, "actual_recorded": true, "expected_type": "DOCUMENT_INFORMATION_GAP", "actual_type": "DOCUMENT_INFORMATION_GAP"},
+    {"expected_recorded": false, "actual_recorded": false}
+  ],
+  "temporal_cases": [
+    {"checks": [{"name": "first_observed_preserved", "passed": true}, {"name": "independent_confirmation_updates_last_confirmed", "passed": true}, {"name": "event_order_stable", "passed": true}, {"name": "stale_source_suppressed", "passed": true}, {"name": "retraction_history_retained", "passed": true}]}
+  ]
+}
