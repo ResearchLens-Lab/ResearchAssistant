@@ -10,11 +10,9 @@ import threading
 from typing import Callable
 from typing import List, Optional, Dict, Any
 
-from rag.pipelines.ingest_pipeline import IngestionPipeline, IngestResult
 from rag.pipelines.query_pipeline import QueryPipeline
 from rag.retrieval.query import QueryFilters
 from rag.citations.citation_formatter import RAGResult
-from rag.vectorstore.vector_repository import VectorRepository
 from rag.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -28,19 +26,27 @@ class RAGClient:
 
     def __init__(
         self,
-        ingest_pipeline: Optional[IngestionPipeline] = None,
+        ingest_pipeline: Optional[Any] = None,
         query_pipeline: Optional[QueryPipeline] = None,
-        vector_repo: Optional[VectorRepository] = None,
+        vector_repo: Optional[Any] = None,
     ):
-        # Keep model-backed ingestion lazy so an independent-mode API process
-        # can answer from SQLite FTS5 without constructing FastEmbedder.
+        # Keep model-backed ingestion and vector storage lazy so an independent-mode API process
+        # can answer and ingest from SQLite FTS5 without constructing FastEmbedder or ChromaDB.
         self._ingest_pipeline = ingest_pipeline
         self._query_pipeline = query_pipeline or QueryPipeline()
-        self._vector_repo = vector_repo or VectorRepository()
+        self._vector_repo = vector_repo
         self._ingest_locks: dict[str, threading.Lock] = {}
         self._ingest_locks_guard = threading.Lock()
         self._active_ingests: dict[str, str] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+
+    @property
+    def vector_repo(self) -> Any:
+        if self._vector_repo is None:
+            if settings.rag_engine_mode != "independent":
+                from rag.vectorstore.vector_repository import VectorRepository
+                self._vector_repo = VectorRepository()
+        return self._vector_repo
 
     @property
     def _ingest(self) -> Any:
@@ -288,8 +294,8 @@ class RAGClient:
             if paper_id in self._active_ingests.values():
                 raise RuntimeError("Cannot delete a paper while one of its sources is being indexed.")
         count = self._ingest.delete_paper(paper_id)
-        if settings.rag_engine_mode == "independent":
-            count = max(count, self._vector_repo.delete_paper_chunks(paper_id))
+        if settings.rag_engine_mode != "independent" and self.vector_repo:
+            count = max(count, self.vector_repo.delete_paper_chunks(paper_id))
         return count
 
     def delete_document_chunks(self, document_id: str) -> int:
@@ -297,7 +303,12 @@ class RAGClient:
         with self._ingest_locks_guard:
             if document_id in self._active_ingests:
                 raise RuntimeError("Cannot delete source chunks while its ingestion is still active.")
-        return self._vector_repo.delete_document_chunks(document_id)
+        if settings.rag_engine_mode == "independent":
+            from rag.independent.index_writer import IndependentIndexWriter
+            return IndependentIndexWriter().delete_document(document_id)
+        if self.vector_repo:
+            return self.vector_repo.delete_document_chunks(document_id)
+        return 0
 
     def get_document_index_counts(self, document_id: str) -> Dict[str, Any]:
         """Return verifiable active-collection counts for both backing indexes."""

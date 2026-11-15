@@ -13,11 +13,8 @@ from typing import Optional, List, Dict, Any
 
 from rag.config.settings import settings
 from rag.retrieval.query import QueryRequest, QueryFilters, RetrievedSource
-from rag.retrieval.retriever import ResearchRetriever
 from rag.context.context_builder import ContextBuilder, AssembledContext
-from rag.generation.generator import GroundedGenerator, GenerationResult
 from rag.generation.extractive_engine import ExtractiveAnswerEngine
-from rag.generation.llm_client import OllamaLLMClient
 from rag.citations.source_tracker import SourceTracker
 from rag.citations.citation_mapper import CitationMapper, SourceCitation
 from rag.citations.citation_formatter import RAGResult
@@ -78,11 +75,11 @@ class QueryPipeline:
 
     def __init__(
         self,
-        retriever: Optional[ResearchRetriever] = None,
+        retriever: Optional[Any] = None,
         context_builder: Optional[ContextBuilder] = None,
-        generator: Optional[GroundedGenerator] = None,
-        planner: Optional[QueryPlanner] = None,
-        sufficiency_checker: Optional[EvidenceSufficiencyChecker] = None,
+        generator: Optional[Any] = None,
+        planner: Optional[Any] = None,
+        sufficiency_checker: Optional[Any] = None,
     ):
         self._independent_engine = None
         if settings.rag_engine_mode == "independent":
@@ -92,19 +89,34 @@ class QueryPipeline:
             self._independent_engine = IndependentResearchEngine()
             self.retriever = retriever
         else:
-            self.retriever = retriever or ResearchRetriever()
+            if retriever is None:
+                from rag.retrieval.retriever import ResearchRetriever
+                retriever = ResearchRetriever()
+            self.retriever = retriever
         self.context_builder = context_builder or ContextBuilder()
-        # Generation is only needed after retrieval has established that the
-        # selected evidence is sufficient. Keep ingestion/local retrieval usable
-        # even when no generation provider is configured.
         self._generator = generator
-        self.planner = planner or QueryPlanner()
-        self.sufficiency_checker = sufficiency_checker or EvidenceSufficiencyChecker()
+        self._planner = planner
+        self._sufficiency_checker = sufficiency_checker
         self.extractive_engine = ExtractiveAnswerEngine()
 
     @property
-    def generator(self) -> GroundedGenerator:
+    def planner(self) -> Any:
+        if self._planner is None:
+            from rag.research.orchestrator import QueryPlanner
+            self._planner = QueryPlanner()
+        return self._planner
+
+    @property
+    def sufficiency_checker(self) -> Any:
+        if self._sufficiency_checker is None:
+            from rag.research.orchestrator import EvidenceSufficiencyChecker
+            self._sufficiency_checker = EvidenceSufficiencyChecker()
+        return self._sufficiency_checker
+
+    @property
+    def generator(self) -> Any:
         if self._generator is None:
+            from rag.generation.generator import GroundedGenerator
             self._generator = GroundedGenerator()
         return self._generator
 

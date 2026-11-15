@@ -6,8 +6,12 @@ Supports PersistentClient (local storage) and HttpClient (remote server).
 import os
 import logging
 from typing import Optional
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+try:
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+except ImportError:
+    chromadb = None
+    ChromaSettings = None
 from rag.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -18,7 +22,7 @@ class ChromaClientFactory:
     Manages ChromaDB client lifecycle and connection health.
     """
 
-    _instance: Optional[chromadb.ClientAPI] = None
+    _instance: Optional[Any] = None
     _client_persist_dirs: dict[int, str] = {}
 
     @classmethod
@@ -29,7 +33,9 @@ class ChromaClientFactory:
         host: Optional[str] = None,
         port: Optional[int] = None,
         force_new: bool = False,
-    ) -> chromadb.ClientAPI:
+    ) -> Any:
+        if chromadb is None:
+            raise RuntimeError("ChromaDB is not installed in this model-free environment.")
         if cls._instance is not None and not force_new:
             return cls._instance
 

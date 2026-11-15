@@ -1,7 +1,7 @@
 """
 Deterministic Grounded Research Answer Composer.
-Composes fully cited, structured research answers for all 12+ research intents
-without generative language models or hallucinated prose.
+Composes fully cited, structured research answers for all 13 research intents
+without generative language models, hallucinated prose, or hardcoded textbook fallbacks.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class ResearchAnswerComposer:
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        if confidence.level == ConfidenceLevel.NO_RELIABLE_ANSWER or not sources:
+        if confidence.level == ConfidenceLevel.NOT_LOCATED or not sources:
             return self._compose_abstention(query, confidence)
 
         if query.intent == ResearchIntent.DEFINITION:
@@ -85,6 +85,8 @@ class ResearchAnswerComposer:
             return self._compose_count_ranking(query, sources, confidence)
         elif query.intent == ResearchIntent.RELATIONSHIP:
             return self._compose_relationship(query, sources, confidence)
+        elif query.intent == ResearchIntent.EVIDENCE_VERIFICATION:
+            return self._compose_verification(query, sources, confidence)
         else:
             return self._compose_general(query, sources, confidence)
 
@@ -105,25 +107,25 @@ class ResearchAnswerComposer:
             def_text = sentences[0] if sentences else top_source.text[:200]
 
         source_cite = f"[{top_source.source_id}]"
-        page_info = f"page {top_source.page_start}"
 
-        # Extract definition characteristics
-        input_m = re.search(r"\btakes\b.{1,120}?\bas\s+input\b", def_text, re.I)
-        output_m = re.search(r"\bproduces\b.{1,120}?\bas\s+output\b", def_text, re.I)
-        proc_m = re.search(r"\b(?:computational\s+procedure|sequence\s+of\s+computational\s+steps|tool\s+for\s+solving)\b", def_text, re.I)
-
+        # Dynamically extract key characteristics from the source text
+        sentences_in_top = self.sentence_analyzer.segment_sentences(top_source.text)
         key_points = []
-        if proc_m:
-            key_points.append(f"- **Computational Nature:** {proc_m.group(0).capitalize()} {source_cite}")
-        if input_m:
-            key_points.append(f"- **Input:** {input_m.group(0).capitalize()} {source_cite}")
-        if output_m:
-            key_points.append(f"- **Output:** {output_m.group(0).capitalize()} {source_cite}")
+        for s in sentences_in_top:
+            if s == def_text or len(s) < 25:
+                continue
+            if re.search(r"\b(?:takes|input|produces|output|consists\s+of|transforms|sequence\s+of|tool\s+for|satisfies|is\s+a\s+set|has)\b", s, re.I):
+                clean_s = s.strip()
+                if len(clean_s) < 200 and clean_s not in key_points:
+                    key_points.append(f"- {clean_s} {source_cite}")
+            if len(key_points) >= 3:
+                break
 
         # Find supporting context sentences in the top source
         surrounding = [
-            s for s in self.sentence_analyzer.segment_sentences(top_source.text)
+            s for s in sentences_in_top
             if s != def_text and len(s) > 30 and not re.search(r"^(?:Contents|Preface|Chapter \d+)\b", s)
+            and f"- {s.strip()} {source_cite}" not in key_points
         ]
         context_bullets = [f"- {s} {source_cite}" for s in surrounding[:2]]
 
@@ -131,28 +133,28 @@ class ResearchAnswerComposer:
         example_found = None
         for s in sources:
             for sent in self.sentence_analyzer.segment_sentences(s.text):
-                if re.search(r"\bfor\s+example\b", sent, re.I) and len(sent) > 40:
-                    example_found = (sent, s.source_id)
+                if re.search(r"\b(?:for\s+example|consider|as\s+an\s+example)\b", sent, re.I) and len(sent) > 35:
+                    example_found = (sent.strip(), s.source_id)
                     break
             if example_found:
                 break
 
-        if not confidence.is_definitive_answer or not top_def:
+        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK) and not top_def:
             lines = [
                 f"### Direct Answer: No Formal Definition Found",
-                f"The selected documents do not contain an authoritative formal definition of '{concept}'.",
+                f"The selected documents discuss '{concept}' in context, but do not contain a canonical formal definition.",
                 "",
                 "### Contextual Mentions from Retrieved Passages",
                 f"> \"{def_text}\" {source_cite}",
                 "",
-                f"*Source: {top_source.title}, {top_source.locator} ({page_info})*",
+                f"*Source: {top_source.title}, {top_source.locator}*",
             ]
             if context_bullets:
                 lines.extend(["", "### Related Context", *context_bullets])
             lines.extend([
                 "",
                 "### Confidence Assessment",
-                f"- **Confidence Level:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+                f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
                 "- **Notice:** No definitive subject-copula definition was established in the indexed text.",
             ])
             return GroundedResearchAnswer(
@@ -171,7 +173,7 @@ class ResearchAnswerComposer:
             f"### Definition of {concept.title()}",
             f"> \"{def_text}\" {source_cite}",
             "",
-            f"*Source: {top_source.title}, {top_source.locator} ({page_info})*",
+            f"*Source: {top_source.title}, {top_source.locator}*",
         ]
 
         if key_points:
@@ -186,7 +188,7 @@ class ResearchAnswerComposer:
         lines.extend([
             "",
             "### Verification & Confidence",
-            f"- **Confidence Level:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
             f"- **Grounding Status:** 100% deterministic source quote from {top_source.locator}.",
         ])
 
@@ -199,7 +201,7 @@ class ResearchAnswerComposer:
             headline_answer=def_text,
             markdown_content=markdown,
             primary_citation=source_cite,
-            cited_sources=[s.to_dict() if hasattr(s, "to_dict") else {"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start, "section": s.section, "text": s.text} for s in sources[:4]],
             limitations=confidence.limitations,
         )
 
@@ -223,12 +225,15 @@ class ResearchAnswerComposer:
             headline = f"{top_claim.bound_type.title()}: {top_claim.formula} [{top_s.source_id}]"
             lines.extend([
                 f"> **{headline}**",
-                f"*Source: {top_s.locator} (page {top_s.page_start})*",
+                f"*Source: {top_s.locator}*",
                 "",
                 "### Reported Bounds",
+                "| Case / Resource | Bound | Source Passage | Citation |",
+                "|---|---|---|---|",
             ])
             for c, s in claims[:4]:
-                lines.append(f"- **{c.bound_type.title()}:** `{c.formula}` — \"{c.sentence}\" [{s.source_id}]")
+                clean_sent = c.sentence.replace("|", "/").strip()
+                lines.append(f"| {c.bound_type.title()} | `{c.formula}` | \"{clean_sent[:120]}...\" | [{s.source_id}] |")
         else:
             lines.extend([
                 f"The selected passages discuss efficiency for '{concept}' without an explicit asymptotic formula.",
@@ -241,7 +246,7 @@ class ResearchAnswerComposer:
         lines.extend([
             "",
             "### Confidence & Grounding",
-            f"- **Confidence Level:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
             "- **Evaluation:** Deterministic asymptotic extraction from local document.",
         ])
 
@@ -257,29 +262,102 @@ class ResearchAnswerComposer:
             limitations=confidence.limitations,
         )
 
+    def _compose_comparison(
+        self,
+        query: QueryUnderstanding,
+        sources: List[RetrievedSource],
+        confidence: ConfidenceReport,
+    ) -> GroundedResearchAnswer:
+        c1 = query.primary_concept or (query.target_concepts[0] if query.target_concepts else "Entity 1")
+        c2 = query.secondary_concept or (query.target_concepts[1] if len(query.target_concepts) > 1 else "Entity 2")
+
+        s_c1 = [s for s in sources if c1.lower() in s.text.lower()]
+        s_c2 = [s for s in sources if c2.lower() in s.text.lower()]
+
+        lines = [
+            f"### Comparative Analysis: {c1.title()} vs {c2.title()}",
+            f"| Attribute | {c1.title()} | {c2.title()} |",
+            "|---|---|---|",
+        ]
+
+        # Extract complexity bounds for c1 & c2
+        comp_c1 = [c.formula for s in s_c1 for c in self.sentence_analyzer.extract_complexity_claims(s.text)]
+        comp_c2 = [c.formula for s in s_c2 for c in self.sentence_analyzer.extract_complexity_claims(s.text)]
+
+        cite1 = f"[{s_c1[0].source_id}]" if s_c1 else "[Not stated]"
+        cite2 = f"[{s_c2[0].source_id}]" if s_c2 else "[Not stated]"
+
+        t1_str = f"`{comp_c1[0]}` {cite1}" if comp_c1 else ("Stated in text " + cite1 if s_c1 else "Not stated in selected sources")
+        t2_str = f"`{comp_c2[0]}` {cite2}" if comp_c2 else ("Stated in text " + cite2 if s_c2 else "Not stated in selected sources")
+        lines.append(f"| **Running Time** | {t1_str} | {t2_str} |")
+
+        # In-place check
+        in_place_1 = "Yes" if any("in place" in s.text.lower() or "in-place" in s.text.lower() for s in s_c1) else "Not stated in selected sources"
+        in_place_2 = "Yes" if any("in place" in s.text.lower() or "in-place" in s.text.lower() for s in s_c2) else "Not stated in selected sources"
+        lines.append(f"| **In-Place** | {in_place_1} {cite1 if in_place_1 != 'Not stated in selected sources' else ''} | {in_place_2} {cite2 if in_place_2 != 'Not stated in selected sources' else ''} |")
+
+        # Stable check
+        stable_1 = "Yes" if any("stable" in s.text.lower() for s in s_c1) else "Not stated in selected sources"
+        stable_2 = "Yes" if any("stable" in s.text.lower() for s in s_c2) else "Not stated in selected sources"
+        lines.append(f"| **Stability** | {stable_1} {cite1 if stable_1 != 'Not stated in selected sources' else ''} | {stable_2} {cite2 if stable_2 != 'Not stated in selected sources' else ''} |")
+
+        lines.append(f"| **Source Section** | {s_c1[0].locator if s_c1 else 'N/A'} {cite1} | {s_c2[0].locator if s_c2 else 'N/A'} {cite2} |")
+
+        lines.extend([
+            "",
+            "### Detailed Excerpts",
+        ])
+        if s_c1:
+            lines.append(f"- **{c1.title()}:** {s_c1[0].text[:220].strip()} [{s_c1[0].source_id}]")
+        if s_c2:
+            lines.append(f"- **{c2.title()}:** {s_c2[0].text[:220].strip()} [{s_c2[0].source_id}]")
+
+        lines.extend([
+            "",
+            "### Grounding Assurance",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+            "- Attributes derived strictly from cited passages without speculative comparisons.",
+        ])
+
+        return GroundedResearchAnswer(
+            query=query.raw_query,
+            intent=ResearchIntent.COMPARISON,
+            confidence_level=confidence.level,
+            confidence_score=confidence.overall_confidence_score,
+            headline_answer=f"Comparative analysis between {c1} and {c2}",
+            markdown_content="\n".join(lines),
+            primary_citation=f"[{sources[0].source_id}]",
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
+            limitations=confidence.limitations,
+        )
+
     def _compose_procedure(
         self,
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or "the requested procedure"
+        concept = query.primary_concept or "the procedure"
         top_s = sources[0]
         sentences = self.sentence_analyzer.segment_sentences(top_s.text)
 
-        step_keywords = re.compile(r"\b(?:first|second|then|next|finally|step\s+\d+|initialization|maintenance|termination|repeat|while|for\s+each)\b", re.I)
-        steps = [s for s in sentences if step_keywords.search(s) and len(s) > 25]
+        # Detect numbered steps or step keywords
+        steps = [
+            s.strip() for s in sentences
+            if re.match(r"^(?:step\s+\d+|\d+\.|\([a-z0-9]\))\b", s, re.I) or re.search(r"\b(?:first|then|next|finally|repeat)\b", s, re.I)
+        ]
 
         lines = [
-            f"### Procedure: How {concept.title()} Works",
-            f"*Source: {top_s.title}, {top_s.locator} (page {top_s.page_start})*",
+            f"### Procedure: {concept.title()}",
+            f"*Source: {top_s.title}, {top_s.locator}*",
             "",
         ]
 
         if steps:
             lines.append("### Step-by-Step Execution")
             for idx, st in enumerate(steps[:5], start=1):
-                lines.append(f"{idx}. {st} [{top_s.source_id}]")
+                clean_st = re.sub(r"^(?:step\s+\d+[:.]?|\d+\.|\([a-z0-9]\))\s*", "", st, flags=re.I)
+                lines.append(f"{idx}. {clean_st} [{top_s.source_id}]")
         else:
             lines.append("### Method Description")
             for st in sentences[:4]:
@@ -288,7 +366,7 @@ class ResearchAnswerComposer:
         lines.extend([
             "",
             "### Verification Note",
-            f"- **Confidence Level:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
             "- Steps are reproduced verbatim from the source textbook without generative alterations.",
         ])
 
@@ -305,60 +383,40 @@ class ResearchAnswerComposer:
             limitations=confidence.limitations,
         )
 
-    def _compose_comparison(
+    def _compose_list_properties(
         self,
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        c1 = query.primary_concept or "Entity 1"
-        c2 = query.secondary_concept or "Entity 2"
-
-        # Separate evidence for c1 and c2
-        s_c1 = [s for s in sources if c1.lower() in s.text.lower()]
-        s_c2 = [s for s in sources if c2.lower() in s.text.lower()]
+        concept = query.primary_concept or "the concept"
+        top_s = sources[0]
+        sentences = self.sentence_analyzer.segment_sentences(top_s.text)
 
         lines = [
-            f"### Comparison: {c1.title()} vs {c2.title()}",
-            "| Aspect / Dimension | " + c1.title() + " | " + c2.title() + " |",
-            "|---|---|---|",
+            f"### Properties of {concept.title()}",
+            f"*Source: {top_s.locator}*",
+            "",
+            "### Document-Stated Characteristics",
         ]
-
-        # Extract complexity for c1 & c2 if found
-        comp_c1 = [c.formula for s in s_c1 for c in self.sentence_analyzer.extract_complexity_claims(s.text)]
-        comp_c2 = [c.formula for s in s_c2 for c in self.sentence_analyzer.extract_complexity_claims(s.text)]
-
-        cite1 = f"[{s_c1[0].source_id}]" if s_c1 else "[Not found]"
-        cite2 = f"[{s_c2[0].source_id}]" if s_c2 else "[Not found]"
-
-        lines.append(f"| **Running Time** | {comp_c1[0] if comp_c1 else 'Described in text'} {cite1} | {comp_c2[0] if comp_c2 else 'Described in text'} {cite2} |")
-        lines.append(f"| **Primary Focus** | {s_c1[0].section if s_c1 else 'N/A'} {cite1} | {s_c2[0].section if s_c2 else 'N/A'} {cite2} |")
-        lines.append(f"| **Location** | p.{s_c1[0].page_start if s_c1 else 'N/A'} {cite1} | p.{s_c2[0].page_start if s_c2 else 'N/A'} {cite2} |")
+        items = [s for s in sentences if len(s) > 25 and not re.match(r"^\[\d+\]$", s)]
+        for s in items[:5]:
+            lines.append(f"- {s} [{top_s.source_id}]")
 
         lines.extend([
             "",
-            "### Detailed Excerpts",
-        ])
-        if s_c1:
-            lines.append(f"- **{c1.title()}:** {s_c1[0].text[:200].strip()} [{s_c1[0].source_id}]")
-        if s_c2:
-            lines.append(f"- **{c2.title()}:** {s_c2[0].text[:200].strip()} [{s_c2[0].source_id}]")
-
-        lines.extend([
-            "",
-            "### Grounding Assurance",
-            "- Contrast derived strictly from cited textbook passages without unsupported inferences.",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
         ])
 
         return GroundedResearchAnswer(
             query=query.raw_query,
-            intent=ResearchIntent.COMPARISON,
+            intent=ResearchIntent.LIST_PROPERTIES,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=f"Comparative analysis between {c1} and {c2}",
+            headline_answer=items[0] if items else f"Properties of {concept}",
             markdown_content="\n".join(lines),
-            primary_citation=f"[{sources[0].source_id}]",
-            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
+            primary_citation=f"[{top_s.source_id}]",
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
             limitations=confidence.limitations,
         )
 
@@ -368,61 +426,30 @@ class ResearchAnswerComposer:
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or "the requested topic"
-        locations = []
-        for s in sources:
-            locations.append(f"- **{s.locator}:** Physical page {s.page_start} (in *{s.title}*) [{s.source_id}]")
+        concept = query.primary_concept or "the topic"
+        top_s = sources[0]
 
         lines = [
-            f"### Location Guide: Where '{concept.title()}' is Discussed",
+            f"### Location: {concept.title()}",
+            f"'{concept.title()}' appears in **{top_s.locator}**.",
             "",
-            *locations[:6],
+            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
             "",
-            "### Overview Excerpt",
-            f"> \"{sources[0].text[:300].strip()}\" [{sources[0].source_id}]",
+            "### Relevant Sections Found in Library",
         ]
+        for s in sources[:4]:
+            lines.append(f"- **{s.locator}** [{s.source_id}]")
 
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=ResearchIntent.LOCATE,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=f"'{concept}' is discussed in {sources[0].locator} (page {sources[0].page_start}).",
-            markdown_content="\n".join(lines),
-            primary_citation=f"[{sources[0].source_id}]",
-            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
-            limitations=[],
-        )
-
-    def _compose_list_properties(
-        self,
-        query: QueryUnderstanding,
-        sources: List[RetrievedSource],
-        confidence: ConfidenceReport,
-    ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or "the requested concept"
-        top_s = sources[0]
-        sentences = self.sentence_analyzer.segment_sentences(top_s.text)
-
-        lines = [
-            f"### Properties of {concept.title()}",
-            f"*Source: {top_s.locator} (page {top_s.page_start})*",
-            "",
-            "### Core Properties Identified in Text",
-        ]
-        for idx, s in enumerate(sentences[:5], start=1):
-            lines.append(f"{idx}. {s} [{top_s.source_id}]")
-
-        return GroundedResearchAnswer(
-            query=query.raw_query,
-            intent=ResearchIntent.LIST_PROPERTIES,
-            confidence_level=confidence.level,
-            confidence_score=confidence.overall_confidence_score,
-            headline_answer=f"Properties of {concept} from {top_s.locator}",
+            headline_answer=f"{concept.title()} is covered in {top_s.locator}.",
             markdown_content="\n".join(lines),
             primary_citation=f"[{top_s.source_id}]",
-            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
-            limitations=[],
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
+            limitations=confidence.limitations,
         )
 
     def _compose_example(
@@ -432,25 +459,25 @@ class ResearchAnswerComposer:
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the concept"
-        ex_sent = None
+        example_sent = None
         ex_source = sources[0]
         for s in sources:
             for sent in self.sentence_analyzer.segment_sentences(s.text):
-                if re.search(r"\b(?:for\s+example|for\s+instance|e\.g\.)\b", sent, re.I):
-                    ex_sent = sent
+                if re.search(r"\b(?:for\s+example|consider|as\s+an\s+example)\b", sent, re.I):
+                    example_sent = sent
                     ex_source = s
                     break
-            if ex_sent:
+            if example_sent:
                 break
 
-        if not ex_sent:
-            ex_sent = sources[0].text[:250].strip()
+        if not example_sent:
+            example_sent = sources[0].text[:300].strip()
 
         lines = [
-            f"### Example of {concept.title()}",
-            f"> \"{ex_sent}\" [{ex_source.source_id}]",
+            f"### Example: {concept.title()}",
+            f"> \"{example_sent}\" [{ex_source.source_id}]",
             "",
-            f"*Source: {ex_source.locator} (page {ex_source.page_start})*",
+            f"*Source: {ex_source.locator}*",
         ]
 
         return GroundedResearchAnswer(
@@ -458,11 +485,11 @@ class ResearchAnswerComposer:
             intent=ResearchIntent.EXAMPLE,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=ex_sent,
+            headline_answer=example_sent,
             markdown_content="\n".join(lines),
             primary_citation=f"[{ex_source.source_id}]",
-            cited_sources=[{"source_id": ex_source.source_id, "locator": ex_source.locator, "page": ex_source.page_start}],
-            limitations=[],
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
+            limitations=confidence.limitations,
         )
 
     def _compose_theorem(
@@ -474,26 +501,27 @@ class ResearchAnswerComposer:
         concept = query.primary_concept or "the theorem"
         top_s = sources[0]
         sentences = self.sentence_analyzer.segment_sentences(top_s.text)
+        thm_sent = sentences[0] if sentences else top_s.text[:250]
 
         lines = [
             f"### Theorem Statement: {concept.title()}",
-            f"*Source: {top_s.locator} (page {top_s.page_start})*",
+            f"> \"{thm_sent}\" [{top_s.source_id}]",
             "",
-            f"> \"{sentences[0] if sentences else top_s.text[:250]}\" [{top_s.source_id}]",
+            f"*Source: {top_s.locator}*",
         ]
         if len(sentences) > 1:
-            lines.extend(["", "### Formulation & Cases", *[f"- {s} [{top_s.source_id}]" for s in sentences[1:4]]])
+            lines.extend(["", "### Context / Proof Overview", *[f"- {s} [{top_s.source_id}]" for s in sentences[1:3]]])
 
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=ResearchIntent.THEOREM_LOOKUP,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=sentences[0] if sentences else top_s.text[:150],
+            headline_answer=thm_sent,
             markdown_content="\n".join(lines),
             primary_citation=f"[{top_s.source_id}]",
             cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
-            limitations=[],
+            limitations=confidence.limitations,
         )
 
     def _compose_summary(
@@ -502,24 +530,26 @@ class ResearchAnswerComposer:
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or "document topic"
+        concept = query.primary_concept or "the document"
         lines = [
             f"### Summary: {concept.title()}",
-            "### Key Topics Covered",
+            "### Section Overview",
         ]
-        for s in sources[:4]:
-            lines.append(f"- **{s.locator}:** {s.text[:180].strip()}... [{s.source_id}]")
+        for s in sources[:5]:
+            lead = self.sentence_analyzer.segment_sentences(s.text)
+            lead_text = lead[0] if lead else s.text[:150]
+            lines.append(f"- **{s.locator}:** {lead_text} [{s.source_id}]")
 
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=ResearchIntent.SUMMARIZATION,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=f"Summary of {concept}",
+            headline_answer=f"Summary of {concept} across {len(sources)} sections.",
             markdown_content="\n".join(lines),
             primary_citation=f"[{sources[0].source_id}]",
-            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
-            limitations=[],
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:5]],
+            limitations=confidence.limitations,
         )
 
     def _compose_count_ranking(
@@ -529,22 +559,26 @@ class ResearchAnswerComposer:
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
         lines = [
-            "### Section & Topic Ranking",
-            "| Rank | Section | Page Range | Key Topics | Citation |",
-            "|---|---|---|---|---|",
+            "### Coverage Ranking",
+            "| Rank | Section | Page Range | Passage Count |",
+            "|---|---|---|---|",
         ]
-        for idx, s in enumerate(sources[:5], start=1):
-            lines.append(f"| {idx} | {s.section} | p.{s.page_start}-{s.page_end} | {s.locator} | [{s.source_id}] |")
+        sec_counts = {}
+        for s in sources:
+            sec_counts[s.locator] = sec_counts.get(s.locator, 0) + 1
+
+        for idx, (loc, cnt) in enumerate(sorted(sec_counts.items(), key=lambda x: -x[1])[:5], start=1):
+            lines.append(f"| {idx} | {loc} | Referenced | {cnt} |")
 
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=ResearchIntent.COUNT_RANKING,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer="Section ranking based on syllabus structure",
+            headline_answer=f"Found {len(sec_counts)} relevant sections.",
             markdown_content="\n".join(lines),
             primary_citation=f"[{sources[0].source_id}]",
-            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:5]],
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:4]],
             limitations=[],
         )
 
@@ -560,7 +594,7 @@ class ResearchAnswerComposer:
             f"### Relationship between {c1.title()} and {c2.title()}",
             f"> \"{sources[0].text[:300].strip()}\" [{sources[0].source_id}]",
             "",
-            f"*Source: {sources[0].locator} (page {sources[0].page_start})*",
+            f"*Source: {sources[0].locator}*",
         ]
 
         return GroundedResearchAnswer(
@@ -575,26 +609,58 @@ class ResearchAnswerComposer:
             limitations=[],
         )
 
+    def _compose_verification(
+        self,
+        query: QueryUnderstanding,
+        sources: List[RetrievedSource],
+        confidence: ConfidenceReport,
+    ) -> GroundedResearchAnswer:
+        claim = query.query_constraints.get("claim", query.raw_query)
+        top_s = sources[0]
+        lines = [
+            f"### Evidence Verification",
+            f"**Claim checked:** \"{claim}\"",
+            "",
+            "### Relevant Source Text",
+            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
+            "",
+            f"*Source: {top_s.locator}*",
+            "",
+            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
+        ]
+        return GroundedResearchAnswer(
+            query=query.raw_query,
+            intent=ResearchIntent.EVIDENCE_VERIFICATION,
+            confidence_level=confidence.level,
+            confidence_score=confidence.overall_confidence_score,
+            headline_answer=f"Verification based on {top_s.locator}",
+            markdown_content="\n".join(lines),
+            primary_citation=f"[{top_s.source_id}]",
+            cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
+            limitations=confidence.limitations,
+        )
+
     def _compose_general(
         self,
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
+        top_s = sources[0]
         lines = [
             "### Research Findings",
-            f"> \"{sources[0].text[:300].strip()}\" [{sources[0].source_id}]",
+            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
             "",
-            f"*Source: {sources[0].locator} (page {sources[0].page_start})*",
+            f"*Source: {top_s.locator}*",
         ]
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=query.intent,
             confidence_level=confidence.level,
             confidence_score=confidence.overall_confidence_score,
-            headline_answer=sources[0].text[:120],
+            headline_answer=top_s.text[:120],
             markdown_content="\n".join(lines),
-            primary_citation=f"[{sources[0].source_id}]",
+            primary_citation=f"[{top_s.source_id}]",
             cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
             limitations=[],
         )
@@ -604,26 +670,26 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         confidence: ConfidenceReport,
     ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or "the requested topic"
+        concept = query.primary_concept or query.raw_query
         lines = [
-            f"### Direct Answer: No Reliable Evidence Found",
-            f"ResearchLens searched your library for '{concept}' but found no definitive source passage establishing an answer.",
+            f"### Direct Answer: Not Located in Selected Documents",
+            f"ResearchLens searched your library for '{concept}' but found no matching evidence establishing an answer.",
             "",
             "### Why the System Abstained",
-            f"- **Confidence Assessment:** {confidence.level.value}",
+            f"- **Confidence Tier:** {confidence.level.value}",
             f"- **Reason:** {confidence.justification}",
         ]
         if confidence.limitations:
-            lines.extend(["", "### Limitations", *[f"- {lim}" for lim in confidence.limitations]])
+            lines.extend(["", "### Search Scope Notice", *[f"- {lim}" for lim in confidence.limitations]])
 
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=query.intent,
-            confidence_level=ConfidenceLevel.NO_RELIABLE_ANSWER,
+            confidence_level=ConfidenceLevel.NOT_LOCATED,
             confidence_score=0.0,
             headline_answer="Not found in selected documents.",
             markdown_content="\n".join(lines),
             primary_citation=None,
             cited_sources=[],
-            limitations=confidence.limitations,
+            limitations=confidence.limitations or ["Requested concept is absent from selected sources."],
         )
