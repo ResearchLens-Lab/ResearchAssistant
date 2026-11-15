@@ -103,8 +103,11 @@ try {
     runRobocopy(join(pythonHome, 'DLLs'), join(pythonTarget, 'DLLs'));
     runRobocopy(join(pythonHome, 'Lib'), join(pythonTarget, 'Lib'), ['/XD', 'test', 'idlelib', 'tkinter']);
 
-    console.log(`      Copying packaged site-packages...`);
-    runRobocopy(sitePackages, join(pythonTarget, 'Lib', 'site-packages'), ['/XD', '__pycache__', 'tests', 'test', '.git', 'pip*', 'kubernetes*', '/XF', '*.pyc', '*.pyo']);
+    console.log(`      Copying packaged site-packages (model-free by construction)...`);
+    runRobocopy(sitePackages, join(pythonTarget, 'Lib', 'site-packages'), [
+      '/XD', '__pycache__', 'tests', 'test', '.git', 'pip*', 'kubernetes*', 'chromadb*', 'fastembed*', 'onnxruntime*', 'google*', 'torch*', 'sentence_transformers*',
+      '/XF', '*.pyc', '*.pyo'
+    ]);
 
     console.log(`      Copying Node runtime binary...`);
     safeCopy(process.execPath, join(runtime, 'node.exe'));
@@ -124,7 +127,7 @@ try {
     console.log(`      Verifying staged Python runtime in isolation...`);
     run(join(pythonTarget, 'python.exe'), [
       '-c',
-      'import fastapi, uvicorn, aiosqlite, sqlalchemy, alembic, chromadb; print("      Staged Python runtime verified successfully!")',
+      'import fastapi, uvicorn, aiosqlite, sqlalchemy, alembic; print("      Staged Python runtime verified successfully!")',
     ], repo);
   } else {
     console.log(`[3/5] Staged Python 3.12 runtime already present.`);
@@ -156,36 +159,64 @@ try {
     }
   }
 
-  // Compute RAG module source hashes for manifest audit
-  const computeFileHash = (rel) => {
-    const full = join(repo, rel);
-    return existsSync(full) ? createHash('sha256').update(readFileSync(full)).digest('hex') : null;
+  // Compute comprehensive source and staged runtime hashes for manifest audit
+  const computeFileHash = (filePath) => {
+    return existsSync(filePath) ? createHash('sha256').update(readFileSync(filePath)).digest('hex') : null;
   };
+
+  const getDirectoryHashes = (baseDir, prefix = '') => {
+    const hashes = {};
+    if (!existsSync(baseDir)) return hashes;
+    const walk = (dir, currentPrefix) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (!['__pycache__', 'tests', 'test', '.pytest_cache'].includes(entry.name)) {
+            walk(join(dir, entry.name), currentPrefix ? `${currentPrefix}/${entry.name}` : entry.name);
+          }
+        } else if (entry.isFile()) {
+          const relKey = currentPrefix ? `${currentPrefix}/${entry.name}` : entry.name;
+          hashes[relKey] = computeFileHash(join(dir, entry.name));
+        }
+      }
+    };
+    walk(baseDir, prefix);
+    return hashes;
+  };
+
+  const stagedRagHashes = getDirectoryHashes(join(runtime, 'source', 'rag'), 'rag');
+  const stagedBackendHashes = getDirectoryHashes(join(runtime, 'source', 'backend'), 'backend');
+  const desktopHashes = {
+    'desktop/main.cjs': computeFileHash(join(desktop, 'main.cjs')),
+    'desktop/preload.cjs': computeFileHash(join(desktop, 'preload.cjs')),
+    'runtime/node.exe': computeFileHash(join(runtime, 'node.exe')),
+    'runtime/python/python.exe': computeFileHash(join(runtime, 'python', 'python.exe')),
+  };
+
   const ragModuleHashes = {
-    'rag/ingestion/document_loader.py': computeFileHash('rag/ingestion/document_loader.py'),
-    'rag/ingestion/document_normalizer.py': computeFileHash('rag/ingestion/document_normalizer.py'),
-    'rag/ingestion/preflight.py': computeFileHash('rag/ingestion/preflight.py'),
-    'rag/ingestion/ocr_engine.py': computeFileHash('rag/ingestion/ocr_engine.py'),
-    'rag/ingestion/structure_extractor.py': computeFileHash('rag/ingestion/structure_extractor.py'),
-    'rag/chunking/strategies.py': computeFileHash('rag/chunking/strategies.py'),
-    'rag/chunking/structure_chunker.py': computeFileHash('rag/chunking/structure_chunker.py'),
-    'rag/intelligence/engine.py': computeFileHash('rag/intelligence/engine.py'),
-    'rag/intelligence/query_analyzer.py': computeFileHash('rag/intelligence/query_analyzer.py'),
-    'rag/intelligence/sentence_analyzer.py': computeFileHash('rag/intelligence/sentence_analyzer.py'),
-    'rag/intelligence/retrieval_engine.py': computeFileHash('rag/intelligence/retrieval_engine.py'),
-    'rag/intelligence/confidence_evaluator.py': computeFileHash('rag/intelligence/confidence_evaluator.py'),
-    'rag/intelligence/answer_composer.py': computeFileHash('rag/intelligence/answer_composer.py'),
-    'rag/intelligence/report_generator.py': computeFileHash('rag/intelligence/report_generator.py'),
-    'rag/skills/runtime.py': computeFileHash('rag/skills/runtime.py'),
-    'rag/skills/schema.py': computeFileHash('rag/skills/schema.py'),
-    'rag/independent/topic_analyzer.py': computeFileHash('rag/independent/topic_analyzer.py'),
-    'rag/independent/intent_classifier.py': computeFileHash('rag/independent/intent_classifier.py'),
-    'rag/independent/retriever.py': computeFileHash('rag/independent/retriever.py'),
-    'rag/independent/engine.py': computeFileHash('rag/independent/engine.py'),
-    'rag/independent/answer_composer.py': computeFileHash('rag/independent/answer_composer.py'),
-    'rag/independent/evidence_validator.py': computeFileHash('rag/independent/evidence_validator.py'),
-    'rag/independent/index_writer.py': computeFileHash('rag/independent/index_writer.py'),
-    'rag/independent/ingest_pipeline.py': computeFileHash('rag/independent/ingest_pipeline.py'),
+    'rag/ingestion/document_loader.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'document_loader.py')),
+    'rag/ingestion/document_normalizer.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'document_normalizer.py')),
+    'rag/ingestion/preflight.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'preflight.py')),
+    'rag/ingestion/ocr_engine.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'ocr_engine.py')),
+    'rag/ingestion/structure_extractor.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'structure_extractor.py')),
+    'rag/chunking/strategies.py': computeFileHash(join(runtime, 'source', 'rag', 'chunking', 'strategies.py')),
+    'rag/chunking/structure_chunker.py': computeFileHash(join(runtime, 'source', 'rag', 'chunking', 'structure_chunker.py')),
+    'rag/intelligence/engine.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'engine.py')),
+    'rag/intelligence/query_analyzer.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'query_analyzer.py')),
+    'rag/intelligence/sentence_analyzer.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'sentence_analyzer.py')),
+    'rag/intelligence/retrieval_engine.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'retrieval_engine.py')),
+    'rag/intelligence/confidence_evaluator.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'confidence_evaluator.py')),
+    'rag/intelligence/answer_composer.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'answer_composer.py')),
+    'rag/intelligence/report_generator.py': computeFileHash(join(runtime, 'source', 'rag', 'intelligence', 'report_generator.py')),
+    'rag/skills/runtime.py': computeFileHash(join(runtime, 'source', 'rag', 'skills', 'runtime.py')),
+    'rag/skills/schema.py': computeFileHash(join(runtime, 'source', 'rag', 'skills', 'schema.py')),
+    'rag/independent/topic_analyzer.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'topic_analyzer.py')),
+    'rag/independent/intent_classifier.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'intent_classifier.py')),
+    'rag/independent/retriever.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'retriever.py')),
+    'rag/independent/engine.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'engine.py')),
+    'rag/independent/answer_composer.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'answer_composer.py')),
+    'rag/independent/evidence_validator.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'evidence_validator.py')),
+    'rag/independent/index_writer.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'index_writer.py')),
+    'rag/independent/ingest_pipeline.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'ingest_pipeline.py')),
   };
 
   const report = {
@@ -193,7 +224,7 @@ try {
     buildDate: new Date().toISOString(),
     targetArchitecture: 'x64 (Windows)',
     ragEngineMode: 'independent',
-    pythonRuntime: 'Python 3.12.15 (Windows x86_64, cpython)',
+    pythonRuntime: 'Python 3.12.15 (Windows x86_64, cpython, model-free)',
     nodeVersion: process.version,
     electronVersion: '39.8.10',
     nextBuild: 'Next.js 15.5.28 Standalone Production',
@@ -203,6 +234,9 @@ try {
     pythonExecutable: existsSync(join(runtime, 'python', 'python.exe')),
     nextStandalone: existsSync(join(runtime, 'frontend', 'server.js')),
     ragModuleHashes,
+    stagedBackendHashes,
+    stagedRagHashes,
+    desktopHashes,
     excluded: [
       '.env and developer secrets',
       'developer SQLite / PostgreSQL databases',
@@ -210,6 +244,7 @@ try {
       'User uploaded documents and PDFs',
       'developer test suites and fixtures',
       'model caches',
+      'chromadb, fastembed, onnxruntime, and generative AI packages',
     ],
   };
 

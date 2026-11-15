@@ -776,7 +776,17 @@ function createWindow() {
     },
   });
   mainWindow.once("ready-to-show", () => mainWindow.show());
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (
+      (uiOrigin && url.startsWith(uiOrigin)) ||
+      url.startsWith("http://127.0.0.1:") ||
+      url.startsWith("http://localhost:") ||
+      url.includes("/pdf-viewer")
+    )) {
+      return { action: "allow" };
+    }
+    return { action: "deny" };
+  });
   mainWindow.webContents.on("will-navigate", (event, target) => {
     if (target.startsWith("file://")) {
       try {
@@ -812,10 +822,17 @@ function stopOwnedServices() {
   for (const proc of [frontendProcess, backendProcess]) {
     if (!proc || proc.killed) continue;
     try {
-      killProcessTree(proc.pid);
-      proc.kill();
+      proc.kill("SIGTERM");
     } catch {}
   }
+  // Allow graceful exit for database transactions before force kill
+  setTimeout(() => {
+    for (const proc of [frontendProcess, backendProcess]) {
+      if (proc && !proc.killed && proc.pid) {
+        killProcessTree(proc.pid);
+      }
+    }
+  }, 2000).unref();
 }
 
 app.on("before-quit", () => stopOwnedServices());
