@@ -47,7 +47,7 @@ class IndependentIngestionPipeline:
             self._check_cancel(cancel_event, "after extraction")
             self._emit(progress_callback, {"stage": "chunking", "progress": 25, "progress_type": "estimated",
                                            "completed_pages": normalized.total_pages, "total_pages": normalized.total_pages})
-            return self._index(normalized, started, progress_callback, cancel_event)
+            return self._index(normalized, started, progress_callback, cancel_event, file_path=file_path)
         except Exception as exc:
             if not had_existing_index:
                 self.index_writer.delete_document(document_id)
@@ -71,7 +71,7 @@ class IndependentIngestionPipeline:
             self._check_cancel(cancel_event, "after extraction")
             self._emit(progress_callback, {"stage": "chunking", "progress": 25, "progress_type": "estimated",
                                            "completed_pages": normalized.total_pages, "total_pages": normalized.total_pages})
-            return self._index(normalized, started, progress_callback, cancel_event)
+            return self._index(normalized, started, progress_callback, cancel_event, file_path=file_path)
         except Exception as exc:
             document_id = str(meta.get("document_id") or "unknown_doc")
             if document_id != "unknown_doc":
@@ -81,7 +81,7 @@ class IndependentIngestionPipeline:
                                 error=str(exc), execution_time_seconds=round(time.perf_counter() - started, 3),
                                 metadata={"index_mode": "sqlite_fts5_only", "pretrained_embeddings_used": False})
 
-    def _index(self, normalized, started, progress_callback, cancel_event) -> IngestResult:
+    def _index(self, normalized, started, progress_callback, cancel_event, file_path: str | None = None) -> IngestResult:
         self._check_cancel(cancel_event, "before chunking")
         chunks = self.chunker.chunk_document(normalized)
         if not chunks:
@@ -112,11 +112,12 @@ class IndependentIngestionPipeline:
             final_status = "partial"
 
         # Clean up intermediate OCR checkpoint upon successful ingestion
-        try:
-            checkpoint_file = Path(file_path).parent / f".ocr-{normalized.document_id}.json"
-            checkpoint_file.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if file_path:
+            try:
+                checkpoint_file = Path(file_path).parent / f".ocr-{normalized.document_id}.json"
+                checkpoint_file.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         return IngestResult(success=True, status=final_status, document_id=normalized.document_id,
                             paper_id=normalized.paper_id, chunk_count=count, total_pages=normalized.total_pages,

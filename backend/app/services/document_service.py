@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import hashlib
 import zipfile
 import stat
 import tempfile
@@ -96,15 +97,30 @@ class DocumentService:
         storage_path = None
         db_touched = False
         try:
+            hasher = hashlib.sha256()
             with tempfile.NamedTemporaryFile(prefix=".upload-", dir=upload_dir, delete=False) as target:
                 staged = Path(target.name)
                 size = 0
                 while chunk := await upload.read(1024 * 1024):
                     size += len(chunk)
+                    hasher.update(chunk)
                     if size > settings.max_upload_size_bytes:
                         raise RequestValidationAppError(f"File exceeds the maximum allowed size of {settings.max_upload_size_mb} MB.")
                     await asyncio.to_thread(target.write, chunk)
             validate_document_file(upload.filename, upload.content_type, staged, size, settings.max_upload_size_bytes)
+            file_sha256 = hasher.hexdigest()
+
+            # Duplicate detection: check if this file is already attached to this paper
+            existing_docs = await self.documents.list_by_paper(paper.id)
+            for existing in existing_docs:
+                if existing.file_size == size and existing.storage_path and Path(existing.storage_path).is_file():
+                    existing_hash = hashlib.sha256(Path(existing.storage_path).read_bytes()).hexdigest()
+                    if existing_hash == file_sha256:
+                        logger.info("Duplicate document detected in paper %s (matches %s); reusing existing record", paper.id, existing.id)
+                        if staged is not None:
+                            staged.unlink(missing_ok=True)
+                        return existing
+
             filename = upload.filename or "document.txt"
             db_touched = True
             document = await self.documents.create(
@@ -233,26 +249,40 @@ class DocumentService:
             # and meaningful progress changes at most once per 750 ms.
             if not (event.get("force") or stage_changed or (progress_changed and now - last_persisted["at"] >= 0.75) or stage == "ready"):
                 return
-            document.processing_stage = stage
-            document.processing_progress = progress
-            document.processing_progress_type = str(event.get("progress_type") or "estimated")
+            update_data = {
+                "processing_stage": stage,
+                "processing_progress": progress,
+                "processing_progress_type": str(event.get("progress_type") or "estimated"),
+                "processing_heartbeat_at": datetime.utcnow(),
+            }
             if "completed_pages" in event:
-                document.processing_completed_units = int(event.get("completed_pages") or 0)
-                document.processing_total_units = int(event.get("total_pages") or 0) or None
-                document.processing_unit = "pages"
+                update_data["processing_completed_units"] = int(event.get("completed_pages") or 0)
+                update_data["processing_total_units"] = int(event.get("total_pages") or 0) or None
+                update_data["processing_unit"] = "pages"
             elif "completed_chunks" in event:
-                document.processing_completed_units = int(event.get("completed_chunks") or 0)
-                document.processing_total_units = int(event.get("total_chunks") or 0) or None
-                document.processing_unit = "chunks"
-            document.processing_heartbeat_at = datetime.utcnow()
+                update_data["processing_completed_units"] = int(event.get("completed_chunks") or 0)
+                update_data["processing_total_units"] = int(event.get("total_chunks") or 0) or None
+                update_data["processing_unit"] = "chunks"
+
+            for k, v in update_data.items():
+                setattr(document, k, v)
+
+            # Isolated DB session to prevent concurrent AsyncSession race (N11)
+            from backend.app.database.session import get_session_factory
             commit_started = time.perf_counter()
-            await self.db.commit()
-            progress_commit_stats["count"] += 1
-            progress_commit_stats["seconds"] += time.perf_counter() - commit_started
-            logger.debug(
-                "Ingestion progress persisted document_id=%s stage=%s progress=%d commit_seconds=%.4f",
-                document.id, stage, progress, time.perf_counter() - commit_started,
-            )
+            try:
+                async with get_session_factory()() as isolated_db:
+                    await isolated_db.execute(
+                        update(Document)
+                        .where(Document.id == document.id, Document.processing_status == DocumentStatus.PROCESSING.value)
+                        .values(**update_data)
+                    )
+                    await isolated_db.commit()
+                progress_commit_stats["count"] += 1
+                progress_commit_stats["seconds"] += time.perf_counter() - commit_started
+            except Exception as commit_err:
+                logger.debug("Isolated progress commit notice: %s", commit_err)
+
             last_persisted.update(stage=stage, progress=progress, at=time.monotonic())
 
         def progress_callback(event: dict) -> None:

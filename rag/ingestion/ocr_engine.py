@@ -84,20 +84,42 @@ class LocalOCREngine:
         """
         Calculates quality metrics for extracted OCR text:
         returns: (confidence_score, printable_ratio, char_count, word_count)
+        Penalizes control characters, private-use code points, recognizes formula/numeric tokens,
+        and ensures empty or meaningless text is never evaluated as successful.
         """
         if not text or not text.strip():
             return 0.0, 0.0, 0, 0
 
         stripped = text.strip()
         char_count = len(stripped)
+        if char_count == 0 or not re.search(r"\S", stripped):
+            return 0.0, 0.0, 0, 0
+
         printable_count = sum(1 for ch in stripped if ch.isprintable() and not ch.isspace())
         printable_ratio = printable_count / max(1, char_count)
 
-        # Word-level evaluation
+        # Detect corrupt characters: ASCII controls (except \t, \n, \r), Unicode replacement char, and private-use area
+        corrupt_chars = sum(
+            1 for ch in stripped
+            if (ord(ch) < 32 and ch not in ("\t", "\n", "\r"))
+            or (0xE000 <= ord(ch) <= 0xF8FF)
+            or (0xF0000 <= ord(ch) <= 0x10FFFD)
+            or ch == "\ufffd"
+            or ch == "\u0017"
+        )
+        corrupt_ratio = corrupt_chars / max(1, char_count)
+        corrupt_penalty = min(1.0, corrupt_ratio * 4.0)
+
+        # Word-level evaluation & formula/numeric token detection
         tokens = re.findall(r"\b[A-Za-z]+\b", stripped.lower())
+        formula_tokens = re.findall(r"\b\d+(?:\.\d+)?\b|[=+\-*/<>≤≥∑∫ΘΩ^_{}\[\]()]", stripped)
         word_count = len(tokens)
+
         if word_count == 0:
-            return 0.1 * printable_ratio, printable_ratio, char_count, 0
+            if formula_tokens and char_count >= 10:
+                math_conf = max(0.0, (0.4 * printable_ratio) - corrupt_penalty)
+                return round(math_conf, 3), round(printable_ratio, 3), char_count, 0
+            return 0.0, round(printable_ratio, 3), char_count, 0
 
         # Stopword / English vocabulary match
         matching_words = sum(1 for w in tokens if w in COMMON_ENGLISH_WORDS)
@@ -109,15 +131,14 @@ class LocalOCREngine:
         if avg_word_len < 2.5 or avg_word_len > 12.0:
             len_penalty = 0.6
 
-        # Replacement character penalty
-        replacement_count = stripped.count("\ufffd")
-        rep_ratio = replacement_count / max(1, char_count)
+        # Formula / math presence bonus for STEM textbooks
+        math_bonus = min(0.15, len(formula_tokens) / max(1, char_count))
 
         confidence = (
-            (printable_ratio * 0.3)
-            + (min(1.0, vocab_match_ratio * 4.0) * 0.5)
-            + (len_penalty * 0.2)
-            - (rep_ratio * 0.5)
+            (printable_ratio * 0.25)
+            + (min(1.0, vocab_match_ratio * 3.5 + math_bonus) * 0.50)
+            + (len_penalty * 0.20)
+            - (corrupt_penalty * 0.60)
         )
         confidence = max(0.0, min(1.0, confidence))
         return confidence, printable_ratio, char_count, word_count
@@ -179,7 +200,8 @@ class LocalOCREngine:
                 return retry_res
 
         elapsed = time.perf_counter() - start_time
-        success = chars > 30 and conf >= 0.30
+        has_alphanumeric = bool(re.search(r"[A-Za-z0-9]", raw_text))
+        success = chars > 30 and conf >= 0.30 and has_alphanumeric
         warn = None
         if not success:
             warn = "Extracted text quality below acceptable confidence threshold"

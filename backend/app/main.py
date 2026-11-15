@@ -61,6 +61,9 @@ async def lifespan(app: FastAPI):
                 for doc, owner_id in pending:
                     if Path(doc.storage_path).is_file():
                         logging.getLogger("backend").info("Resuming pending ingestion for document_id=%s", doc.id)
+                        from datetime import datetime
+                        doc.processing_heartbeat_at = datetime.utcnow()
+                        await db.commit()
                         launch_background_ingest(doc.id, doc.paper_id, owner_id)
                     else:
                         doc.processing_status = DocumentStatus.FAILED.value

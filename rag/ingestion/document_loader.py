@@ -131,6 +131,16 @@ class PDFDocumentLoader(BaseDocumentLoader):
                 except Exception as exc:
                     logger.warning("Could not read OCR checkpoint for %s: %s", doc_id, exc)
 
+            def _save_checkpoint_atomic(data: dict) -> None:
+                tmp_file = checkpoint_file.parent / f"{checkpoint_file.name}.tmp"
+                try:
+                    tmp_file.write_text(json.dumps(data), encoding="utf-8")
+                    os.replace(tmp_file, checkpoint_file)
+                except Exception as exc:
+                    logger.debug("Checkpoint write notice: %s", exc)
+                    if tmp_file.is_file():
+                        tmp_file.unlink(missing_ok=True)
+
             with pymupdf.open(str(path)) as reader:
                 if reader.is_encrypted and not reader.authenticate(""):
                     raise ValueError("PDF is password-protected and cannot be opened without a password.")
@@ -143,11 +153,8 @@ class PDFDocumentLoader(BaseDocumentLoader):
 
                 for idx, pdf_page in enumerate(reader, start=1):
                     if cancel_event is not None and cancel_event.is_set():
-                        # Save current progress to checkpoint before aborting
-                        try:
-                            checkpoint_file.write_text(json.dumps(saved_ocr_pages), encoding="utf-8")
-                        except Exception:
-                            pass
+                        # Save current progress to checkpoint atomically before aborting
+                        _save_checkpoint_atomic(saved_ocr_pages)
                         raise RuntimeError("Ingestion cancelled during extraction.")
 
                     # Check if page needs OCR
@@ -179,10 +186,7 @@ class PDFDocumentLoader(BaseDocumentLoader):
                             }
                             # Checkpoint every 5 pages or on final page
                             if idx % 5 == 0 or idx == page_count:
-                                try:
-                                    checkpoint_file.write_text(json.dumps(saved_ocr_pages), encoding="utf-8")
-                                except Exception as exc:
-                                    logger.debug("Checkpoint write notice: %s", exc)
+                                _save_checkpoint_atomic(saved_ocr_pages)
 
                         if progress_callback and (idx == 1 or idx % 2 == 0 or idx == page_count):
                             progress_val = round(10 + 40 * idx / max(page_count, 1))
