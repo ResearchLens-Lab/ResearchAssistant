@@ -31,6 +31,11 @@ class IndependentIngestionPipeline:
         if paper_id:
             meta["paper_id"] = paper_id
         document_id = str(meta.get("document_id") or file_path)
+        had_existing_index = False
+        try:
+            had_existing_index = self.index_writer.count_document(document_id).get("lexical_count", 0) > 0
+        except Exception:
+            pass
         try:
             self._check_cancel(cancel_event, "before extraction")
             self._emit(progress_callback, {"stage": "extracting_text", "progress": 5, "progress_type": "estimated"})
@@ -44,12 +49,13 @@ class IndependentIngestionPipeline:
                                            "completed_pages": normalized.total_pages, "total_pages": normalized.total_pages})
             return self._index(normalized, started, progress_callback, cancel_event)
         except Exception as exc:
-            self.index_writer.delete_document(document_id)
+            if not had_existing_index:
+                self.index_writer.delete_document(document_id)
             logger.error("Independent ingestion failed document_id=%s exception_type=%s", document_id, type(exc).__name__)
             return IngestResult(success=False, status="failed", document_id=document_id,
                                 paper_id=str(meta.get("paper_id") or paper_id or "unknown_paper"),
                                 error=str(exc), execution_time_seconds=round(time.perf_counter() - started, 3),
-                                metadata={"index_mode": "sqlite_fts5_only", "pretrained_embeddings_used": False})
+                                metadata={"index_mode": "sqlite_fts5_only", "pretrained_embeddings_used": False, "existing_index_preserved": had_existing_index})
 
     def ingest_text(self, content: str, paper_id: str | None = None,
                     metadata: dict[str, Any] | None = None,
@@ -92,10 +98,31 @@ class IndependentIngestionPipeline:
         elapsed = time.perf_counter() - started
         self._emit(progress_callback, {"stage": "ready", "progress": 100, "progress_type": "actual",
                                        "completed_chunks": count, "total_chunks": count})
-        return IngestResult(success=True, status="indexed", document_id=normalized.document_id,
+
+        pages = getattr(normalized, "pages", [])
+        ocr_pages = [p for p in pages if getattr(p, "is_ocr", False)]
+        has_ocr = len(ocr_pages) > 0
+        has_low_conf = any((getattr(p, "ocr_confidence", 1.0) or 1.0) < 0.40 for p in ocr_pages)
+        has_empty_pages = any(not (getattr(p, "text", "") or "").strip() for p in pages) and len(pages) > 1
+
+        final_status = "indexed"
+        if has_ocr and has_low_conf:
+            final_status = "needs_review"
+        elif has_empty_pages and any((getattr(p, "text", "") or "").strip() for p in pages):
+            final_status = "partial"
+
+        # Clean up intermediate OCR checkpoint upon successful ingestion
+        try:
+            checkpoint_file = Path(file_path).parent / f".ocr-{normalized.document_id}.json"
+            checkpoint_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        return IngestResult(success=True, status=final_status, document_id=normalized.document_id,
                             paper_id=normalized.paper_id, chunk_count=count, total_pages=normalized.total_pages,
                             execution_time_seconds=round(elapsed, 3),
                             metadata={"index_mode": "sqlite_fts5_only", "pretrained_embeddings_used": False,
+                                      "has_ocr_content": has_ocr, "ocr_pages_count": len(ocr_pages),
                                       "truncation_occurred": False, "chunk_count_verified": count == len(chunks)})
 
     def delete_paper(self, paper_id: str) -> int:

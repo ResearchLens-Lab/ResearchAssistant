@@ -79,6 +79,39 @@ class IndependentIndexWriter:
         ids = [row[0] for row in rows]
         return {"lexical_only": True, "lexical_count": len(ids), "lexical_unique_count": len(set(ids))}
 
+    def get_document_index_status(self, document_id: str) -> dict:
+        """Inspect chunk records in lexical_chunks to determine index version, section structure, and staleness."""
+        if not self.db_path.is_file():
+            return {"exists": False, "chunk_count": 0, "is_stale": False, "index_version": 2, "sections": []}
+        uri = self.db_path.resolve().as_uri() + "?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, timeout=10)
+        try:
+            rows = connection.execute(
+                "SELECT chunk_id, section, page_start, page_end FROM lexical_chunks WHERE collection_name = ? AND document_id = ?",
+                (self.collection_name, document_id),
+            ).fetchall()
+        finally:
+            connection.close()
+        if not rows:
+            return {"exists": False, "chunk_count": 0, "is_stale": False, "index_version": 2, "sections": []}
+        sections = [r[1] for r in rows if r[1]]
+        is_stale = False
+        if len(rows) == 1:
+            chunk = rows[0]
+            p_start, p_end = chunk[2], chunk[3]
+            sec = chunk[1] or ""
+            if (p_start and p_end and p_end > p_start) or sec in ("Header / Abstract", "Abstract", "Header", ""):
+                is_stale = True
+        elif all(s in ("Header / Abstract", "Abstract", "Header", "", None) for s in sections):
+            is_stale = True
+        return {
+            "exists": True,
+            "chunk_count": len(rows),
+            "sections": list(dict.fromkeys(sections)),
+            "is_stale": is_stale,
+            "index_version": 1 if is_stale else 2,
+        }
+
     def count_all(self) -> int:
         if not self.db_path.is_file():
             return 0

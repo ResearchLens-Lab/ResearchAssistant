@@ -48,6 +48,76 @@ TERM_SYNONYMS: dict[str, tuple[str, ...]] = {
 
 
 INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...] = (
+    (QuestionIntent.TOPIC_COUNT_RANKING, (
+        r"\bwhich\s+section\b.{0,40}\b(?:more|most|highest|greatest|largest|fewer|fewest|least|lowest)\b.{0,40}\b(?:syllabus|topics?|content|coverage|subtopics?)\b",
+        r"\bwhich\s+section\s+(?:has|have|contains?)\s+(?:the\s+)?(?:most|more|highest|largest|maximum|least|fewest)\b",
+        r"\b(?:rank|order|compare)\b.{0,30}\bsections?\b.{0,30}\b(?:topics?|syllabus|size|length)\b",
+        r"\bsection\s+(?:with|having)\s+(?:the\s+)?(?:most|more|highest|maximum|least|fewest)\s+(?:topics?|syllabus)\b",
+        r"\bhow\s+many\s+topics\s+(?:are\s+there\s+)?in\s+each\s+section\b",
+        r"\bwhich\s+section\s+contains?\s+(?:the\s+)?(?:most|fewest|least|more)\s+(?:topics?|syllabus)\b",
+        r"\btell\s+me\s+which\s+section\s+(?:has|have)\s+more\s+syllabus\s+or\s+topics\b",
+    ), ("section ranking", "topic counts", "syllabus coverage", "evidence")),
+    (QuestionIntent.TOPIC_EXTRACTION, (
+        r"\bhow\s+many\s+(?:distinct\s+)?topics\s+(?:are\s+(?:there\s+)?)?in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\b(?:list|extract|show|give)\s+(?:all\s+)?(?:the\s+)?topics\s+in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\btopics?\s+in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bwhat\s+topics\s+does\s+section\s+([0-9IVXLCDM]+)\s+cover\b",
+    ), ("section topics", "topic items", "syllabus")),
+    (QuestionIntent.TOPIC_COVERAGE_ANALYSIS, (
+        r"\b(?:syllabus|curriculum|topic)\s+coverage\b",
+        r"\b(?:topic|syllabus)\s+distribution\b",
+        r"\bdistribution\s+of\s+(?:the\s+)?(?:topics?|syllabus)\b",
+        r"\bbreakdown\s+of\s+(?:the\s+)?(?:topics?|syllabus)\b",
+        r"\bwhat\s+topics\s+(?:are\s+covered|does\s+this\s+cover)\b",
+        r"\btopics?\s+covered\s+in\b",
+        r"\b(?:extract|list|show)\s+(?:all\s+)?(?:the\s+)?syllabus\s+topics\b",
+    ), ("syllabus coverage", "topic groups", "subtopics")),
+    (QuestionIntent.SECTION_COMPARISON, (
+        r"\bcompare\s+section\s+([0-9IVXLCDM]+)\s+and\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bdifferences?\s+between\s+section\s+([0-9IVXLCDM]+)\s+and\s+section\s+([0-9IVXLCDM]+)\b",
+    ), ("section comparison", "differences", "topics")),
+    (QuestionIntent.SECTION_SUMMARY, (
+        r"\bsummarize\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bsection\s+([0-9IVXLCDM]+)\s+summary\b",
+    ), ("section summary", "main topics", "evidence")),
+    (QuestionIntent.DOCUMENT_COMPARISON, (
+        r"\bcompare\s+(?:the\s+)?(?:methodolog(?:y|ies)|results?|findings?|approaches?)\s+of\s+(?:these|the)\s+(?:\w+\s+)?papers\b",
+        r"\bcompare\s+these\s+(?:\d+\s+)?papers\b",
+        r"\bcompare\s+paper\s+\w+\s+and\s+paper\s+\w+\b",
+        r"\bcompare\s+across\s+two\s+documents\b",
+    ), ("cross-paper comparison", "methods", "findings")),
+    (QuestionIntent.DOCUMENT_SUMMARY, (
+        r"^\s*(?:give\s+me\s+the\s+)?summary\s*\??$",
+        r"\bsummarize\s+this\s+(?:syllabus|paper|document|book)\b",
+    ), ("document summary", "overview", "findings")),
+    (QuestionIntent.DEFINITION, (
+        r"^\s*define\s+[A-Za-z0-9\s-]{2,60}\??$",
+        r"\bdefinition\s+of\s+[A-Za-z0-9\s-]{2,60}\??$",
+        r"\bwhat\s+is\s+meant\s+by\s+[A-Za-z0-9\s-]{2,60}\??$",
+    ), ("definition", "core concept", "meaning")),
+    (QuestionIntent.CONCEPT_EXPLANATION, (
+        r"\bexplain\s+(?:the\s+)?(?:concept\s+of\s+)?([A-Za-z0-9\s-]{2,60})\b",
+        r"^\s*what\s+is\s+(?:an?|the)\s+([A-Za-z0-9\s-]{2,60})\??$",
+    ), ("concept explanation", "principles", "evidence")),
+    (QuestionIntent.NUMERICAL_RESULT_LOOKUP, (
+        r"\b(?:reported|numerical)\s+results?\b",
+        r"\bfind\s+(?:the\s+)?(?:source'?s\s+)?reported\s+numerical\s+results\b",
+        r"\bwhat\s+are\s+the\s+numerical\s+results\b",
+    ), ("numerical results", "metrics", "values", "units")),
+    (QuestionIntent.RESEARCH_GAP_ANALYSIS, (
+        r"\bresearch\s+gaps?\b",
+        r"\bunexplored\s+areas?\b",
+        r"\bfuture\s+directions?\b",
+    ), ("research gaps", "open problems", "future work")),
+    (QuestionIntent.CONTRADICTION_ANALYSIS, (
+        r"\bcontradict(?:ion|ing|ory)?\b",
+        r"\bconflicting\s+(?:claims|results|findings|evidence)\b",
+    ), ("contradictions", "conflicts", "opposing findings")),
+    (QuestionIntent.BIBLIOGRAPHIC_LOOKUP, (
+        r"\bbibliograph(?:y|ic)\b",
+        r"\bcitations?\s+list\b",
+        r"\breferences?\s+list\b",
+    ), ("bibliography", "references", "venue", "year")),
     (QuestionIntent.CHART_SYNTHESIS, (
         r"(?:^|\s)/(?:pie|chart)\b",
         r"\b(?:pie\s+chart|distribution\s+chart|pie\s+diagram|breakdown\s+chart|proportions?\s+chart)\b",

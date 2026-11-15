@@ -1,0 +1,40 @@
+{
+  "skill_id": "property_list_extraction",
+  "name": "Property and Criteria List Extraction",
+  "description": "Extracts formal criteria, properties, and axioms associated with an academic concept.",
+  "supported_intent": "LIST_PROPERTIES",
+  "trigger_patterns": [
+    "\\blist\\s+the\\s+properties\\s+of\\b",
+    "\\bcharacteristics\\s+of\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_body_definition_boost",
+  "evidence_requirements": [
+    "bullet_or_numbered_sentences"
+  ],
+  "output_schema": {
+    "concept": "string",
+    "properties": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.75,
+    "low": 0.4
+  },
+  "abstention_behavior": "general_prose_fallback",
+  "regression_test_cases": [
+    {
+      "query": "List the properties of an algorithm",
+      "expected_intent": "LIST_PROPERTIES",
+      "expected_slots": {
+        "primary_concept": "an algorithm"
+      },
+      "min_confidence": 0.75,
+      "should_abstain": false
+    }
+  ]
+}

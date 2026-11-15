@@ -127,9 +127,19 @@ class IndependentRetriever:
                         " ORDER BY CAST(page_start AS INTEGER), chunk_id LIMIT 200"
                     )
                     rows.extend(connection.execute(extra_sql, author_values).fetchall())
-                if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS, QuestionIntent.CHART_SYNTHESIS, QuestionIntent.DIAGRAM_SYNTHESIS}:
+                if analysis.intent in {
+                    QuestionIntent.SUMMARY,
+                    QuestionIntent.DOCUMENT_SUMMARY,
+                    QuestionIntent.TOPIC_COUNT_RANKING,
+                    QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+                    QuestionIntent.TOPIC_EXTRACTION,
+                    QuestionIntent.SECTION_COMPARISON,
+                    QuestionIntent.TABLE_SYNTHESIS,
+                    QuestionIntent.CHART_SYNTHESIS,
+                    QuestionIntent.DIAGRAM_SYNTHESIS,
+                }:
                     # These modes need the full selected scope to build a complete
-                    # outline or visualization. Merge all in-scope chunks with
+                    # outline, topic ranking, or visualization. Merge all in-scope chunks with
                     # lexical hits instead of limiting synthesis to top matches.
                     scope_constraints = ["collection_name = ?"]
                     scope_values: list[Any] = [self.collection_name]
@@ -227,6 +237,11 @@ class IndependentRetriever:
         fused.sort(key=lambda item: (-item[0], item[2][0]))
         whole_scope_intent = analysis.intent in {
             QuestionIntent.SUMMARY,
+            QuestionIntent.DOCUMENT_SUMMARY,
+            QuestionIntent.TOPIC_COUNT_RANKING,
+            QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+            QuestionIntent.TOPIC_EXTRACTION,
+            QuestionIntent.SECTION_COMPARISON,
             QuestionIntent.TABLE_SYNTHESIS,
             QuestionIntent.CHART_SYNTHESIS,
             QuestionIntent.DIAGRAM_SYNTHESIS,

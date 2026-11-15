@@ -1,0 +1,42 @@
+{
+  "skill_id": "relationship_analysis",
+  "name": "Inter-Concept Relationship Analysis",
+  "description": "Identifies structural, historical, and mathematical relationships connecting two algorithms.",
+  "supported_intent": "RELATIONSHIP",
+  "trigger_patterns": [
+    "\\bhow\\s+is\\s+[\\w\\s-]+\\s+related\\s+to\\s+[\\w\\s-]+\\b",
+    "\\brelationship\\s+between\\b"
+  ],
+  "input_slots": [
+    "primary_concept",
+    "secondary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "dual_entity_proximity",
+  "evidence_requirements": [
+    "co_occurrence_sentences"
+  ],
+  "output_schema": {
+    "entities": "list",
+    "relationship_statement": "string"
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "low": 0.4
+  },
+  "abstention_behavior": "separate_entity_reporting",
+  "regression_test_cases": [
+    {
+      "query": "How is insertion sort related to bubble sort?",
+      "expected_intent": "RELATIONSHIP",
+      "expected_slots": {
+        "primary_concept": "insertion sort",
+        "secondary_concept": "bubble sort"
+      },
+      "min_confidence": 0.75,
+      "should_abstain": false
+    }
+  ]
+}

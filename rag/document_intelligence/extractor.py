@@ -217,6 +217,10 @@ class DocumentIntelligenceExtractor:
     def _heading(line: str) -> tuple[str, int] | None:
         m = re.match(r"^(#{1,6})\s+(.+?)\s*#*\s*$", line)
         if m: return m.group(2), len(m.group(1))
+        sec_m = re.match(r"^(?:Section|Unit|Module|Chapter|Part)\s+([0-9IVXLCDM]+)\s*[:.]?\s*(.*)$", line, re.I)
+        if sec_m:
+            title = sec_m.group(2).strip()
+            return f"Section {sec_m.group(1)}: {title}" if title else f"Section {sec_m.group(1)}", 1
         m = re.match(r"^(\d+(?:\.\d+)*)(?:[.)])?\s+(.{2,100})$", line)
         if m and len(line) < 110: return m.group(2).strip(), m.group(1).count(".") + 1
         if len(line) <= 80 and line.isupper() and re.search(r"[A-Z]", line) and len(line.split()) <= 10:

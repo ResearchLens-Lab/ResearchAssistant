@@ -84,7 +84,7 @@ class IndependentResearchEngine:
         emit({"type": "sources_found", "count": len(sources), "engine": "independent"})
         facts = self.fact_extractor.extract(sources, analysis.important_terms)
         answer = self.composer.compose(analysis, sources, facts)
-        decision = self.validator.validate(answer, sources, facts, analysis.important_terms)
+        decision = self.validator.validate(answer, sources, facts, analysis.important_terms, intent=analysis.intent)
         if answer.startswith("### Direct answer\nNot found in your selected documents.") and sources:
             decision = EvidenceDecision(status="NOT FOUND", reasons=["A target fact or explicitly labeled evidence was not present in the retrieved passages."])
         if decision.status == "CONFLICTING EVIDENCE" and decision.conflicts:

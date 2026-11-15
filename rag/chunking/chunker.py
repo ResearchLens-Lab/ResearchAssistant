@@ -45,7 +45,12 @@ class DocumentChunker:
                 return []
 
             try:
-                chunks = self.strategy.chunk(document)
+                if any(getattr(s, "extra", None) for s in document.sections):
+                    from rag.chunking.structure_chunker import StructureAwareChunker
+                    strategy = StructureAwareChunker()
+                    chunks = strategy.chunk(document)
+                else:
+                    chunks = self.strategy.chunk(document)
                 if self.token_limiter:
                     chunks = self._limit_embedding_tokens(chunks, document)
                 logger.info(

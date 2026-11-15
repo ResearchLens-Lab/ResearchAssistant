@@ -1,0 +1,43 @@
+{
+  "skill_id": "complexity_retrieval",
+  "name": "Asymptotic Complexity Retrieval",
+  "description": "Extracts formal Big-O, Theta, and Omega asymptotic running time and space complexity bounds.",
+  "supported_intent": "COMPLEXITY",
+  "trigger_patterns": [
+    "\\b(?:time|space)?\\s*complexity\\s+of\\b",
+    "\\brunning\\s+time\\s+of\\b",
+    "\\bbig\\s+o\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_complexity_terms",
+  "evidence_requirements": [
+    "asymptotic_formula",
+    "bound_type"
+  ],
+  "output_schema": {
+    "formula": "string",
+    "bound_type": "string",
+    "explanation": "string"
+  },
+  "confidence_thresholds": {
+    "high": 0.85,
+    "low": 0.4
+  },
+  "abstention_behavior": "report_context_without_formula",
+  "regression_test_cases": [
+    {
+      "query": "What is the time complexity of heap sort?",
+      "expected_intent": "COMPLEXITY",
+      "expected_slots": {
+        "primary_concept": "heap sort"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

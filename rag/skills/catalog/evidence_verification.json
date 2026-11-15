@@ -1,0 +1,41 @@
+{
+  "skill_id": "evidence_verification",
+  "name": "Factual Claim & Evidence Verification",
+  "description": "Validates whether a specific statement is supported verbatim by the document text.",
+  "supported_intent": "OTHER",
+  "trigger_patterns": [
+    "\\bverify\\s+claim\\b",
+    "\\bis\\s+it\\s+true\\s+that\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "exact_claim_verification",
+  "evidence_requirements": [
+    "verbatim_overlap"
+  ],
+  "output_schema": {
+    "claim": "string",
+    "verified": "bool",
+    "supporting_excerpt": "string"
+  },
+  "confidence_thresholds": {
+    "high": 0.9,
+    "low": 0.5
+  },
+  "abstention_behavior": "flag_unsupported",
+  "regression_test_cases": [
+    {
+      "query": "Verify claim that quicksort worst case is O(n^2)",
+      "expected_intent": "OTHER",
+      "expected_slots": {
+        "primary_concept": "quicksort"
+      },
+      "min_confidence": 0.85,
+      "should_abstain": false
+    }
+  ]
+}

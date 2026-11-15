@@ -7,6 +7,7 @@ from collections import OrderedDict
 from rag.independent.models import ExtractedFact, QueryAnalysis, QuestionIntent
 from rag.retrieval.query import RetrievedSource
 from rag.independent.fact_extractor import clean_academic_text
+from rag.independent.topic_analyzer import TopicCoverageAnalyzer, SectionTopicProfile, TopicRankingResult
 
 
 def _sentences(text: str) -> list[str]:
@@ -44,6 +45,26 @@ class StructuredAnswerComposer:
         if not sources:
             return self._not_found(analysis, "No matching passage was found in the selected documents.")
         intent = analysis.intent
+        if intent == QuestionIntent.TOPIC_COUNT_RANKING:
+            return self._topic_count_ranking(analysis, sources)
+        if intent == QuestionIntent.TOPIC_COVERAGE_ANALYSIS:
+            return self._topic_coverage_analysis(analysis, sources)
+        if intent == QuestionIntent.TOPIC_EXTRACTION:
+            return self._topic_extraction(analysis, sources)
+        if intent == QuestionIntent.SECTION_COMPARISON:
+            return self._section_comparison(analysis, sources)
+        if intent == QuestionIntent.SECTION_SUMMARY:
+            return self._section_summary(analysis, sources)
+        if intent == QuestionIntent.DOCUMENT_SUMMARY:
+            return self._summary(analysis, sources)
+        if intent == QuestionIntent.DOCUMENT_COMPARISON:
+            return self._comparison(analysis, sources, facts)
+        if intent in {QuestionIntent.DIRECT_DEFINITION, QuestionIntent.DEFINITION}:
+            return self._definition(analysis, sources, facts)
+        if intent in {QuestionIntent.CONCEPT_EXPLANATION, QuestionIntent.EXPLANATION, QuestionIntent.DEEP_EXPLANATION}:
+            return self._concept_explanation(analysis, sources)
+        if intent == QuestionIntent.NUMERICAL_RESULT_LOOKUP:
+            return self._numerical(analysis, sources, facts)
         if intent == QuestionIntent.AUTHOR_LOOKUP:
             return self._authors(analysis, sources, facts)
         if intent == QuestionIntent.DEFINITION:
@@ -232,7 +253,7 @@ class StructuredAnswerComposer:
             sections = ["### Side-by-side source evidence"]
             for document_id, (group, candidates) in zip(selected_ids, source_groups):
                 source = candidates[0][0] if candidates else (group[0] if group else None)
-                label = labels.get(document_id) or (source.filename or source.title or source.paper_id if source else "Selected document")
+                label = labels.get(document_id) or (source.title or source.filename or source.paper_id if source else "Selected document")
                 selected = [item for item in candidates if item[2] > 0][:3]
                 if not selected:
                     sections.append(f"#### {label}\nNo relevant passage was retrieved from this document.")
@@ -250,7 +271,7 @@ class StructuredAnswerComposer:
             ]
             for document_id, (group, candidates) in zip(selected_ids, source_groups):
                 source = candidates[0][0] if candidates else (group[0] if group else None)
-                label = labels.get(document_id) or (source.filename or source.title or source.paper_id if source else "Selected document")
+                label = labels.get(document_id) or (source.title or source.filename or source.paper_id if source else "Selected document")
                 selected = [item for item in candidates if item[2] > 0][:3]
                 if not selected:
                     sections.append(f"#### {label}\nNo relevant passage was retrieved from this document.")
@@ -260,7 +281,7 @@ class StructuredAnswerComposer:
             sections.append("### Evidence limits\nOnly reported text is included. Missing or non-comparable details should be treated as unreported in the retrieved passages, not inferred.")
             return "\n\n".join(sections)
 
-        headers = [labels.get(document_id) or ((group[0].filename or group[0].title or group[0].paper_id) if group else "Selected document") for document_id, (group, _candidates) in zip(selected_ids, source_groups)]
+        headers = [labels.get(document_id) or ((group[0].title or group[0].filename or group[0].paper_id) if group else "Selected document") for document_id, (group, _candidates) in zip(selected_ids, source_groups)]
         cells = []
         for group, candidates in source_groups:
             selected = [item for item in candidates if item[2] > 0][:2]
@@ -294,19 +315,19 @@ class StructuredAnswerComposer:
         if len(structured_sections) >= 2:
             doc_label = sources[0].title or sources[0].filename or "Document"
             return (
-                f"### Structured Document Outline & Curriculum: {doc_label}\n\n"
+                f"### Structured Document Summary & Curriculum Outline: {doc_label}\n\n"
                 + "\n\n".join(structured_sections)
                 + "\n\n### Scope note\n"
                 f"All {len(structured_sections)} document sections and topics were extracted deterministically from indexed passages without generative fabrication."
             )
 
         sections_spec = [
-            ("Problem / Motivation", [r"\bproblem\b", r"\bchallenge\b", r"\bmotivat\b", r"\bissue\b", r"\bgap\b", r"\bdrawback\b"]),
+            ("Problem / Motivation", [r"\bproblem\b", r"\bchallenge\b", r"\bmotivat\w*", r"\bissue\b", r"\bgap\b", r"\bdrawback\b"]),
             ("Research Objective", [r"\bobjective\b", r"\baim\b", r"\bgoal\b", r"\bpropose\b", r"\bwe present\b", r"\bin this (?:paper|work|study)\b", r"\bfocus\b"]),
             ("Background / Related Work", [r"\bbackground\b", r"\brelated work\b", r"\bprior\b", r"\bliterature\b", r"\bprevious\b", r"\btraditional\b"]),
-            ("Proposed Methodology / Architecture", [r"\bmethodolog\b", r"\bmethod\b", r"\bapproach\b", r"\barchitectur\b", r"\balgorithm\b", r"\bframework\b", r"\bmodel\b"]),
+            ("Proposed Methodology / Architecture", [r"\bmethodolog\w*", r"\bmethod\b", r"\bapproach\b", r"\barchitectur\w*", r"\balgorithm\b", r"\bframework\b", r"\bmodel\b"]),
             ("Experimental Setup & Datasets", [r"\bdataset\b", r"\bbenchmark\b", r"\bsetup\b", r"\bexperiment\b", r"\btraining\b", r"\bparameter\b", r"\bcorpus\b", r"\bdata\b"]),
-            ("Key Findings & Performance Metrics", [r"\bfinding\b", r"\bresult\b", r"\bperformance\b", r"\baccurac\b", r"\bprecision\b", r"\brecall\b", r"\bf1\b", r"\bimproven\b", r"\boutperform\b", r"\bachieve\b"]),
+            ("Key Findings & Performance Metrics", [r"\bfinding\b", r"\bresult\b", r"\bperformance\b", r"\baccurac\w*", r"\bprecision\b", r"\brecall\b", r"\bf1\b", r"\bimproven\w*", r"\boutperform\b", r"\bachieve\b"]),
             ("Reported Limitations & Threats to Validity", [r"\blimitation\b", r"\bthreat\b", r"\bvalidity\b", r"\bconstraint\b", r"\bweakness\b", r"\bcaveat\b", r"\bfuture work\b"]),
             ("Conclusion & Future Directions", [r"\bconclusion\b", r"\bconclude\b", r"\bin summary\b", r"\bfuture\b", r"\boverall\b"]),
         ]
@@ -339,6 +360,8 @@ class StructuredAnswerComposer:
                     used_keys.add(" ".join(sent.casefold().split()))
                     block_lines.append(f"- {sent} [{s.source_id}]")
                 summary_blocks.append(f"#### {heading}\n" + "\n".join(block_lines))
+            else:
+                summary_blocks.append(f"#### {heading}\n*Not explicitly detailed in the retrieved passages.*")
 
         if not summary_blocks:
             # Fallback to general salient sentences if standard research headings didn't match
@@ -346,11 +369,263 @@ class StructuredAnswerComposer:
                 summary_blocks.append(f"- {sent} [{source.source_id}]")
 
         return (
-            "### Structured Document Summary\n\n"
+            "### Structured Research Paper Summary\n\n"
             + "\n\n".join(summary_blocks)
             + "\n\n### Scope note\n"
             "This structured summary is derived deterministically from the retrieved passages of your selected documents without generative extrapolation."
         )
+
+    @staticmethod
+    def _topic_count_ranking(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        content_sources = [s for s in sources if not (s.section and "front matter" in s.section.lower())]
+        if not content_sources:
+            content_sources = sources
+
+        profiles = []
+        for s in content_sources:
+            p = TopicCoverageAnalyzer.analyze_section(
+                section_name=s.section or f"Section p.{s.page_start}",
+                text=s.text,
+                page_start=s.page_start or 1,
+                page_end=s.page_end or s.page_start or 1,
+                source_id=s.source_id,
+                chunk_id=s.chunk_id,
+                paper_id=s.paper_id,
+                document_id=s.document_id,
+            )
+            profiles.append(p)
+
+        is_fewest = bool(re.search(r"\b(?:fewest|least|lowest|smallest|fewer)\b", analysis.normalized_question, re.I))
+        ranking = TopicCoverageAnalyzer.rank_sections(profiles)
+        target = ranking.fewest_section if is_fewest else ranking.winning_section
+
+        # Check if the question is comparing two specific sections (e.g. "Section 3 or Section 5")
+        section_nums = re.findall(r"\bsection\s+(\d+)\b", analysis.normalized_question, re.I)
+        if len(section_nums) >= 2:
+            sec_a, sec_b = section_nums[0], section_nums[1]
+            pa = next((p for p in profiles if f"section {sec_a}" in p.section_name.lower()), None)
+            pb = next((p for p in profiles if f"section {sec_b}" in p.section_name.lower()), None)
+            if pa and pb:
+                more_leaf = pa if pa.leaf_topic_count > pb.leaf_topic_count else (pb if pb.leaf_topic_count > pa.leaf_topic_count else None)
+                more_sub = pa if pa.subtopics_count > pb.subtopics_count else (pb if pb.subtopics_count > pa.subtopics_count else None)
+                answer = f"### Direct answer\nBetween **{pa.section_name}** [{pa.source_id}] and **{pb.section_name}** [{pb.source_id}]:\n\n"
+                if more_sub:
+                    other_sub = pb.subtopics_count if more_sub is pa else pa.subtopics_count
+                    answer += f"- **Listed subtopics**: **{more_sub.section_name}** covers more subtopics ({more_sub.subtopics_count} vs {other_sub}) [{more_sub.source_id}].\n"
+                if more_leaf:
+                    other_leaf = pb.leaf_topic_count if more_leaf is pa else pa.leaf_topic_count
+                    answer += f"- **Leaf-level topic entries**: **{more_leaf.section_name}** covers more leaf topics ({more_leaf.leaf_topic_count} vs {other_leaf}) [{more_leaf.source_id}].\n\n"
+                table_lines = [
+                    "### Comparative topic breakdown",
+                    "| Section | Leaf topics | Listed subtopics | Main subject groups | PDF page | Citation |",
+                    "|---|---:|---:|---:|---|---|",
+                    f"| {pa.section_name} | {pa.leaf_topic_count} | {pa.subtopics_count} | {pa.main_group_count} | p. {pa.page_start} | [{pa.source_id}] |",
+                    f"| {pb.section_name} | {pb.leaf_topic_count} | {pb.subtopics_count} | {pb.main_group_count} | p. {pb.page_start} | [{pb.source_id}] |",
+                ]
+                answer += "\n".join(table_lines) + "\n\n"
+                answer += f"### Supporting evidence\n- **{pa.section_name}** [{pa.source_id}]: \"{pa.supporting_passage}...\"\n- **{pb.section_name}** [{pb.source_id}]: \"{pb.supporting_passage}...\""
+                return answer
+
+        if target:
+            rel_word = "fewest" if is_fewest else "most"
+            answer = (
+                f"### Direct answer\n"
+                f"Based on curriculum scope analysis of the selected document, **{target.section_name}** has the {rel_word} syllabus topics in the document. "
+                f"It contains **{target.leaf_topic_count} verified leaf-level topic entries**, "
+                f"**{target.subtopics_count} distinct listed subtopics**, and "
+                f"**{target.main_group_count} main topic group{'s' if target.main_group_count != 1 else ''}** [{target.source_id}].\n\n"
+            )
+        elif ranking.is_tie:
+            answer = (
+                f"### Direct answer\n"
+                f"The topic count is tied across multiple sections: **{', '.join(ranking.tie_sections)}**.\n\n"
+            )
+        else:
+            answer = "### Direct answer\nUnable to calculate topic counts from the available sections.\n\n"
+
+        table_lines = [
+            "### Section ranking",
+            "| Section | Leaf topics | Listed subtopics | Main topic groups | PDF pages |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for s in ranking.rankings:
+            pages_str = f"p. {s.page_start}" if s.page_start == s.page_end else f"pp. {s.page_start}–{s.page_end}"
+            table_lines.append(f"| {s.section_name} | {s.leaf_topic_count} | {s.subtopics_count} | {s.main_group_count} | {pages_str} |")
+        answer += "\n".join(table_lines) + "\n\n"
+
+        answer += f"### Explanation\n{ranking.counting_methodology}\n\n"
+
+        evidence_lines = ["### Supporting evidence"]
+        for s in ranking.rankings:
+            evidence_lines.append(f"- **{s.section_name}** [{s.source_id}]: \"{s.supporting_passage}...\"")
+        answer += "\n".join(evidence_lines)
+        return answer
+
+    @staticmethod
+    def _topic_coverage_analysis(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        content_sources = [s for s in sources if not (s.section and "front matter" in s.section.lower())]
+        if not content_sources:
+            content_sources = sources
+
+        profiles = [
+            TopicCoverageAnalyzer.analyze_section(
+                section_name=s.section or f"Section p.{s.page_start}",
+                text=s.text, page_start=s.page_start or 1, page_end=s.page_end or s.page_start or 1,
+                source_id=s.source_id, chunk_id=s.chunk_id, paper_id=s.paper_id, document_id=s.document_id,
+            )
+            for s in content_sources
+        ]
+
+        total_groups = sum(p.main_group_count for p in profiles)
+        total_subtopics = sum(p.subtopics_count for p in profiles)
+        total_leaf = sum(p.leaf_topic_count for p in profiles)
+
+        answer = (
+            f"### Direct answer\n"
+            f"The document covers **{len(profiles)} sections** containing **{total_leaf} leaf-level topic entries** across "
+            f"**{total_subtopics} distinct listed subtopics** and **{total_groups} main subject groups**.\n\n"
+            f"### Curriculum coverage breakdown\n"
+            f"| Section | Leaf topics | Listed subtopics | Main topic groups | PDF pages | Supporting citation |\n"
+            f"|---|---:|---:|---:|---|---:|\n"
+        )
+        for p in profiles:
+            pages_str = f"p. {p.page_start}" if p.page_start == p.page_end else f"pp. {p.page_start}–{p.page_end}"
+            answer += f"| {p.section_name} | {p.leaf_topic_count} | {p.subtopics_count} | {p.main_group_count} | {pages_str} | [{p.source_id}] |\n"
+        answer += "\n"
+
+        for p in profiles:
+            pages_str = f"p. {p.page_start}" if p.page_start == p.page_end else f"pp. {p.page_start}–{p.page_end}"
+            answer += f"#### {p.section_name} ({pages_str}) [{p.source_id}]\n"
+            for g in p.groups:
+                lead_topic = g.subtopics[0] if g.subtopics else ""
+                answer += f"- **{p.section_name} — {g.name}**: {lead_topic} [{p.source_id}]\n"
+            answer += "\n"
+
+        return answer.strip()
+
+    @staticmethod
+    def _topic_extraction(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        sec_match = re.search(r"\bsection\s+([0-9IVXLCDM]+)\b", analysis.normalized_question, re.I)
+        target_sec_num = sec_match.group(1) if sec_match else None
+
+        matching_sources = []
+        if target_sec_num:
+            for s in sources:
+                if re.search(rf"\bsection\s+{target_sec_num}\b", s.section or "", re.I):
+                    matching_sources.append(s)
+
+        if not matching_sources:
+            matching_sources = sources[:3]
+
+        s = matching_sources[0]
+        profile = TopicCoverageAnalyzer.analyze_section(
+            section_name=s.section or f"Section p.{s.page_start}",
+            text=s.text, page_start=s.page_start or 1, page_end=s.page_end or s.page_start or 1,
+            source_id=s.source_id, chunk_id=s.chunk_id, paper_id=s.paper_id, document_id=s.document_id,
+        )
+
+        answer = (
+            f"### Direct answer\n"
+            f"**{profile.section_name}** covers **{profile.leaf_topic_count} verified leaf-level topics** across "
+            f"**{profile.subtopics_count} listed subtopics** and "
+            f"**{profile.main_group_count} topic group{'s' if profile.main_group_count != 1 else ''}** [{profile.source_id}]:\n\n"
+        )
+        for g in profile.groups:
+            answer += f"#### {g.name} [{profile.source_id}]\n"
+            for sub in g.subtopics:
+                answer += f"- {sub} [{profile.source_id}]\n"
+            answer += "\n"
+
+        answer += f"### Supporting evidence\n- **{profile.section_name}** [{profile.source_id}]: \"{profile.supporting_passage}...\""
+        return answer.strip()
+
+    @staticmethod
+    def _section_comparison(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        sec_nums = re.findall(r"\bsection\s+([0-9IVXLCDM]+)\b", analysis.normalized_question, re.I)
+        profiles = []
+        for s in sources:
+            if not s.section or "front matter" in s.section.lower():
+                continue
+            if sec_nums:
+                if any(re.search(rf"\bsection\s+{n}\b", s.section, re.I) for n in sec_nums):
+                    profiles.append(TopicCoverageAnalyzer.analyze_section(
+                        section_name=s.section, text=s.text, page_start=s.page_start or 1,
+                        page_end=s.page_end or s.page_start or 1, source_id=s.source_id,
+                        chunk_id=s.chunk_id, paper_id=s.paper_id, document_id=s.document_id,
+                    ))
+            else:
+                profiles.append(TopicCoverageAnalyzer.analyze_section(
+                    section_name=s.section, text=s.text, page_start=s.page_start or 1,
+                    page_end=s.page_end or s.page_start or 1, source_id=s.source_id,
+                    chunk_id=s.chunk_id, paper_id=s.paper_id, document_id=s.document_id,
+                ))
+
+        if len(profiles) >= 2:
+            s1, s2 = profiles[0], profiles[1]
+            focus1 = " ".join(", ".join(s1.subtopics[:2]).split())
+            focus2 = " ".join(", ".join(s2.subtopics[:2]).split())
+            supp1 = " ".join(s1.supporting_passage.split())
+            supp2 = " ".join(s2.supporting_passage.split())
+            groups1 = " ".join(", ".join(s1.main_groups[:3]).split())
+            groups2 = " ".join(", ".join(s2.main_groups[:3]).split())
+            answer = (
+                f"### Direct answer\n"
+                f"Comparison between **{s1.section_name}** [{s1.source_id}] and **{s2.section_name}** [{s2.source_id}]:\n\n"
+                f"| Attribute | {s1.section_name} | {s2.section_name} |\n"
+                f"|---|---|---|\n"
+                f"| PDF Page | p. {s1.page_start} | p. {s2.page_start} |\n"
+                f"| Main Topic Groups | {s1.main_group_count} ({groups1}) | {s2.main_group_count} ({groups2}) |\n"
+                f"| Listed Subtopics | {s1.subtopics_count} subtopics | {s2.subtopics_count} subtopics |\n"
+                f"| Focus Area | {focus1} | {focus2} |\n\n"
+                f"### Key differences\n"
+                f"- **Curriculum volume**: **{s1.section_name}** [{s1.source_id}] has {s1.subtopics_count} subtopics versus {s2.subtopics_count} in **{s2.section_name}** [{s2.source_id}].\n"
+                f"- **Structure**: {s1.section_name} [{s1.source_id}] is divided into {s1.main_group_count} main subject groups, while {s2.section_name} [{s2.source_id}] is organized as {s2.main_group_count} group.\n\n"
+                f"### Supporting evidence\n"
+                f"- **{s1.section_name}** [{s1.source_id}]: \"{supp1}...\"\n"
+                f"- **{s2.section_name}** [{s2.source_id}]: \"{supp2}...\""
+            )
+            return answer
+        return StructuredAnswerComposer._general(analysis, sources)
+
+    @staticmethod
+    def _section_summary(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        return StructuredAnswerComposer._topic_extraction(analysis, sources)
+
+    @staticmethod
+    def _concept_explanation(analysis: QueryAnalysis, sources: list[RetrievedSource]) -> str:
+        generic_words = {"explain", "concept", "what", "is", "the", "an", "a", "overview", "describe", "discuss"}
+        terms = [t for t in analysis.important_terms if t.casefold() not in generic_words]
+
+        ranked_sources = sorted(
+            sources,
+            key=lambda s: (
+                -sum(2 for t in terms if t.casefold() in (s.section or "").casefold()),
+                -_overlap_score(s.text, terms)
+            )
+        )
+        target = ranked_sources[0] if ranked_sources else sources[0]
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", target.text) if len(s.strip()) > 15]
+        explanation_body = " ".join(" ".join(sentences[:4]).split()) if sentences else " ".join(target.text[:300].split())
+
+        anchor_words = {"finding", "method", "result", "experiment", "model", "approach", "conclusion", "table", "evidence"}
+        substantive = [t for t in terms if t.casefold() not in anchor_words]
+        concept_title = " ".join(t.title() for t in substantive) if substantive else (" ".join(t.title() for t in terms) if terms else (target.section or "Topic"))
+        answer = (
+            f"### Direct answer\n"
+            f"According to the selected document ({target.section or 'Source'}), **{concept_title}** covers:\n\n"
+            f"> {explanation_body} [{target.source_id}]\n\n"
+        )
+
+        if len(sentences) > 4:
+            answer += "### Key areas covered\n"
+            for s in sentences[4:8]:
+                answer += f"- {s} [{target.source_id}]\n"
+            answer += "\n"
+
+        snippet = " ".join(target.text[:220].split())
+        answer += f"### Supporting evidence\n- **{target.section or 'Excerpt'}** (p. {target.page_start or 1}) [{target.source_id}]: \"{snippet}...\""
+        return answer
 
     @staticmethod
     def _table(analysis, sources, facts):
@@ -820,7 +1095,9 @@ class StructuredAnswerComposer:
         passages = StructuredAnswerComposer._best_sentences(
             analysis, sources, 10, required_terms=subject_terms or None
         )
-        if not passages and sources and not subject_terms:
+        if not passages:
+            passages = StructuredAnswerComposer._best_sentences(analysis, sources, 10)
+        if not passages and sources:
             for s in sources:
                 for sent in _sentences(s.text):
                     passages.append((s, sent, 1))

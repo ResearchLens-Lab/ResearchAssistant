@@ -4,7 +4,7 @@ import re
 import unicodedata
 from collections import defaultdict
 
-from rag.independent.models import EvidenceDecision, ExtractedFact
+from rag.independent.models import EvidenceDecision, ExtractedFact, QuestionIntent
 from rag.retrieval.query import RetrievedSource
 
 
@@ -22,7 +22,7 @@ class EvidenceValidator:
     """Only citations resolving to actual retrieved chunks count as support."""
 
     def validate(self, answer: str, sources: list[RetrievedSource], facts: list[ExtractedFact],
-                 important_terms: list[str]) -> EvidenceDecision:
+                 important_terms: list[str], intent: QuestionIntent | None = None) -> EvidenceDecision:
         if not sources:
             return EvidenceDecision(status="NOT FOUND", reasons=["No passages matched the selected-document search."])
         by_id = {source.source_id.upper(): source for source in sources}
@@ -56,7 +56,13 @@ class EvidenceValidator:
             "The names were extracted from title-page or bibliographic structure;",
             "The retrieved text does not contain a clear definition; these passages are related evidence:",
             "The source passages do not expose a clearly ordered list; the following passages describe the process:",
-            "###", "| Source |", "|---|",
+            "Sections are analyzed hierarchically:", "Sections are ranked primarily",
+            "Sections are analyzed and ranked", "According to the selected document",
+            "Comparison between", "Between **Section", "The document covers **",
+            "- **Listed subtopics**:", "- **Leaf-level topic entries**:",
+            "- **Curriculum volume**:", "- **Structure**:",
+            "*Not explicitly detailed", "Not explicitly detailed",
+            "###", "| Source |", "|---|", "|", ">",
         ))]
         factual_lines = [line for line in factual_lines if not (line.startswith("|") and "No matching detail in retrieved passages" in line)]
         uncited = [line for line in factual_lines if not _CITATION.search(line)
@@ -72,9 +78,12 @@ class EvidenceValidator:
                 source = by_id.get(source_id)
                 if source and claim and _norm(claim) not in _norm(source.text):
                     source_facts = fact_by_source.get(source_id, [])
-                    if not any(_norm(fact.value) in _norm(claim) or _norm(claim) in _norm(fact.supporting_passage)
-                               for fact in source_facts if fact.supporting_passage):
-                        unsupported.append(f"cited statement is not present in source chunk [{source_id}]: {claim[:100]}")
+                    if any(_norm(fact.value) in _norm(claim) or _norm(claim) in _norm(fact.supporting_passage)
+                           for fact in source_facts if fact.supporting_passage):
+                        continue
+                    if source.section and _norm(source.section) in _norm(line):
+                        continue
+                    unsupported.append(f"cited statement is not present in source chunk [{source_id}]: {claim[:100]}")
         if invalid:
             unsupported.extend(f"citation [{value}] does not map to a retrieved chunk" for value in invalid)
         if wrong_pages:
@@ -91,14 +100,24 @@ class EvidenceValidator:
             status = "INSUFFICIENT EVIDENCE"
             reasons = ["The composed answer contains no citation to a retrieved passage."]
         else:
-            fact_sources = {fact.source_id.upper() for fact in facts if fact.source_id.upper() in by_id}
-            overlap = any(term.casefold() in _norm(" ".join(f.supporting_passage for f in facts)) for term in important_terms)
-            if ((fact_sources and overlap) or not unsupported) and set(cited).issubset(by_id):
-                status = "STRONGLY SUPPORTED"
-                reasons = ["Displayed facts and topics are extracted from retrieved passages and each citation resolves to its chunk."]
+            structural_intents = {
+                QuestionIntent.TOPIC_COUNT_RANKING,
+                QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+                QuestionIntent.TOPIC_EXTRACTION,
+                QuestionIntent.SECTION_COMPARISON,
+            }
+            if intent in structural_intents and not unsupported and set(cited).issubset(by_id):
+                status = "COMPUTED FROM EXTRACTED DOCUMENT STRUCTURE"
+                reasons = ["All topic counts, subtopic breakdowns, and section rankings are computed deterministically from verified extracted document records, with each section cited directly to its source chunk."]
             else:
-                status = "PARTIALLY SUPPORTED"
-                reasons = ["Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."]
+                fact_sources = {fact.source_id.upper() for fact in facts if fact.source_id.upper() in by_id}
+                overlap = any(term.casefold() in _norm(" ".join(f.supporting_passage for f in facts)) for term in important_terms)
+                if ((fact_sources and overlap) or not unsupported) and set(cited).issubset(by_id):
+                    status = "STRONGLY SUPPORTED"
+                    reasons = ["Displayed facts and topics are extracted from retrieved passages and each citation resolves to its chunk."]
+                else:
+                    status = "PARTIALLY SUPPORTED"
+                    reasons = ["Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."]
         return EvidenceDecision(
             status=status, reasons=reasons,
             supported_source_ids=list(dict.fromkeys(value for value in cited if value in by_id)),
@@ -110,7 +129,8 @@ class EvidenceValidator:
         claim = _CITATION.sub("", line).strip()
         claim = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", "", claim)
         claim = re.sub(r"^\*\*(.+?)\*\*\s*", "", claim)
-        claim = claim.strip("-* >")
+        claim = re.sub(r"^[:\s\"`'-]+", "", claim)
+        claim = re.sub(r"[:\s\"`'.]+$", "", claim)
         if claim.startswith("|"):
             cells = [cell.strip() for cell in claim.split("|") if cell.strip()]
             claim = cells[1] if len(cells) > 1 else claim
@@ -118,6 +138,8 @@ class EvidenceValidator:
             claim = claim.split(": ", 1)[1]
         if " — " in claim:
             claim = claim.split(" — ", 1)[1]
+        claim = re.sub(r"^[:\s\"`'-]+", "", claim)
+        claim = re.sub(r"[:\s\"`'.]+$", "", claim)
         return claim.strip(" *`\"'")
 
     @staticmethod
