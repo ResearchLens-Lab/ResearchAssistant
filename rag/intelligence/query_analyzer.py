@@ -32,6 +32,30 @@ class ResearchIntent(str, enum.Enum):
 
 
 @dataclass
+class QueryFacet:
+    facet_id: str  # e.g. "definition", "criteria", "strategies", "explanation", "comparison", "complexity"
+    facet_title: str
+    intent: ResearchIntent
+    primary_concept: str
+    target_concepts: List[str] = field(default_factory=list)
+    search_phrases: List[str] = field(default_factory=list)
+    required: bool = True
+    section_priors: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "facet_id": self.facet_id,
+            "facet_title": self.facet_title,
+            "intent": self.intent.value,
+            "primary_concept": self.primary_concept,
+            "target_concepts": self.target_concepts,
+            "search_phrases": self.search_phrases,
+            "required": self.required,
+            "section_priors": self.section_priors,
+        }
+
+
+@dataclass
 class QueryUnderstanding:
     raw_query: str
     normalized_query: str
@@ -43,6 +67,8 @@ class QueryUnderstanding:
     section_priors: Dict[str, float] = field(default_factory=dict)
     expanded_search_terms: List[str] = field(default_factory=list)
     matched_rule: Optional[str] = None
+    is_compound: bool = False
+    facets: List[QueryFacet] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -54,6 +80,8 @@ class QueryUnderstanding:
             "section_priors": self.section_priors,
             "expanded_search_terms": self.expanded_search_terms,
             "matched_rule": self.matched_rule,
+            "is_compound": self.is_compound,
+            "facets": [f.to_dict() for f in self.facets],
         }
 
 
@@ -204,6 +232,17 @@ class QueryAnalyzer:
         "dynamic programming": ["dynamic programming", "memoization", "optimal substructure", "subproblems"],
         "asymptotic notation": ["asymptotic notation", "big-O", "theta", "omega", "standard notations"],
         "loop invariant": ["loop invariant", "initialization", "maintenance", "termination", "correctness"],
+        "np-completeness": ["np-completeness", "np-complete", "np complete", "polynomial-time reduction"],
+        "np-complete": ["np-complete", "np-completeness", "np complete", "polynomial-time reduction"],
+        "approximation algorithm": ["approximation algorithm", "approximation algorithms", "ratio bound", "approximation ratio"],
+        "approximation algorithms": ["approximation algorithms", "approximation algorithm", "ratio bound", "approximation ratio"],
+        "backtracking": ["backtracking", "state space tree", "bounding function"],
+        "branch-and-bound": ["branch-and-bound", "branch and bound", "lc search", "fifo search"],
+        "branch and bound": ["branch and bound", "branch-and-bound", "lc search", "fifo search"],
+        "randomized algorithm": ["randomized algorithm", "randomized algorithms", "probability", "las vegas"],
+        "randomized algorithms": ["randomized algorithms", "randomized algorithm", "probability", "las vegas"],
+        "greedy algorithm": ["greedy algorithm", "greedy method", "greedy strategy"],
+        "greedy algorithms": ["greedy algorithms", "greedy algorithm", "greedy method", "greedy strategy"],
     }
 
     def analyze(self, query: str) -> QueryUnderstanding:
@@ -250,6 +289,188 @@ class QueryAnalyzer:
         self._current_output_format = output_format
         self._current_raw_query = orig_query
         lower = clean.casefold()
+
+        # 0. COMPOUND MULTI-FACET QUERY RULE (e.g., "What is an algorithm and explain its different strategies")
+        is_compound_def_strat = bool(
+            re.search(r"\b(?:what\s+is|define|definition\s+of)\s+.*?\band\b.*?\b(?:strategies|strategy|types|kinds|categories|paradigms|methods|approaches|characteristics|criteria|properties)\b", lower)
+            or re.search(r"\b(?:what\s+is|define)\s+(?:\b(?:an?|the)\b\s*)?algorithm\b.*?\b(?:strategies|strategy|paradigms|techniques|types|classes)\b", lower)
+        )
+        if is_compound_def_strat:
+            concept = "algorithm"
+            paradigms = [
+                "divide and conquer",
+                "greedy method",
+                "dynamic programming",
+                "backtracking",
+                "branch and bound",
+                "randomized algorithms",
+                "approximation algorithms",
+            ]
+            inferred_compound, inferred_facets = self._infer_default_facets(
+                ResearchIntent.CLASSIFICATION, concept, "strategies", [concept, "strategies"], clean
+            )
+            return self._build_result(
+                clean,
+                ResearchIntent.CLASSIFICATION,
+                [concept, "strategies"],
+                "compound_definition_and_strategy_pattern",
+                constraints={"taxonomy": "algorithmic_paradigms", "multi_facet": True, "compound_type": "def_strat"},
+                synonyms=[concept, "computational procedure", *paradigms],
+                facets=inferred_facets,
+                is_compound=True,
+            )
+
+        # 0.2 COMPOUND CONCEPT + EXAMPLE (e.g., "What is dynamic programming and give an example")
+        m_compound_ex = re.search(r"\b(?:what\s+is|explain|describe|define)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40}?)\s+\band\b\s+(?:give\s+(?:an?\s+)?example|provide\s+(?:an?\s+)?example|examples?)\b", lower)
+        if m_compound_ex:
+            concept = self._clean_concept(m_compound_ex.group(1))
+            f_expl = QueryFacet(
+                facet_id="explanation",
+                facet_title=f"Definition & Core Principle of {concept.title()}",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=concept,
+                target_concepts=[concept],
+                search_phrases=[f'"{concept}"', f'"{concept} is"', f'"{concept} solves"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            f_exam = QueryFacet(
+                facet_id="example",
+                facet_title=f"Textbook Example of {concept.title()}",
+                intent=ResearchIntent.EXAMPLE,
+                primary_concept=concept,
+                target_concepts=[concept, "example"],
+                search_phrases=[f'"{concept}" AND "example"', f'"{concept}" AND "instance"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXAMPLE],
+            )
+            return self._build_result(
+                clean,
+                ResearchIntent.EXAMPLE,
+                [concept, "example"],
+                "compound_concept_and_example_pattern",
+                constraints={"multi_facet": True, "compound_type": "concept_example"},
+                synonyms=self._concept_synonyms(concept) + ["example", "instance"],
+                facets=[f_expl, f_exam],
+                is_compound=True,
+            )
+
+        # 0.3 COMPOUND CONCEPT + COMPLEXITY (e.g., "Explain merge sort and its time complexity")
+        m_compound_comp = re.search(
+            r"\b(?:what\s+is|explain|describe|define)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40}?)\s+\band\b\s+(?:its\s+)?(?:time\s+complexity|space\s+complexity|complexity|running\s+time)\b",
+            lower
+        )
+        if m_compound_comp:
+            concept = self._clean_concept(m_compound_comp.group(1))
+            f_expl = QueryFacet(
+                facet_id="explanation",
+                facet_title=f"Core Concept of {concept.title()}",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=concept,
+                target_concepts=[concept],
+                search_phrases=[f'"{concept}"', f'"{concept} is"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            f_comp = QueryFacet(
+                facet_id="complexity",
+                facet_title=f"Asymptotic Complexity of {concept.title()}",
+                intent=ResearchIntent.COMPLEXITY,
+                primary_concept=concept,
+                target_concepts=[concept, "complexity"],
+                search_phrases=[
+                    f'"{concept}" AND "O("',
+                    f'"{concept}" AND "running time"',
+                    f'"{concept}" AND "time complexity"',
+                    f'"{concept}" AND "worst-case"',
+                    f'"{concept}" AND "theta("',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.COMPLEXITY],
+            )
+            return self._build_result(
+                clean,
+                ResearchIntent.COMPLEXITY,
+                [concept, "complexity"],
+                "compound_concept_and_complexity_pattern",
+                constraints={"multi_facet": True, "compound_type": "concept_complexity"},
+                synonyms=self._concept_synonyms(concept) + ["complexity", "running time"],
+                facets=[f_expl, f_comp],
+                is_compound=True,
+            )
+
+        # 0.4 COMPOUND CONCEPT + PROCEDURE / HOW IT WORKS / STEPS / BOUNDS
+        m_compound_proc = re.search(
+            r"\b(?:what\s+is|explain|describe|define)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40}?)\s+\band\b\s+(?:how\s+(?:does\s+it\s+work|it\s+works|is\s+it\s+used|it\s+is\s+used)|explain\s+its\s+steps|its\s+steps|how\s+to\s+use\s+it|their\s+ratio\s+bounds)\b",
+            lower
+        )
+        if m_compound_proc:
+            concept = self._clean_concept(m_compound_proc.group(1))
+            f_expl = QueryFacet(
+                facet_id="explanation",
+                facet_title=f"Foundational Definition of {concept.title()}",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=concept,
+                target_concepts=[concept],
+                search_phrases=[f'"{concept}"', f'"{concept} is"', f'"{concept} solves"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            f_proc = QueryFacet(
+                facet_id="procedure",
+                facet_title=f"Operation, Methodology & Steps of {concept.title()}",
+                intent=ResearchIntent.PROCEDURE,
+                primary_concept=concept,
+                target_concepts=[concept, "steps"],
+                search_phrases=[
+                    f'"{concept}" AND "step"',
+                    f'"{concept}" AND "method"',
+                    f'"{concept}" AND "algorithm"',
+                    f'"{concept}"',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.PROCEDURE],
+            )
+            return self._build_result(
+                clean,
+                ResearchIntent.PROCEDURE,
+                [concept, "steps"],
+                "compound_concept_and_procedure_pattern",
+                constraints={"multi_facet": True, "compound_type": "concept_procedure"},
+                synonyms=self._concept_synonyms(concept) + ["steps", "methodology"],
+                facets=[f_expl, f_proc],
+                is_compound=True,
+            )
+
+        # 0.5 CROSS-DOCUMENT COMPARISON ("How do Cormen and Horowitz approach dynamic programming?")
+        m_cross_doc = re.search(
+            r"\b(?:how\s+do\s+)?(cormen|horowitz)\s+and\s+(cormen|horowitz)\s+(?:approach|treat|define|explain|present)\s+([a-z0-9\s-]{2,40})\b",
+            lower
+        )
+        if m_cross_doc:
+            concept = self._clean_concept(m_cross_doc.group(3))
+            f_cormen = QueryFacet(
+                facet_id="cormen_view",
+                facet_title=f"Cormen formulation of {concept.title()}",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=concept,
+                target_concepts=[concept],
+                search_phrases=[f'"{concept}"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            f_horowitz = QueryFacet(
+                facet_id="horowitz_view",
+                facet_title=f"Horowitz formulation of {concept.title()}",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=concept,
+                target_concepts=[concept],
+                search_phrases=[f'"{concept}"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            return self._build_result(
+                clean,
+                ResearchIntent.COMPARISON,
+                ["Cormen", "Horowitz", concept],
+                "cross_textbook_comparison_pattern",
+                constraints={"multi_facet": True, "compound_type": "cross_doc", "subject": concept},
+                synonyms=[concept, "Cormen", "Horowitz"],
+                facets=[f_cormen, f_horowitz],
+                is_compound=True,
+            )
 
         # 1. DEFINITION
         # "What is an algorithm?", "Define merge sort", "What is meant by dynamic programming?"
@@ -455,6 +676,7 @@ class QueryAnalyzer:
         s = raw.strip().lower()
         s = re.sub(r"^(?:an?|the)\s+", "", s)
         s = re.sub(r"\s+(?:in\s+computer\s+science|in\s+algorithms)$", "", s)
+        s = re.sub(r"\s+and\s+(?:how\s+(?:does\s+it\s+work|it\s+works|is\s+it\s+used|it\s+is\s+used)|its\s+steps|explain\s+its\s+steps|how\s+to\s+use\s+it|their\s+ratio\s+bounds)$", "", s)
         return s.strip()
 
     @classmethod
@@ -469,6 +691,171 @@ class QueryAnalyzer:
             return [concept_clean, "sorting", "order", "reordering"]
         return [concept_clean]
 
+    def _infer_default_facets(
+        self,
+        intent: ResearchIntent,
+        primary_concept: Optional[str],
+        secondary_concept: Optional[str],
+        target_concepts: List[str],
+        raw_query: str,
+    ) -> Tuple[bool, List[QueryFacet]]:
+        lower = raw_query.casefold()
+        pc = (primary_concept or "").strip().lower()
+
+        # Check for compound definition + strategies / types / characteristics
+        if ("what is" in lower or "define" in lower or "definition" in lower) and any(w in lower for w in ["strategies", "strategy", "types", "paradigms", "classes", "categories", "characteristics", "criteria"]):
+            f_def = QueryFacet(
+                facet_id="definition",
+                facet_title="Definition & Meaning of Algorithm",
+                intent=ResearchIntent.DEFINITION,
+                primary_concept=pc or "algorithm",
+                target_concepts=[pc or "algorithm", "computational procedure"],
+                search_phrases=[
+                    '"informally, an algorithm is"',
+                    '"what is an algorithm"',
+                    '"computational procedure"',
+                    '"sequence of computational steps"',
+                    '"algorithm is any well-defined"',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.DEFINITION],
+            )
+            f_crit = QueryFacet(
+                facet_id="criteria",
+                facet_title="Five Foundational Criteria & Characteristics (Horowitz §1.1)",
+                intent=ResearchIntent.LIST_PROPERTIES,
+                primary_concept=pc or "algorithm",
+                target_concepts=["criteria", "finiteness", "definiteness", "input", "output", "effectiveness"],
+                search_phrases=[
+                    '"following criteria"',
+                    '"definiteness" AND "finiteness"',
+                    '"criteria 1 and 2 require"',
+                    '"five criteria"',
+                    '"input" AND "output" AND "finiteness"',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.LIST_PROPERTIES],
+            )
+            f_strat = QueryFacet(
+                facet_id="strategies",
+                facet_title="Algorithmic Design Strategies & Taxonomy",
+                intent=ResearchIntent.CLASSIFICATION,
+                primary_concept="algorithmic strategies",
+                target_concepts=["divide and conquer", "greedy method", "dynamic programming", "backtracking", "branch and bound", "randomized algorithms", "approximation algorithms"],
+                search_phrases=[
+                    '"divide and conquer"',
+                    '"greedy method" OR "greedy strategy" OR "greedy algorithm"',
+                    '"dynamic programming"',
+                    '"backtracking"',
+                    '"branch and bound"',
+                    '"randomized algorithm" OR "randomized algorithms"',
+                    '"approximation algorithm" OR "approximation algorithms"',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.CLASSIFICATION],
+            )
+            f_exp = QueryFacet(
+                facet_id="explanation",
+                facet_title="Strategy Principles & Core Methods",
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept="strategy principles",
+                target_concepts=["divide and conquer", "greedy", "dynamic programming", "backtracking", "branch and bound"],
+                search_phrases=[
+                    '"divide-and-conquer strategy suggests"',
+                    '"greedy method is perhaps the most"',
+                    '"sequence of decisions" AND "dynamic programming"',
+                    '"dynamic programming" AND "subproblems"',
+                    '"state space" AND "backtracking"',
+                    '"branch-and-bound refers to"',
+                    '"techniques used in designing and analyzing"',
+                ],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.EXPLANATION],
+            )
+            return True, [f_def, f_crit, f_strat, f_exp]
+
+        # Single Definition
+        if intent == ResearchIntent.DEFINITION and pc in ("algorithm", "algorithms"):
+            f_def = QueryFacet(
+                facet_id="definition",
+                facet_title="Definition & Core Meaning",
+                intent=ResearchIntent.DEFINITION,
+                primary_concept=pc,
+                target_concepts=[pc, "computational procedure"],
+                search_phrases=['"algorithm is"', '"what is an algorithm"', '"computational procedure"', '"sequence of computational steps"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.DEFINITION],
+            )
+            f_crit = QueryFacet(
+                facet_id="criteria",
+                facet_title="Five Foundational Criteria (Horowitz §1.1)",
+                intent=ResearchIntent.LIST_PROPERTIES,
+                primary_concept=pc,
+                target_concepts=["criteria", "finiteness", "definiteness", "input", "output", "effectiveness"],
+                search_phrases=['"following criteria"', '"definiteness" AND "finiteness"', '"criteria 1 and 2"', '"input" AND "output" AND "finiteness"'],
+                section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.LIST_PROPERTIES],
+            )
+            return False, [f_def, f_crit]
+
+        # Taxonomy / Classification / Paradigms
+        if intent == ResearchIntent.CLASSIFICATION or (pc in ("algorithm", "algorithms") and any(w in lower for w in ["types", "strategies", "paradigms", "classes", "categories"])):
+            paradigms = [
+                ("divide_and_conquer", "Divide-and-Conquer", ['"divide and conquer"']),
+                ("greedy_method", "The Greedy Method", ['"greedy method" OR "greedy strategy" OR "greedy algorithm"']),
+                ("dynamic_programming", "Dynamic Programming", ['"dynamic programming"']),
+                ("backtracking", "Backtracking", ['"backtracking"']),
+                ("branch_and_bound", "Branch-and-Bound", ['"branch and bound"']),
+                ("randomized", "Randomized Algorithms", ['"randomized algorithm" OR "randomized algorithms"']),
+                ("approximation", "Approximation Algorithms", ['"approximation algorithm" OR "approximation algorithms"']),
+            ]
+            facets = []
+            for fid, ftitle, phrases in paradigms:
+                facets.append(QueryFacet(
+                    facet_id=fid,
+                    facet_title=ftitle,
+                    intent=ResearchIntent.CLASSIFICATION,
+                    primary_concept=ftitle.lower(),
+                    target_concepts=[ftitle.lower()],
+                    search_phrases=phrases,
+                    section_priors=DEFAULT_SECTION_PRIORS[ResearchIntent.CLASSIFICATION],
+                ))
+            return False, facets
+
+        # Comparison
+        if intent == ResearchIntent.COMPARISON and primary_concept and secondary_concept:
+            f1 = QueryFacet(
+                facet_id="concept_1",
+                facet_title=primary_concept.title(),
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=primary_concept,
+                target_concepts=[primary_concept],
+                search_phrases=[f'"{primary_concept}"'],
+            )
+            f2 = QueryFacet(
+                facet_id="concept_2",
+                facet_title=secondary_concept.title(),
+                intent=ResearchIntent.EXPLANATION,
+                primary_concept=secondary_concept,
+                target_concepts=[secondary_concept],
+                search_phrases=[f'"{secondary_concept}"'],
+            )
+            f3 = QueryFacet(
+                facet_id="comparison",
+                facet_title=f"Comparison: {primary_concept} vs {secondary_concept}",
+                intent=ResearchIntent.COMPARISON,
+                primary_concept=f"{primary_concept} vs {secondary_concept}",
+                target_concepts=[primary_concept, secondary_concept],
+                search_phrases=[f'"{primary_concept}" AND "{secondary_concept}"'],
+            )
+            return True, [f1, f2, f3]
+
+        # Default Single Facet
+        default_facet = QueryFacet(
+            facet_id="main",
+            facet_title=primary_concept.title() if primary_concept else "Core Topic",
+            intent=intent,
+            primary_concept=primary_concept or "",
+            target_concepts=target_concepts,
+            search_phrases=[f'"{c}"' for c in target_concepts if len(c) > 2],
+            section_priors=DEFAULT_SECTION_PRIORS.get(intent, DEFAULT_SECTION_PRIORS[ResearchIntent.OTHER]),
+        )
+        return False, [default_facet]
+
     def _build_result(
         self,
         raw_query: str,
@@ -477,6 +864,8 @@ class QueryAnalyzer:
         rule_name: str,
         constraints: Optional[Dict[str, Any]] = None,
         synonyms: Optional[List[str]] = None,
+        facets: Optional[List[QueryFacet]] = None,
+        is_compound: Optional[bool] = None,
     ) -> QueryUnderstanding:
         cleaned_concepts = [self._clean_concept(c) for c in concepts if c]
         primary = cleaned_concepts[0] if cleaned_concepts else None
@@ -499,6 +888,16 @@ class QueryAnalyzer:
         elif current_fmt == "summary" and intent == ResearchIntent.OTHER:
             effective_intent = ResearchIntent.SUMMARIZATION
 
+        if facets is None:
+            inferred_compound, inferred_facets = self._infer_default_facets(
+                effective_intent, primary, secondary, cleaned_concepts, current_raw
+            )
+            final_compound = is_compound if is_compound is not None else inferred_compound
+            final_facets = inferred_facets
+        else:
+            final_compound = is_compound if is_compound is not None else (len(facets) > 1)
+            final_facets = facets
+
         return QueryUnderstanding(
             raw_query=current_raw,
             normalized_query=current_raw.strip(),
@@ -510,4 +909,6 @@ class QueryAnalyzer:
             section_priors=priors,
             expanded_search_terms=search_terms,
             matched_rule=rule_name,
+            is_compound=final_compound,
+            facets=final_facets,
         )

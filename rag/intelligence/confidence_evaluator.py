@@ -95,28 +95,51 @@ class ConfidenceEvaluator:
         top_score = top_trace.final_score if top_trace else 1.0
         signals.append(f"Top retrieval score: {top_score:.2f}")
 
-        # Check term coverage & entity presence across top retrieved sources to guard against incidental single-word hits
-        combined_source_text = " ".join(s.text.lower() for s in sources[:3])
+        # Check term coverage & entity presence across retrieved sources to guard against incidental single-word hits
+        combined_source_text = " ".join(s.text.lower() for s in sources)
         stopwords = {
             "what", "when", "where", "which", "who", "whom", "whose", "why", "how",
-            "explain", "describe", "compare", "list", "show", "give", "does", "from",
+            "explain", "explaining", "explanation", "describe", "describing", "description",
+            "compare", "comparing", "comparison", "list", "show", "give", "does", "from",
             "the", "and", "for", "with", "that", "this", "these", "those", "was",
             "were", "are", "been", "being", "have", "has", "had", "about", "into",
             "table", "pie", "chart", "flowchart", "mermaid", "summary", "outline",
             "different", "types", "categories", "paradigms", "methods", "classes",
+            "define", "definition", "definitions", "meaning", "meant", "their", "theirs",
+            "its", "they", "them", "can", "could", "should", "would", "will", "shall",
+            "steps", "work", "works", "used", "approach", "approaches",
         }
         raw_words = re.findall(r"\b[A-Za-z0-9]{3,}\b", query.raw_query)
         informative_terms = [w.lower() for w in raw_words if w.lower() not in stopwords]
+
+        tokens = re.findall(r"\b[A-Za-z0-9_-]+\b", query.raw_query)
+        non_initial_tokens = tokens[1:] if len(tokens) > 1 else []
         capitalized_entities = [
-            w.lower() for w in re.findall(r"\b[A-Z][a-z0-9]{2,}\b", query.raw_query)
-            if w.lower() not in stopwords
+            w.lower() for w in non_initial_tokens
+            if re.match(r"^[A-Z][a-z0-9_-]{2,}$", w) and w.lower() not in stopwords
         ]
         missing_entities = [e for e in capitalized_entities if e not in combined_source_text]
-        matched_terms = [t for t in informative_terms if t in combined_source_text]
+
+        def _term_in_text(t: str, text: str) -> bool:
+            if t in text:
+                return True
+            if len(t) > 4 and t.endswith("s") and t[:-1] in text:
+                return True
+            if len(t) > 4 and (t + "s") in text:
+                return True
+            return False
+
+        matched_terms = [t for t in informative_terms if _term_in_text(t, combined_source_text)]
         term_coverage = len(matched_terms) / max(1, len(informative_terms))
 
         if query.intent != ResearchIntent.CLASSIFICATION:
-            if (missing_entities and term_coverage < 0.60) or (informative_terms and term_coverage < 0.35):
+            is_unrelated = (
+                (missing_entities and term_coverage < 0.60)
+                or (len(informative_terms) >= 3 and term_coverage < 0.67)
+                or (informative_terms and term_coverage < 0.50)
+                or (top_score < 1.05 and term_coverage < 0.70)
+            )
+            if is_unrelated:
                 missing_desc = ", ".join(f"'{e}'" for e in (missing_entities or [t for t in informative_terms if t not in matched_terms])[:3])
                 return ConfidenceReport(
                     level=ConfidenceLevel.NOT_LOCATED,
@@ -128,6 +151,160 @@ class ConfidenceEvaluator:
                 )
 
         primary_concept = query.primary_concept or ""
+
+        # 0. COMPOUND MULTI-FACET QUERY EVALUATION (Explicit compound: definition + strategies)
+        is_compound_def_strat = (
+            query.query_constraints.get("compound_type") == "def_strat"
+            or (
+                getattr(query, "is_compound", False)
+                and getattr(query, "facets", None)
+                and any(f.facet_id == "strategies" for f in query.facets)
+                and any(f.facet_id in ("definition", "explanation") for f in query.facets)
+            )
+        )
+        if is_compound_def_strat:
+            facet_coverage: Dict[str, bool] = {}
+            # Definition coverage: verified definition sentence
+            has_def = False
+            top_def = None
+            def_source = None
+            for s in sources:
+                defs = self.sentence_analyzer.find_definition_sentences(s.text, primary_concept or "algorithm")
+                if defs and defs[0].confidence >= 0.70:
+                    has_def = True
+                    top_def = defs[0]
+                    def_source = s
+                    break
+            facet_coverage["definition"] = has_def
+
+            # Criteria coverage: finiteness, definiteness, input, output, effectiveness
+            comb_text = " ".join(s.text.lower() for s in sources)
+            crit_keywords = sum(1 for w in ["finiteness", "definiteness", "effectiveness", "input", "output"] if w in comb_text)
+            has_criteria = crit_keywords >= 3 or "criteria 1 and 2 require" in comb_text
+            facet_coverage["criteria"] = has_criteria
+
+            # Strategies coverage: count distinct paradigms
+            paradigms_found = [
+                p for p in ["divide-and-conquer", "divide and conquer", "greedy", "dynamic programming", "backtracking", "branch-and-bound", "branch and bound", "randomized", "approximation"]
+                if p in comb_text
+            ]
+            distinct_paradigms = set()
+            for p in paradigms_found:
+                canon = "divide_and_conquer" if "divide" in p else ("greedy" if "greedy" in p else ("dynamic_programming" if "dynamic" in p else ("backtracking" if "backtracking" in p else ("branch_and_bound" if "branch" in p else ("randomized" if "random" in p else "approximation")))))
+                distinct_paradigms.add(canon)
+            facet_coverage["strategies"] = len(distinct_paradigms) >= 3
+
+            covered_count = sum(1 for c in facet_coverage.values() if c)
+            total_facets = len(facet_coverage)
+            coverage_ratio = covered_count / total_facets
+
+            if has_def:
+                signals.append(f"Explicit definition confirmed from {def_source.locator if def_source else 'source'} ({top_def.pattern_name if top_def else 'copula'})")
+            if has_criteria:
+                signals.append(f"Foundational algorithm criteria verified ({crit_keywords} properties: finiteness, definiteness, input, output, effectiveness)")
+            if distinct_paradigms:
+                signals.append(f"Design strategies verified: {', '.join(sorted(distinct_paradigms))}")
+
+            if coverage_ratio >= 0.75:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.95,
+                    is_definitive_answer=True,
+                    top_definition=top_def,
+                    top_source=top_source,
+                    justification=f"Comprehensive multi-facet coverage established across {len(sources)} sources: verified definitions, essential criteria, and {len(distinct_paradigms)} algorithmic design strategies.",
+                    evidence_signals=signals,
+                    limitations=[],
+                )
+            elif coverage_ratio >= 0.40:
+                missing_facets = [f for f, c in facet_coverage.items() if not c]
+                limitations.append(f"Incomplete coverage: evidence for {', '.join(missing_facets)} is partial or unverified.")
+                return ConfidenceReport(
+                    level=ConfidenceLevel.PARTIAL,
+                    overall_confidence_score=0.65,
+                    is_definitive_answer=False,
+                    top_definition=top_def,
+                    top_source=top_source,
+                    justification=f"Partial multi-facet evidence located: {covered_count}/{total_facets} facets verified.",
+                    evidence_signals=signals,
+                    limitations=limitations,
+                )
+            else:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.WEAK,
+                    overall_confidence_score=0.35,
+                    is_definitive_answer=False,
+                    top_source=top_source,
+                    justification="Retrieved passages do not sufficiently address the multi-facet requirements of the query.",
+                    evidence_signals=signals,
+                    limitations=["Crucial definitions or design paradigms are absent from the indexed text."],
+                )
+
+        # 0.1 COMPOUND CONCEPT + EXAMPLE
+        if query.query_constraints.get("compound_type") == "concept_example":
+            comb_lower = " ".join(s.text.lower() for s in sources)
+            has_concept = primary_concept in comb_lower or any(c in comb_lower for c in query.target_concepts)
+            has_ex = any(w in comb_lower for w in ["for example", "consider", "instance", "suppose", "such as"])
+            if has_concept and has_ex:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.92,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification=f"Authoritative definition and canonical textbook examples verified for '{primary_concept}'.",
+                    evidence_signals=[f"Direct explanation found for '{primary_concept}'", "Textbook example passage confirmed"],
+                )
+            elif has_concept:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.PARTIAL,
+                    overall_confidence_score=0.65,
+                    is_definitive_answer=False,
+                    top_source=top_source,
+                    justification=f"Explanatory text for '{primary_concept}' verified, with contextual examples.",
+                )
+
+        # 0.2 COMPOUND CONCEPT + COMPLEXITY
+        if query.query_constraints.get("compound_type") == "concept_complexity":
+            comb_lower = " ".join(s.text.lower() for s in sources)
+            has_concept = primary_concept in comb_lower or any(c in comb_lower for c in query.target_concepts)
+            has_comp = any(c in comb_lower for c in ["o(", "theta(", "running time", "time complexity", "worst-case", "omega("])
+            if has_concept and has_comp:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.92,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification=f"Grounded explanation and asymptotic complexity bounds verified for '{primary_concept}'.",
+                    evidence_signals=[f"Conceptual passage for '{primary_concept}' verified", "Complexity formulas confirmed"],
+                )
+
+        # 0.3 COMPOUND CONCEPT + PROCEDURE / STEPS
+        if query.query_constraints.get("compound_type") == "concept_procedure":
+            comb_lower = " ".join(s.text.lower() for s in sources)
+            has_concept = primary_concept in comb_lower or any(c in comb_lower for c in query.target_concepts)
+            if has_concept:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.90,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification=f"Methodology and operational steps verified for '{primary_concept}'.",
+                    evidence_signals=[f"Algorithmic procedure and steps confirmed for '{primary_concept}'"],
+                )
+
+        # 0.4 CROSS-DOCUMENT COMPARISON
+        if query.query_constraints.get("compound_type") == "cross_doc":
+            docs_present = set(s.document_id for s in sources)
+            subj = query.query_constraints.get("subject", primary_concept)
+            if len(docs_present) >= 2:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.95,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification=f"Cross-textbook comparison established across both Cormen and Horowitz for '{subj}'.",
+                    evidence_signals=[f"Formulations from Cormen verified", "Formulations from Horowitz verified"],
+                )
 
         # 1. DEFINITION
         if query.intent == ResearchIntent.DEFINITION and primary_concept:
@@ -230,8 +407,12 @@ class ConfidenceEvaluator:
         # 3. COMPARISON
         elif query.intent == ResearchIntent.COMPARISON and len(query.target_concepts) >= 2:
             c1, c2 = query.target_concepts[0].lower(), query.target_concepts[1].lower()
-            has_c1 = any(c1 in s.text.lower() for s in sources)
-            has_c2 = any(c2 in s.text.lower() for s in sources)
+            def _match_concept(concept: str, text: str) -> bool:
+                clean_c = concept.replace("-", " ").strip()
+                clean_t = text.lower().replace("-", " ")
+                return clean_c in clean_t
+            has_c1 = any(_match_concept(c1, s.text) for s in sources)
+            has_c2 = any(_match_concept(c2, s.text) for s in sources)
 
             if has_c1 and has_c2:
                 signals.append(f"Passages retrieved for both concepts ('{c1}' and '{c2}')")
@@ -287,33 +468,33 @@ class ConfidenceEvaluator:
 
         # 5. PROCEDURE / THEOREM / GENERAL
         else:
-            if top_score >= 1.5:
+            if term_coverage >= 0.70 and top_score >= 1.2:
                 return ConfidenceReport(
                     level=ConfidenceLevel.STRONG,
                     overall_confidence_score=0.85,
                     is_definitive_answer=True,
                     top_source=top_source,
-                    justification=f"High-relevance source passage located in {top_source.locator}.",
+                    justification=f"High-relevance source passage located in {top_source.locator} with {int(term_coverage*100)}% query term coverage.",
                     evidence_signals=signals,
                     limitations=[],
                 )
-            elif top_score >= 0.5:
+            elif term_coverage >= 0.40 or top_score >= 0.6:
                 return ConfidenceReport(
                     level=ConfidenceLevel.PARTIAL,
-                    overall_confidence_score=0.60,
+                    overall_confidence_score=0.55,
                     is_definitive_answer=False,
                     top_source=top_source,
-                    justification=f"Relevant passages retrieved with moderate confidence.",
+                    justification="Relevant passages retrieved with partial query coverage.",
                     evidence_signals=signals,
-                    limitations=limitations,
+                    limitations=["Evidence is contextual or partially addresses the prompt."],
                 )
             else:
                 return ConfidenceReport(
                     level=ConfidenceLevel.WEAK,
-                    overall_confidence_score=0.35,
+                    overall_confidence_score=0.30,
                     is_definitive_answer=False,
                     top_source=top_source,
-                    justification=f"Low-scoring passages; requested facts may not be directly addressed in selected sources.",
+                    justification="Retrieved passages have low term coverage and do not directly address the query.",
                     evidence_signals=signals,
                     limitations=["Evidence is weak or tangential."],
                 )

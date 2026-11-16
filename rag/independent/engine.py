@@ -55,3 +55,29 @@ class IndependentResearchEngine:
             owner_id=owner_id,
             paper_metadata=paper_metadata,
         )
+
+    @staticmethod
+    def _result(
+        answer_text: str,
+        query_analysis: Any,
+        sources: list,
+        paper_ids: list,
+        document_labels: dict,
+        evidence_decision: Any,
+        traces: list,
+        started_at: float,
+    ) -> RAGResult:
+        filters = getattr(query_analysis, "document_filters", {}) or {}
+        doc_ids = filters.get("document_ids") or getattr(query_analysis, "selected_document_ids", None) or getattr(query_analysis, "target_concepts", []) or []
+        fmt = filters.get("output_format") or getattr(query_analysis, "output_format", None) or getattr(query_analysis, "requested_format", None) or "narrative"
+        return RAGResult(
+            answer=answer_text,
+            sources=sources,
+            paper_ids=paper_ids,
+            metadata={
+                "output_format": fmt,
+                "selected_document_ids": doc_ids,
+                "confidence_tier": getattr(evidence_decision, "status", "SUPPORTED"),
+                "duration_seconds": round(time.perf_counter() - started_at, 3),
+            },
+        )

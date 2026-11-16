@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 from rag.citations.citation_formatter import RAGResult
 from rag.citations.citation_mapper import CitationMapper
 from rag.citations.source_tracker import SourceTracker
+from rag.generation.local_intelligence_service import LocalIntelligenceService
 from rag.intelligence.answer_composer import GroundedResearchAnswer, ResearchAnswerComposer
 from rag.intelligence.confidence_evaluator import ConfidenceEvaluator, ConfidenceLevel, ConfidenceReport
 from rag.intelligence.query_analyzer import QueryAnalyzer, QueryUnderstanding, ResearchIntent
@@ -37,6 +38,7 @@ class ResearchIntelligenceEngine:
         self.retrieval_engine = ExplainableRetrievalEngine(db_path=db_path)
         self.confidence_evaluator = ConfidenceEvaluator()
         self.answer_composer = ResearchAnswerComposer()
+        self.local_intelligence = LocalIntelligenceService()
         self.operator_runtime = OperatorRuntime(
             retrieval_engine=self.retrieval_engine,
             sentence_analyzer=self.retrieval_engine.sentence_analyzer,
@@ -91,7 +93,43 @@ class ResearchIntelligenceEngine:
             traces=traces,
         )
 
-        # Step 5: Grounded Deterministic Answer Composition
+        # Step 5: Grounded Synthesis with Local Model & Extractive Fallback
+        can_use_local = (
+            self.local_intelligence.is_available()
+            and confidence.level in (ConfidenceLevel.STRONG, ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK)
+            and len(sources) > 0
+            and not getattr(understanding, "is_compound", False)
+            and not understanding.query_constraints.get("output_format")
+            and understanding.intent not in (
+                ResearchIntent.DEFINITION,
+                ResearchIntent.CLASSIFICATION,
+                ResearchIntent.COMPLEXITY,
+                ResearchIntent.EXPLANATION,
+                ResearchIntent.PROCEDURE,
+                ResearchIntent.EXAMPLE,
+                ResearchIntent.COMPARISON,
+            )
+        )
+        if can_use_local:
+            try:
+                payload, model_md = self.local_intelligence.synthesize(understanding, sources, confidence)
+                if model_md:
+                    answer = GroundedResearchAnswer(
+                        query=question,
+                        intent=understanding.intent,
+                        confidence_level=confidence.level,
+                        confidence_score=confidence.overall_confidence_score,
+                        headline_answer=payload.direct_answer if payload else "",
+                        markdown_content=model_md,
+                        primary_citation=f"[{sources[0].source_id}]" if sources else None,
+                        cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start, "title": s.title} for s in sources],
+                        limitations=[],
+                        execution_time_seconds=time.perf_counter() - start_time,
+                    )
+                    return answer
+            except Exception as exc:
+                logger.warning("Local intelligence synthesis in answer_query failed: %s; falling back", exc)
+
         answer = self.answer_composer.compose(
             query=understanding,
             sources=sources,
@@ -128,6 +166,14 @@ class ResearchIntelligenceEngine:
 
         # 1. Query Normalization & Understanding
         understanding = self.query_analyzer.analyze(question)
+        logger.info(
+            "Diagnostic Query Trace: raw='%s' | norm='%s' | intent=%s | is_compound=%s | facets=%s",
+            question,
+            understanding.normalized_query,
+            understanding.intent.value,
+            understanding.is_compound,
+            [f.facet_id for f in getattr(understanding, "facets", [])],
+        )
         emit({
             "type": "planning_completed",
             "intent": understanding.intent.value,
@@ -144,6 +190,12 @@ class ResearchIntelligenceEngine:
                 document_ids=selected_documents or None,
                 top_k=top_k,
                 owner_id=effective_owner,
+            )
+            logger.info(
+                "Diagnostic Retrieval Trace: retrieved=%d sources | docs=%s | pages=%s",
+                len(sources),
+                list(dict.fromkeys(s.document_id for s in sources)),
+                [s.page_start for s in sources],
             )
         except Exception as exc:
             logger.error("Retrieval failed: %s", exc)
@@ -168,21 +220,65 @@ class ResearchIntelligenceEngine:
             traces=traces,
         )
 
-        # 4. Grounded Answer Composition
-        grounded_answer = self.answer_composer.compose(
-            query=understanding,
-            sources=sources,
-            confidence=confidence,
+        # 4. Grounded Synthesis with Local Intelligence & Extractive Fallback
+        emit({"type": "evidence_ready", "count": len(sources), "engine": "research_intelligence"})
+
+        final_markdown = None
+        generation_provider = "extractive"
+        model_calls = 0
+
+        effective_format = output_format or understanding.query_constraints.get("output_format")
+        can_use_local = (
+            self.local_intelligence.is_available()
+            and confidence.level in (ConfidenceLevel.STRONG, ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK)
+            and len(sources) > 0
+            and effective_format not in ("table", "pie", "flowchart", "summary", "compare")
+            and not getattr(understanding, "is_compound", False)
+            and understanding.intent not in (
+                ResearchIntent.DEFINITION,
+                ResearchIntent.CLASSIFICATION,
+                ResearchIntent.COMPLEXITY,
+                ResearchIntent.EXPLANATION,
+                ResearchIntent.PROCEDURE,
+                ResearchIntent.EXAMPLE,
+                ResearchIntent.COMPARISON,
+            )
         )
 
-        final_markdown = grounded_answer.markdown_content
+        if can_use_local:
+            emit({"type": "generation_started", "provider": "local_intelligence", "model": self.local_intelligence.model})
+            try:
+                payload, model_md = self.local_intelligence.synthesize(
+                    query=understanding,
+                    sources=sources,
+                    confidence=confidence,
+                )
+                if model_md:
+                    final_markdown = model_md
+                    generation_provider = "local_intelligence"
+                    model_calls = 1
+                    emit({"type": "generation_completed", "provider": "local_intelligence"})
+                elif payload and payload.insufficient_evidence:
+                    final_markdown = (
+                        f"I could not find sufficient information in the uploaded documents to answer this question reliably.\n\n"
+                        f"{payload.direct_answer}"
+                    )
+                    generation_provider = "local_intelligence"
+                    model_calls = 1
+            except Exception as exc:
+                logger.warning("Local intelligence synthesis failed (%s): %s; falling back to deterministic composer", type(exc).__name__, exc)
 
-        # Append structured evidence state line
-        reasons_summary = "; ".join(confidence.evidence_signals[:2]) if confidence.evidence_signals else confidence.justification
-        final_markdown += f"\n\nEvidence state: **{confidence.level.value}** — {reasons_summary}"
-
-        emit({"type": "evidence_ready", "count": len(sources), "engine": "research_intelligence"})
-        emit({"type": "generation_skipped", "reason": "deterministic_structured_composition"})
+        # Fallback to deterministic composer if local intelligence was unavailable or returned fallback
+        if not final_markdown:
+            emit({"type": "generation_fallback", "reason": "deterministic_structured_composition"})
+            grounded_answer = self.answer_composer.compose(
+                query=understanding,
+                sources=sources,
+                confidence=confidence,
+            )
+            final_markdown = grounded_answer.markdown_content
+            reasons_summary = "; ".join(confidence.evidence_signals[:2]) if confidence.evidence_signals else confidence.justification
+            final_markdown += f"\n\nEvidence state: **{confidence.level.value}** — {reasons_summary}"
 
         # 5. Map citations to paper metadata and locators
         cited_ids = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", final_markdown, re.I)))
@@ -205,11 +301,12 @@ class ResearchIntelligenceEngine:
             paper_ids=selected_papers or list(dict.fromkeys(source.paper_id for source in sources)),
             metadata={
                 "answer_mode": "independent_documents_only",
-                "generation_provider": "none",
-                "llm_provider": "none",
-                "llm_enabled": False,
+                "generation_provider": generation_provider,
+                "llm_provider": "local_intelligence" if generation_provider == "local_intelligence" else "none",
+                "llm_enabled": generation_provider == "local_intelligence",
+                "llm_model": self.local_intelligence.model if generation_provider == "local_intelligence" else "none",
                 "embedding_provider": "none",
-                "model_calls": 0,
+                "model_calls": model_calls,
                 "pretrained_embeddings_used": False,
                 "external_inference_used": False,
                 "execution_time_seconds": round(time.perf_counter() - started, 4),
