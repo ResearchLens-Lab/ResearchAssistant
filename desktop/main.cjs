@@ -19,6 +19,10 @@ let mainWindow = null;
 let appSettings = null;
 let backendProcess = null;
 let frontendProcess = null;
+let ollamaProcess = null;
+let localIntelligenceActive = false;
+let localModelInstalled = false;
+let localIntelligenceUrl = "http://127.0.0.1:11434";
 let requestKey = "";
 let apiBaseUrl = "";
 let uiOrigin = "";
@@ -261,12 +265,107 @@ function spawnOwned(executable, args, options = {}) {
   return spawnTracked("generic-service", executable, args, options);
 }
 
+function resolveOllamaExecutable() {
+  const candidates = [
+    path.join(runtimeRoot, "ollama", "ollama.exe"),
+    path.join(process.resourcesPath || "", "app-runtime", "ollama", "ollama.exe"),
+    path.join(process.env.LOCALAPPDATA || "", "Programs", "Ollama", "ollama.exe"),
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function checkOllamaAlive(url = "http://127.0.0.1:11434") {
+  return new Promise((resolve) => {
+    const req = http.get(`${url}/api/tags`, { timeout: 1500 }, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
+function checkModelAvailable(url = "http://127.0.0.1:11434", targetModel = "qwen3.5:0.8b") {
+  return new Promise((resolve) => {
+    const req = http.get(`${url}/api/tags`, { timeout: 2500 }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => body += chunk);
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          const models = data.models || [];
+          const found = models.some((m) => {
+            const name = (m.name || m.model || "").toLowerCase();
+            return name === targetModel.toLowerCase() || name.startsWith(targetModel.toLowerCase());
+          });
+          resolve(found);
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
+async function ensureLocalIntelligence() {
+  try {
+    const alreadyActive = await checkOllamaAlive(localIntelligenceUrl);
+    if (alreadyActive) {
+      appendPrivateLog("Local Intelligence service is already active on port 11434 (reusing active instance).");
+      localIntelligenceActive = true;
+      localModelInstalled = await checkModelAvailable(localIntelligenceUrl, "qwen3.5:0.8b");
+      appendPrivateLog(`Local Intelligence model qwen3.5:0.8b status: ${localModelInstalled ? "READY" : "NOT_DOWNLOADED"}`);
+      return;
+    }
+
+    const ollamaExe = resolveOllamaExecutable();
+    if (!ollamaExe) {
+      appendPrivateLog("Local Intelligence runtime binary not found; continuing in deterministic extractive mode.");
+      localIntelligenceActive = false;
+      localModelInstalled = false;
+      return;
+    }
+
+    appendPrivateLog(`Spawning application-managed Local Intelligence engine: ${ollamaExe}`);
+    const modelsDir = process.env.OLLAMA_MODELS || path.join(os.homedir(), ".ollama", "models");
+    try { fs.mkdirSync(modelsDir, { recursive: true }); } catch {}
+
+    ollamaProcess = spawnTracked("local-intelligence", ollamaExe, ["serve"], {
+      cwd: path.dirname(ollamaExe),
+      env: {
+        OLLAMA_HOST: "127.0.0.1:11434",
+        OLLAMA_MODELS: modelsDir,
+        OLLAMA_ORIGINS: "*",
+        OLLAMA_KEEP_ALIVE: "15m",
+      },
+    });
+
+    await waitForHttp(`${localIntelligenceUrl}/api/tags`, {}, 12000, ollamaProcess);
+    localIntelligenceActive = true;
+    appendPrivateLog("Application-managed Local Intelligence service started successfully.");
+    localModelInstalled = await checkModelAvailable(localIntelligenceUrl, "qwen3.5:0.8b");
+    appendPrivateLog(`Local Intelligence model qwen3.5:0.8b status: ${localModelInstalled ? "READY" : "NOT_DOWNLOADED"}`);
+  } catch (err) {
+    appendPrivateLog(`Local Intelligence startup encountered issue: ${err.message}; gracefully falling back to extractive engine.`);
+    localIntelligenceActive = false;
+    localModelInstalled = false;
+  }
+}
+
 function appApiEnvironment() {
   const library = appSettings.libraryPath;
   const documents = path.join(library, "documents");
   const indexes = path.join(library, "indexes");
   const databasePath = path.join(library, "library.sqlite3").replace(/\\/g, "/");
   const origin = uiOrigin;
+  const useLocalIntelligence = (process.env.LLM_ENABLED === "false")
+    ? false
+    : (localIntelligenceActive && localModelInstalled);
   return {
     APP_ENV: "production",
     APP_NAME: "ResearchLens",
@@ -280,8 +379,8 @@ function appApiEnvironment() {
     RAG_ENGINE_MODE: "independent",
     RAG_ANSWER_MODE: "INDEPENDENT",
     RAG_MODE: "local",
-    LLM_ENABLED: "false",
-    LLM_PROVIDER: "none",
+    LLM_ENABLED: useLocalIntelligence ? "true" : "false",
+    LLM_PROVIDER: useLocalIntelligence ? "local_intelligence" : "none",
     LLM_API_KEY: "",
     GEMINI_API_KEY: "",
     EMBEDDING_PROVIDER: "local",
@@ -290,8 +389,8 @@ function appApiEnvironment() {
     CHROMA_COLLECTION_NAME: "researchlens_local",
     EMBEDDING_CACHE_PATH: path.join(library, "cache", "embeddings.sqlite3"),
     FASTEMBED_CACHE_DIR: path.join(library, "cache", "models"),
-    OLLAMA_BASE_URL: "",
-    OLLAMA_MODEL: "none",
+    OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || localIntelligenceUrl,
+    OLLAMA_MODEL: process.env.OLLAMA_MODEL || "qwen3.5:0.8b",
     NODE_OPTIONS: "",
   };
 }
@@ -383,9 +482,11 @@ async function startLocalServices() {
     const dbMs = Date.now() - t1;
     emitStage("database", "completed", `Up to date (${dbMs}ms)`, 50, "SQLite database and migrations verified.");
 
-    // STAGE 3: Research Engine
+    // STAGE 3: Research Engine & Local Intelligence
     const t2 = Date.now();
-    emitStage("engine", "in-progress", "Starting Python research intelligence engine…", 65, "Spawning FastAPI sidecar…");
+    emitStage("engine", "in-progress", "Initializing research intelligence & local runtime…", 60, "Verifying local intelligence engine…");
+    await ensureLocalIntelligence();
+    emitStage("engine", "in-progress", "Starting Python research intelligence engine…", 70, "Spawning FastAPI sidecar…");
     const apiEnv = appApiEnvironment();
     backendProcess = spawnTracked("fastapi-backend", pythonExe, [
       "-m", "uvicorn", "backend.app.main:app",
@@ -629,7 +730,66 @@ function registerIpc() {
     diskFreeBytes: appSettings?.libraryPath ? await getFreeBytes(appSettings.libraryPath) : null,
     activeJobs: currentJobs,
     networkFeatures: "disabled",
+    localIntelligence: {
+      available: localIntelligenceActive,
+      modelInstalled: localModelInstalled,
+      model: "qwen3.5:0.8b",
+      engine: (localIntelligenceActive && localModelInstalled) ? "synthesized_local_llm" : "extractive_deterministic",
+    },
   }));
+
+  guarded("intelligence:status", async () => ({
+    available: localIntelligenceActive,
+    modelInstalled: localModelInstalled,
+    modelName: "qwen3.5:0.8b",
+    displayName: "Local Intelligence Engine",
+    approximateDownloadSizeMB: 574,
+    provider: "application_managed_ollama",
+    mode: (localIntelligenceActive && localModelInstalled) ? "synthesized_local_llm" : "extractive_deterministic",
+  }));
+
+  guarded("intelligence:pull-model", async () => {
+    if (!localIntelligenceActive) {
+      throw new Error("Local Intelligence engine service is not active.");
+    }
+    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify({ name: "qwen3.5:0.8b", stream: true });
+      const options = {
+        hostname: "127.0.0.1",
+        port: 11434,
+        path: "/api/pull",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData),
+        },
+      };
+      const req = http.request(options, (res) => {
+        let buffer = "";
+        res.on("data", (chunk) => {
+          buffer += chunk.toString("utf8");
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const statusObj = JSON.parse(line);
+              if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+                mainWindow.webContents.send("intelligence:progress", statusObj);
+              }
+            } catch {}
+          }
+        });
+        res.on("end", async () => {
+          localModelInstalled = await checkModelAvailable(localIntelligenceUrl, "qwen3.5:0.8b");
+          resolve({ success: localModelInstalled });
+        });
+      });
+      req.on("error", reject);
+      req.write(postData);
+      req.end();
+    });
+  });
 
   guarded("desktop:create-backup", async (destinationFolder) => {
     if (!appSettings?.libraryPath) throw new Error("No active library found.");
@@ -832,7 +992,7 @@ function killProcessTree(pid) {
 
 function stopOwnedServices() {
   shuttingDown = true;
-  for (const proc of [frontendProcess, backendProcess]) {
+  for (const proc of [frontendProcess, backendProcess, ollamaProcess]) {
     if (!proc || proc.killed) continue;
     try {
       proc.kill("SIGTERM");
@@ -840,7 +1000,7 @@ function stopOwnedServices() {
   }
   // Allow graceful exit for database transactions before force kill
   setTimeout(() => {
-    for (const proc of [frontendProcess, backendProcess]) {
+    for (const proc of [frontendProcess, backendProcess, ollamaProcess]) {
       if (proc && !proc.killed && proc.pid) {
         killProcessTree(proc.pid);
       }

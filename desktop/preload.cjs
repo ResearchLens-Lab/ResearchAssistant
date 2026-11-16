@@ -10,6 +10,13 @@ contextBridge.exposeInMainWorld("researchLensDesktop", Object.freeze({
   saveSession: (sessionData) => ipcRenderer.invoke("desktop:save-session", sessionData),
   getSession: () => ipcRenderer.invoke("desktop:get-session"),
   clearSession: () => ipcRenderer.invoke("desktop:clear-session"),
+  getIntelligenceStatus: () => ipcRenderer.invoke("intelligence:status"),
+  pullIntelligenceModel: () => ipcRenderer.invoke("intelligence:pull-model"),
+  onIntelligenceProgress: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("intelligence:progress", handler);
+    return () => ipcRenderer.removeListener("intelligence:progress", handler);
+  },
 }));
 
 contextBridge.exposeInMainWorld("startupBridge", Object.freeze({

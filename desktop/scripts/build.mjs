@@ -38,8 +38,9 @@ const isPrivateRelPath = (relPath) => /(^|[\\/])(?:\.env(?:\.[^\\/]*)?|\.git|\.p
 try {
   if (!skipNext) {
     console.log(`[1/5] Preparing app-runtime directory at ${runtime}...`);
-    rmSync(runtime, { recursive: true, force: true });
     mkdirSync(runtime, { recursive: true });
+    const frontendTarget = join(runtime, 'frontend');
+    rmSync(frontendTarget, { recursive: true, force: true });
 
     // 1. Build Next.js frontend standalone
     console.log(`[2/5] Building Next.js standalone frontend...`);
@@ -159,6 +160,29 @@ try {
     }
   }
 
+  // Stage application-managed Local Intelligence runtime (Ollama CPU)
+  const ollamaTarget = join(runtime, 'ollama');
+  const ollamaHome = process.env.OLLAMA_HOME || join(process.env.LOCALAPPDATA, 'Programs', 'Ollama');
+  if (existsSync(join(ollamaHome, 'ollama.exe'))) {
+    console.log(`      Staging CPU Local Intelligence (Ollama) runtime...`);
+    mkdirSync(ollamaTarget, { recursive: true });
+    safeCopy(join(ollamaHome, 'ollama.exe'), join(ollamaTarget, 'ollama.exe'));
+    const libTarget = join(ollamaTarget, 'lib', 'ollama');
+    mkdirSync(libTarget, { recursive: true });
+    runRobocopy(join(ollamaHome, 'lib', 'ollama'), libTarget, ['/XD', 'cuda*', 'rocm*']);
+    console.log(`      Staged CPU Local Intelligence runtime (~80 MB) successfully.`);
+  } else {
+    console.log(`      Notice: Local Intelligence source not found at ${ollamaHome}; building in extractive fallback mode.`);
+  }
+
+  // Stage Third-Party Licenses
+  const licensesTarget = join(runtime, 'licenses');
+  mkdirSync(licensesTarget, { recursive: true });
+  const licenseFile = join(desktop, 'licenses', 'THIRD_PARTY_LICENSES.md');
+  if (existsSync(licenseFile)) {
+    safeCopy(licenseFile, join(licensesTarget, 'THIRD_PARTY_LICENSES.md'));
+  }
+
   // Compute comprehensive source and staged runtime hashes for manifest audit
   const computeFileHash = (filePath) => {
     return existsSync(filePath) ? createHash('sha256').update(readFileSync(filePath)).digest('hex') : null;
@@ -190,9 +214,12 @@ try {
     'desktop/preload.cjs': computeFileHash(join(desktop, 'preload.cjs')),
     'runtime/node.exe': computeFileHash(join(runtime, 'node.exe')),
     'runtime/python/python.exe': computeFileHash(join(runtime, 'python', 'python.exe')),
+    'runtime/ollama/ollama.exe': computeFileHash(join(runtime, 'ollama', 'ollama.exe')),
   };
 
   const ragModuleHashes = {
+    'rag/generation/local_intelligence_service.py': computeFileHash(join(runtime, 'source', 'rag', 'generation', 'local_intelligence_service.py')),
+    'rag/generation/evidence_validator.py': computeFileHash(join(runtime, 'source', 'rag', 'generation', 'evidence_validator.py')),
     'rag/ingestion/document_loader.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'document_loader.py')),
     'rag/ingestion/document_normalizer.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'document_normalizer.py')),
     'rag/ingestion/preflight.py': computeFileHash(join(runtime, 'source', 'rag', 'ingestion', 'preflight.py')),
@@ -233,6 +260,12 @@ try {
     signatureNotice: 'Unsigned showcase build for Windows x64 evaluation',
     pythonExecutable: existsSync(join(runtime, 'python', 'python.exe')),
     nextStandalone: existsSync(join(runtime, 'frontend', 'server.js')),
+    localIntelligence: {
+      provider: 'application_managed_ollama',
+      model: 'qwen3.5:0.8b',
+      bundledOllama: existsSync(join(runtime, 'ollama', 'ollama.exe')),
+      licenses: 'licenses/THIRD_PARTY_LICENSES.md',
+    },
     ragModuleHashes,
     stagedBackendHashes,
     stagedRagHashes,
