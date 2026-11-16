@@ -46,8 +46,8 @@ class OCRResult:
 class LocalOCREngine:
     """Offline OCR engine utilizing PyMuPDF's internal Tesseract C++ bindings."""
 
-    DEFAULT_DPI = 150
-    RETRY_DPI = 200
+    DEFAULT_DPI = 100
+    RETRY_DPI = 150
 
     def __init__(
         self,

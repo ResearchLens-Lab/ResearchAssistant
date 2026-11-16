@@ -106,12 +106,18 @@ class RAGClient:
                 progress_callback=progress_callback,
                 cancel_event=cancel_event,
             )
+            # Milestone 1: Fix cleanup for cancelled jobs
             if cancel_event is not None and cancel_event.is_set() and result.success:
                 # Close the last race between the pipeline's final safe-boundary
                 # check and a gateway timeout. The per-document lock remains held
                 # until this cleanup completes, so an immediate retry cannot race it.
                 try:
-                    self._vector_repo.delete_document_chunks(document_id)
+                    # Milestone 1 FIX: Use index_writer directly in independent mode
+                    if settings.rag_engine_mode == "independent":
+                        self._ingest.index_writer.delete_document(document_id)
+                    else:
+                        if self._vector_repo:
+                            self._vector_repo.delete_document_chunks(document_id)
                     result = result.model_copy(update={
                         "success": False, "status": "failed", "chunk_count": 0,
                         "error": "Ingestion cancelled after the request timed out.",
@@ -127,6 +133,7 @@ class RAGClient:
             with self._ingest_locks_guard:
                 lock.release()
                 self._active_ingests.pop(document_id, None)
+                self._cancel_events.pop(document_id, None)
                 if self._ingest_locks.get(document_id) is lock:
                     self._ingest_locks.pop(document_id, None)
 
@@ -161,6 +168,7 @@ class RAGClient:
         question: str,
         user_id: str,  # SEC-001: Made REQUIRED
         paper_ids: Optional[List[str]] = None,
+        document_ids: Optional[List[str]] = None,
         sections: Optional[List[str]] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
@@ -175,6 +183,7 @@ class RAGClient:
             question: Research question to answer
             user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
             paper_ids: Optional paper IDs to search within user's scope
+            document_ids: Optional document IDs to search within user's scope
             sections: Optional sections to filter
             top_k: Number of sources to retrieve
             conversation_context: Optional conversation history
@@ -209,7 +218,7 @@ class RAGClient:
         if not user_id:
             raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
             
-        filters = QueryFilters(sections=sections) if sections else None
+        filters = QueryFilters(sections=sections, document_ids=document_ids) if (sections or document_ids) else None
         result: RAGResult = self._query_pipeline.answer_question(
             question=question,
             user_id=user_id,  # SEC-001: Pass as required positional arg
@@ -302,7 +311,10 @@ class RAGClient:
         """Remove a document's records from the active vector and lexical indexes."""
         with self._ingest_locks_guard:
             if document_id in self._active_ingests:
-                raise RuntimeError("Cannot delete source chunks while its ingestion is still active.")
+                cancel_evt = self._cancel_events.get(document_id)
+                if cancel_evt and not cancel_evt.is_set():
+                    cancel_evt.set()
+                logger.warning("delete_document_chunks requested while document_id=%s has active ingestion record", document_id)
         if settings.rag_engine_mode == "independent":
             from rag.independent.index_writer import IndependentIndexWriter
             return IndependentIndexWriter().delete_document(document_id)

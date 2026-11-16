@@ -66,6 +66,9 @@ fix_test_owner_ids.py
 # Uploaded documents (backend file storage)
 storage/
 
+# Test runtime environments
+.test_desktop_env/
+
 # Private reviewed NLP annotations and local model artifacts
 rag/training/local_data/
 rag/training/model_registry/

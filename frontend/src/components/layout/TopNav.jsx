@@ -8,6 +8,7 @@ import { UserDropdown } from "./UserDropdown";
 import { ResearchLensLogo } from "@/components/brand/ResearchLensLogo";
 import { cn } from "@/utils/cn";
 import { usePapers } from "@/hooks/usePapers";
+import { useChatScopeStore } from "@/store/chatScopeStore";
 import { AddSourcesModal } from "@/components/upload/AddSourcesModal";
 
 const PRIMARY_DESTINATIONS = [
@@ -20,6 +21,13 @@ export function TopNav() {
   const pathname = usePathname();
   const [addSourcesOpen, setAddSourcesOpen] = useState(false);
   const { papers = [] } = usePapers(1, 50);
+  const { selectedPaperIds, lastViewedPaperId } = useChatScopeStore();
+
+  const activePaperId = lastViewedPaperId || (selectedPaperIds.length > 0 ? selectedPaperIds[0] : null);
+  // When in Research Desk (/chat), clicking Library navigates directly back to the active project page
+  const libraryHref = (pathname.startsWith("/chat") && activePaperId)
+    ? `/papers/${activePaperId}`
+    : "/papers";
 
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200/70 bg-white/95 px-4 backdrop-blur-sm sm:px-6">
@@ -41,10 +49,11 @@ export function TopNav() {
             const active = href === "/papers"
               ? pathname === "/papers" || pathname.startsWith("/papers/") || pathname === "/dashboard"
               : pathname === href || pathname.startsWith(`${href}/`);
+            const destinationHref = label === "Library" ? libraryHref : href;
             return (
               <Link
                 key={href}
-                href={href}
+                href={destinationHref}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "text-xs sm:text-sm transition-colors py-1",

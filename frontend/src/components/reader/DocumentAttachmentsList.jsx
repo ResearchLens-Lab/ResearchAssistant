@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Plus, RefreshCw } from "lucide-react";
+import { FileText, Plus, RefreshCw, X } from "lucide-react";
 import { formatBytes, formatDate } from "@/utils/formatters";
 import { DocumentProcessingProgress } from "@/components/papers/DocumentProcessingProgress";
 import { documentsService } from "@/services/documents.service";
@@ -37,6 +37,14 @@ export function DocumentAttachmentsList({
     onSuccess: (document) => {
       queryClient.invalidateQueries({ queryKey: ["paperDocuments", document.paper_id] });
       queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: documentsService.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["paperDocuments"] });
+      queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
+      queryClient.invalidateQueries({ queryKey: ["papers"] });
     },
   });
   return (
@@ -90,10 +98,16 @@ export function DocumentAttachmentsList({
       ) : (
         <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
           {retryMutation.isError && <p role="alert" className="text-xs text-rose-700">{retryMutation.error?.message || "Could not retry the source."}</p>}
+          {deleteMutation.isError && <p role="alert" className="text-xs text-rose-700">{deleteMutation.error?.message || "Could not remove the source."}</p>}
           {documents.map((doc) => {
             const isIndexed = doc.processing_status === "indexed";
             const isFailed = doc.processing_status === "failed";
+            const isCancelled = doc.processing_status === "cancelled";
             const isProcessing = doc.processing_status === "processing" || doc.processing_status === "uploaded";
+            const isCleanupPending = doc.cleanup_status === "in_progress" || doc.cleanup_status === "pending";
+            const isCleanupFailed = doc.cleanup_status === "failed";
+            const canRetry = (isFailed || isCancelled) && !isCleanupPending;
+            const canDelete = isFailed || isCancelled || isIndexed;
 
             return (
               <div
@@ -113,6 +127,8 @@ export function DocumentAttachmentsList({
                   <div className="flex shrink-0 items-center gap-1.5">
                     {doc.chunk_count && <span className="font-mono text-[11px] text-slate-500">{doc.chunk_count} chunks</span>}
                     {doc.reindex_required && <Badge variant="outline" className="text-[10px] border-amber-300 bg-amber-50 text-amber-800">Update available</Badge>}
+                    {isCleanupPending && <Badge variant="outline" className="text-[10px] border-orange-300 bg-orange-50 text-orange-800">Cleanup pending</Badge>}
+                    {isCleanupFailed && <Badge variant="destructive" className="text-[10px]">Cleanup failed</Badge>}
                     <Badge variant={isIndexed ? "grounded" : isFailed ? "destructive" : "secondary"} className="text-[10px] capitalize">{isIndexed ? "Ready" : isProcessing ? "Processing" : doc.processing_status}</Badge>
                     {isProcessing && (
                       <Button
@@ -125,8 +141,32 @@ export function DocumentAttachmentsList({
                         {cancelMutation.isPending && cancelMutation.variables === doc.id ? "Stopping…" : "Cancel"}
                       </Button>
                     )}
-                    {isFailed && <Button size="sm" variant="soft" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate(doc.id)} className="h-7 text-[10px]">{retryMutation.isPending && retryMutation.variables === doc.id ? "Retrying…" : "Retry"}</Button>}
+                    {(isFailed || isCancelled) && (
+                      <Button 
+                        size="sm" 
+                        variant="soft" 
+                        disabled={!canRetry || retryMutation.isPending} 
+                        onClick={() => retryMutation.mutate(doc.id)} 
+                        className="h-7 text-[10px]"
+                        title={!canRetry ? "Cannot retry while cleanup is in progress" : ""}
+                      >
+                        {retryMutation.isPending && retryMutation.variables === doc.id ? "Retrying…" : "Retry"}
+                      </Button>
+                    )}
                     {isIndexed && doc.reindex_required && <Button size="sm" variant="outline" disabled={reindexMutation.isPending} onClick={() => reindexMutation.mutate(doc.id)} className="h-7 text-[10px] border-amber-300 text-amber-800 hover:bg-amber-50">{reindexMutation.isPending && reindexMutation.variables === doc.id ? "Updating…" : "Re-index"}</Button>}
+                    {canDelete && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={deleteMutation.isPending && deleteMutation.variables === doc.id}
+                        onClick={() => deleteMutation.mutate(doc.id)}
+                        className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Remove source"
+                        aria-label={`Remove ${doc.filename}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {isProcessing && <DocumentProcessingProgress document={doc} />}

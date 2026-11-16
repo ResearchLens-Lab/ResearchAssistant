@@ -9,7 +9,7 @@ const { spawn } = require("node:child_process");
 const { fileURLToPath } = require("node:url");
 
 const LOCAL_APP_DATA = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-const RUNTIME_HOME = path.join(LOCAL_APP_DATA, "ResearchLens");
+const RUNTIME_HOME = process.env.RESEARCHLENS_RUNTIME_HOME || path.join(LOCAL_APP_DATA, "ResearchLens");
 app.setPath("userData", RUNTIME_HOME);
 
 const settingsFile = path.join(RUNTIME_HOME, "desktop-settings.json");
@@ -533,6 +533,9 @@ function registerIpc() {
     appendPrivateLog("Local library verified and configured.");
     try {
       await startLocalServices();
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents?.session) {
+        try { await mainWindow.webContents.session.clearCache(); } catch {}
+      }
       await mainWindow.loadURL(`${uiOrigin}/login`);
     } catch (error) {
       appendPrivateLog(`First-run service initialization failed: ${error.message}`);
@@ -723,8 +726,11 @@ async function openApplication() {
     try {
       await startLocalServices();
       // Provide a brief pause so user sees 100% completion before UI transition
-      setTimeout(() => {
+      setTimeout(async () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
+          if (mainWindow.webContents?.session) {
+            try { await mainWindow.webContents.session.clearCache(); } catch {}
+          }
           mainWindow.loadURL(`${uiOrigin}/login`);
         }
       }, 450);
@@ -758,6 +764,7 @@ function createWindow() {
         : undefined);
 
   mainWindow = new BrowserWindow({
+    title: process.env.RESEARCHLENS_RUNTIME_HOME ? "[ISOLATED TEST ENVIRONMENT] ResearchLens" : "ResearchLens",
     width: 1500,
     height: 960,
     minWidth: 1040,
@@ -775,6 +782,12 @@ function createWindow() {
       devTools: !app.isPackaged,
     },
   });
+  if (process.env.RESEARCHLENS_RUNTIME_HOME) {
+    mainWindow.on("page-title-updated", (event) => {
+      event.preventDefault();
+      mainWindow.setTitle("[ISOLATED TEST ENVIRONMENT] ResearchLens");
+    });
+  }
   mainWindow.once("ready-to-show", () => mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url && (

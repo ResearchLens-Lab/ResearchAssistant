@@ -13,6 +13,7 @@ import {
   Sparkles,
   Layers,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { useChatScopeStore } from "@/store/chatScopeStore";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -73,7 +74,7 @@ export function ChatInputBar({
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
   const textareaRef = useRef(null);
   const slashMenuRef = useRef(null);
-  const { selectedPaperIds } = useChatScopeStore();
+  const { selectedPaperIds, selectedDocumentIds } = useChatScopeStore();
 
   // Detect slash command typing
   useEffect(() => {
@@ -109,10 +110,57 @@ export function ChatInputBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const activeSlash = SLASH_COMMANDS.find((item) =>
+    input.trim().toLowerCase().startsWith(item.cmd.toLowerCase())
+  );
+
   const handleApplySlash = (slashItem) => {
-    setInput(slashItem.prompt);
+    const raw = input || "";
+    const trimmed = raw.trim();
+    // Check if input already starts with an existing slash command (e.g. /table, /pie, /flowchart, /compare, /summary)
+    const existingSlashMatch = trimmed.match(/^\/[a-z0-9_-]+\s*/i);
+    let remainingQuestion = trimmed;
+    if (existingSlashMatch) {
+      remainingQuestion = trimmed.slice(existingSlashMatch[0].length).trim();
+    }
+
+    let nextValue = "";
+    if (remainingQuestion.length > 0) {
+      nextValue = `${slashItem.cmd} ${remainingQuestion}`;
+    } else {
+      nextValue = slashItem.prompt;
+    }
+
+    setInput(nextValue);
     setShowSlashMenu(false);
-    textareaRef.current?.focus();
+
+    setTimeout(() => {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.focus();
+        const len = textarea.value.length;
+        textarea.selectionStart = len;
+        textarea.selectionEnd = len;
+      }
+    }, 10);
+  };
+
+  const handleRemoveSlash = (cmdPrefix) => {
+    const raw = input || "";
+    const trimmed = raw.trim();
+    if (trimmed.toLowerCase().startsWith(cmdPrefix.toLowerCase())) {
+      const remaining = trimmed.slice(cmdPrefix.length).trim();
+      setInput(remaining);
+      setTimeout(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.focus();
+          const len = textarea.value.length;
+          textarea.selectionStart = len;
+          textarea.selectionEnd = len;
+        }
+      }, 10);
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -149,7 +197,8 @@ export function ChatInputBar({
 
   const handleSubmit = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading || selectedPaperIds.length === 0) return;
+    const hasScope = selectedPaperIds.length > 0 || (selectedDocumentIds && selectedDocumentIds.length > 0);
+    if (!trimmed || isLoading || !hasScope) return;
     setInput("");
     setShowSlashMenu(false);
     try {
@@ -159,7 +208,9 @@ export function ChatInputBar({
     }
   };
 
-  const docCount = selectedPaperIds.length;
+  const docCount = (selectedDocumentIds && selectedDocumentIds.length > 0)
+    ? selectedDocumentIds.length
+    : selectedPaperIds.length;
 
   return (
     <div className="relative border-t border-slate-200/90 bg-white/95 backdrop-blur-xs px-3 py-2 sm:px-6 shrink-0 z-20">
@@ -257,10 +308,28 @@ export function ChatInputBar({
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {activeSlash && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 animate-in fade-in duration-150 shrink-0">
+                  <activeSlash.icon className="h-3 w-3 text-indigo-600" />
+                  <span>{activeSlash.title}</span>
+                  <button
+                    type="button"
+                    title="Remove research tool"
+                    onClick={() => handleRemoveSlash(activeSlash.cmd)}
+                    className="ml-0.5 rounded-full hover:bg-indigo-200/70 p-0.5 text-indigo-500 hover:text-indigo-800 focus:outline-none"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              )}
+
               <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200/70 px-2 py-0.5 text-[10px] font-semibold text-[#1d6fc4]">
                 <Layers className="h-3 w-3" />
                 <span className="truncate max-w-[160px] sm:max-w-[220px]">
-                  {activeProjectName || `${docCount} document${docCount === 1 ? "" : "s"}`}
+                  {selectedDocumentIds && selectedDocumentIds.length > 0
+                    ? `${activeProjectName ? `${activeProjectName} · ` : ""}${selectedDocumentIds.length} source${selectedDocumentIds.length === 1 ? "" : "s"}`
+                    : (activeProjectName || `${docCount} document${docCount === 1 ? "" : "s"}`)}
                 </span>
               </span>
 

@@ -17,6 +17,7 @@ import Link from "next/link";
 import { hasIndexedSources } from "@/lib/researchWorkspace.mjs";
 import { papersService } from "@/services/papers.service";
 import { useQueryClient } from "@tanstack/react-query";
+import { useChatScopeStore } from "@/store/chatScopeStore";
 
 export default function PaperDetailsPage() {
   const params = useParams();
@@ -44,8 +45,15 @@ export default function PaperDetailsPage() {
   } = usePaperDetails(paperId);
 
   const { setSources, openDrawer, isDrawerOpen, closeDrawer } = useCitationStore();
+  const { setLastViewedPaperId } = useChatScopeStore();
   const evidenceAvailable = hasIndexedSources(documents);
   const currentSummary = summaryData?.paper_id === paperId ? summaryData : null;
+
+  useEffect(() => {
+    if (paperId) {
+      setLastViewedPaperId(paperId);
+    }
+  }, [paperId, setLastViewedPaperId]);
 
   useEffect(() => {
     setSources(currentSummary?.sources || []);

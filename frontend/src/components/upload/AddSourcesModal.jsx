@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,30 +32,39 @@ export function AddSourcesModal({
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
 
+  // Memoize papers array to prevent dependency churn
+  const memoizedPapers = useMemo(() => papers, [papers]);
+
   const [targetPaperId, setTargetPaperId] = useState(preselectedPaperId || "");
   const [files, setFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadStage, setUploadStage] = useState("idle"); // "idle" | "uploading" | "preparing"
+  const [uploadStage, setUploadStage] = useState("idle"); // "idle" | "uploading" | "preparing" | "partial_success"
   const [uploadProgress, setUploadProgress] = useState(null);
   const [formError, setFormError] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [batchResults, setBatchResults] = useState(null); // Store per-file results
 
   useEffect(() => {
     if (isOpen) {
-      setTargetPaperId(preselectedPaperId || (papers.length > 0 ? papers[0].id : ""));
+      setTargetPaperId(preselectedPaperId || (memoizedPapers.length > 0 ? memoizedPapers[0].id : ""));
       setFiles([]);
       setIsUploading(false);
       setUploadStage("idle");
       setUploadProgress(null);
       setFormError("");
+      setBatchResults(null);
     }
-  }, [isOpen, preselectedPaperId, papers]);
+  }, [isOpen, preselectedPaperId, memoizedPapers]);
 
   const handleClose = () => {
+    // Only allow close if not uploading or if partial results exist
+    if (isUploading && !batchResults) return;
+    
     setFiles([]);
     setFormError("");
     setIsUploading(false);
     setUploadStage("idle");
+    setBatchResults(null);
     onClose();
   };
 
@@ -105,6 +114,7 @@ export function AddSourcesModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError("");
+    setBatchResults(null);
 
     if (!targetPaperId) {
       setFormError("Please select a target research project.");
@@ -120,7 +130,7 @@ export function AddSourcesModal({
     setUploadProgress({ percent: 5 });
 
     try {
-      const batch = await documentsService.uploadBatch(
+      const response = await documentsService.uploadBatch(
         files,
         targetPaperId,
         (progress) => {
@@ -133,16 +143,45 @@ export function AddSourcesModal({
         }
       );
 
+      // Parse structured response with per-file results
+      const { results = [], success_count = 0, failure_count = 0 } = response || {};
+      setBatchResults(results);
+
       queryClient.invalidateQueries({ queryKey: ["papers"] });
       queryClient.invalidateQueries({ queryKey: ["paperDocumentsByPapers"] });
       queryClient.invalidateQueries({ queryKey: ["paperDocuments", targetPaperId] });
 
-      if (onSuccess) onSuccess(batch);
-      handleClose();
+      // Check if all files are duplicates
+      const allDuplicates = results.length > 0 && results.every((r) =>
+        r.outcome === "already_indexed" || r.outcome === "existing_job"
+      );
+
+      // Determine outcome
+      if (failure_count > 0 && success_count === 0) {
+        // All failed
+        setUploadStage("idle");
+        setIsUploading(false);
+        setFormError(`All ${failure_count} file(s) failed to upload. See details below.`);
+      } else if (failure_count > 0) {
+        // Partial success
+        setUploadStage("partial_success");
+        setIsUploading(false);
+        setFormError(`${success_count} of ${results.length} file(s) processed. ${failure_count} failed.`);
+      } else if (allDuplicates) {
+        // All files are duplicates - don't silently close, keep results visible
+        setUploadStage("idle");
+        setIsUploading(false);
+        setFormError("The selected file(s) are already indexed or actively processing in this project.");
+      } else {
+        // All succeeded with new files
+        if (onSuccess) onSuccess(response);
+        handleClose();
+      }
     } catch (err) {
       setIsUploading(false);
       setUploadStage("idle");
       setFormError(err.message || "Failed to upload documents. Please try again.");
+      setBatchResults(null);
     }
   };
 
@@ -189,10 +228,10 @@ export function AddSourcesModal({
               disabled={isUploading || papers.length === 0}
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-2xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-serif dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-200"
             >
-              {papers.length === 0 ? (
+              {memoizedPapers.length === 0 ? (
                 <option value="">No projects available</option>
               ) : (
-                papers.map((p) => (
+                memoizedPapers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}
                   </option>
@@ -235,7 +274,7 @@ export function AddSourcesModal({
           </div>
 
           {/* Selected Files Queue */}
-          {files.length > 0 && (
+          {files.length > 0 && !batchResults && (
             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 px-0.5">
                 <span>Selected documents ({files.length})</span>
@@ -267,6 +306,50 @@ export function AddSourcesModal({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Per-File Results */}
+          {batchResults && batchResults.length > 0 && (
+            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 px-0.5">
+                <span>Upload results</span>
+              </div>
+              {batchResults.map((result, idx) => {
+                const isItemSuccess = result.success !== undefined ? result.success : (result.outcome !== "failed" && !result.error);
+                const displayFilename = result.filename || result.document?.filename || "Document";
+                return (
+                  <div
+                    key={`result-${idx}`}
+                    className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs border ${
+                      isItemSuccess
+                        ? "bg-emerald-50/50 border-emerald-200/90"
+                        : "bg-rose-50/50 border-rose-200/90"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isItemSuccess ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                      )}
+                      <span className="truncate text-[11px] font-medium max-w-[240px]" title={displayFilename}>
+                        {displayFilename}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-medium ${
+                      isItemSuccess ? "text-emerald-700" : "text-rose-700"
+                    }`}>
+                      {isItemSuccess 
+                        ? (result.outcome === "stored_new" ? "New" : 
+                           result.outcome === "already_indexed" ? "Duplicate" :
+                           result.outcome === "retry_available" ? "Retrying" : "OK")
+                        : (result.error || result.message || "Failed")
+                      }
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

@@ -78,6 +78,14 @@ class IndependentIndexWriter:
             self._ensure_schema(connection)
 
             # Delete prior chunks and metadata for this document
+            # CRITICAL: Capture old chunk IDs BEFORE deletion to clean up headings_fts orphans
+            old_chunk_ids = [
+                row[0] for row in connection.execute(
+                    "SELECT chunk_id FROM lexical_chunks WHERE collection_name = ? AND document_id = ?",
+                    (self.collection_name, document_id),
+                ).fetchall()
+            ]
+            
             connection.execute(
                 "DELETE FROM lexical_chunks WHERE collection_name = ? AND document_id = ?",
                 (self.collection_name, document_id),
@@ -86,11 +94,14 @@ class IndependentIndexWriter:
                 "DELETE FROM lexical_metadata WHERE document_id = ?",
                 (document_id,),
             )
-            connection.execute(
-                "DELETE FROM headings_fts WHERE chunk_id IN ("
-                "SELECT chunk_id FROM lexical_chunks WHERE collection_name = ? AND document_id = ?)",
-                (self.collection_name, document_id),
-            )
+            
+            # Delete headings using captured IDs
+            if old_chunk_ids:
+                placeholders = ",".join("?" * len(old_chunk_ids))
+                connection.execute(
+                    f"DELETE FROM headings_fts WHERE chunk_id IN ({placeholders})",
+                    old_chunk_ids,
+                )
 
             chunk_rows = []
             meta_rows = []
@@ -106,7 +117,9 @@ class IndependentIndexWriter:
 
                 sec_type = str(extra.get("section_type") or "body")
                 method = str(extra.get("extraction_method") or "native")
-                quality = float(extra.get("extraction_confidence") or 1.0)
+                # CRITICAL: Preserve quality 0.0 from OCR confidence, default missing to 1.0
+                confidence = extra.get("extraction_confidence")
+                quality = 1.0 if confidence is None else float(confidence)
                 page_lbl_start = str(extra.get("page_label_start") or chunk.metadata.page_start or "")
                 parent_chunk = str(extra.get("parent_chunk_id") or "")
                 block_kind = str(extra.get("block_kind") or "paragraph")
@@ -339,6 +352,15 @@ class IndependentIndexWriter:
         connection = sqlite3.connect(self.db_path, timeout=30)
         try:
             connection.execute("BEGIN IMMEDIATE")
+            
+            # CRITICAL: Capture chunk IDs BEFORE deletion to clean up headings_fts orphans
+            old_chunk_ids = [
+                row[0] for row in connection.execute(
+                    f"SELECT chunk_id FROM lexical_chunks WHERE collection_name = ? AND {column} = ?",
+                    (self.collection_name, value),
+                ).fetchall()
+            ]
+            
             cursor = connection.execute(
                 f"DELETE FROM lexical_chunks WHERE collection_name = ? AND {column} = ?",
                 (self.collection_name, value),
@@ -348,6 +370,15 @@ class IndependentIndexWriter:
                 f"DELETE FROM lexical_metadata WHERE {column} = ?",
                 (value,),
             )
+            
+            # Delete headings using captured IDs
+            if old_chunk_ids:
+                placeholders = ",".join("?" * len(old_chunk_ids))
+                connection.execute(
+                    f"DELETE FROM headings_fts WHERE chunk_id IN ({placeholders})",
+                    old_chunk_ids,
+                )
+            
             connection.commit()
             return deleted_count
         finally:

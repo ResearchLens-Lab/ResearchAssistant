@@ -193,6 +193,23 @@ class SentenceAnalyzer:
             for pattern_name, pat, conf in concept_patterns:
                 m = pat.search(sent)
                 if m:
+                    # Validate that the concept is in grammatical subject position
+                    prefix = sent[:m.start()].strip()
+                    if prefix:
+                        # Prepositional phrases: e.g. "The key to the algorithm", "The input to an algorithm"
+                        if re.search(r"\b(?:to|of|for|in|with|by|from|about|into|on|at|between|among|than|like|as)\s+(?:an?|the)?$", prefix, re.I):
+                            continue
+                        if re.search(r"\b(?:key|heart|operation|input|output|step|steps|phase|variant|subroutine|procedure|running\s+time|cost|analysis|behavior|nature|instance)\s+(?:to|of|for|in)\s+(?:an?|the)?$", prefix, re.I):
+                            continue
+                        if re.search(r"\bif\s+(?:the\s+)?(?:input|output|argument)\s+to\b", prefix, re.I):
+                            continue
+                        # If prefix is not a section/heading identifier or introductory adverb, it's not the main subject
+                        cleaned = re.sub(r"^(?:(?:section|chapter|part|def|definition)?\s*\d+(?:\.\d+)*\s*[:\.-]?\s*)", "", prefix, flags=re.I).strip()
+                        cleaned = re.sub(rf"^{c_esc}s?\b", "", cleaned, flags=re.I).strip()
+                        cleaned = re.sub(r"^(?:informally|formally|in\s+short|in\s+essence|simply\s+put|strictly\s+speaking|in\s+general|in\s+computer\s+science|in\s+other\s+words)?[,\s]*", "", cleaned, flags=re.I).strip()
+                        if cleaned and not cleaned.endswith((";", ":", ".")):
+                            continue
+
                     candidates.append(
                         DefinitionCandidate(
                             sentence=sent,

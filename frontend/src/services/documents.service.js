@@ -99,6 +99,10 @@ export const documentsService = {
     return apiClient(`/documents/${encodeURIComponent(id)}/cancel`, { method: "POST" });
   },
 
+  async delete(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
   async getSystemOverview() {
     return apiClient("/system/overview", { method: "GET" });
   },

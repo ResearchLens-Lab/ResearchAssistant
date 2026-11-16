@@ -68,7 +68,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   } = useChat(conversationId);
 
   // Source scope & citations
-  const { selectedPaperIds, selectPapers } = useChatScopeStore();
+  const { selectedPaperIds, selectedDocumentIds, selectPapers } = useChatScopeStore();
   const {
     sources,
     setSources,
@@ -102,7 +102,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   // Layout UI states
   const [leftTab, setLeftTab] = useState("history"); // "history" | "scope"
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
-  const [leftSidebarWidth, setLeftSidebarWidth] = useState(268);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(380);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // null | "history" | "scope" | "evidence"
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -115,8 +115,10 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
 
   useEffect(() => {
     const savedWidth = Number(window.localStorage.getItem("research-desk-sidebar-width"));
-    if (Number.isFinite(savedWidth) && savedWidth >= 250 && savedWidth <= 280) {
+    if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 540) {
       setLeftSidebarWidth(savedWidth);
+    } else {
+      setLeftSidebarWidth(380);
     }
   }, []);
 
@@ -128,7 +130,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("research-desk-sidebar-width", String(Math.max(250, Math.min(280, leftSidebarWidth))));
+    window.localStorage.setItem("research-desk-sidebar-width", String(Math.max(360, Math.min(540, leftSidebarWidth))));
   }, [leftSidebarWidth]);
 
   // 1. Sync query param paper_id if present
@@ -218,6 +220,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
       const res = await sendMessage({
         question,
         paper_ids: selectedPaperIds,
+        document_ids: selectedDocumentIds && selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined,
         conversation_id: conversationId || null,
         answer_mode: answerMode,
       });
@@ -358,71 +361,98 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     <div className="relative flex h-full min-h-0 w-full overflow-hidden bg-[var(--rl-canvas)]">
       {/* Pane 1: Desktop research navigation */}
       <div className={`relative hidden lg:flex h-full shrink-0 flex-col overflow-hidden border-r border-[var(--rl-border)] bg-white z-10 transition-[width] duration-200 ${isLeftSidebarOpen ? "min-w-0" : "w-16"}`} style={isLeftSidebarOpen ? { width: leftSidebarWidth } : undefined}>
-          <div className="shrink-0 border-b border-slate-100 p-3">
-            <Button
-              type="button"
-              onClick={handleNewResearch}
-              className="h-9 w-full justify-center gap-2 rounded-xl bg-[var(--rl-primary)] text-sm font-semibold text-white shadow-sm hover:bg-[#1f659c]"
-            >
-              <Plus className="h-4 w-4" />
-              {isLeftSidebarOpen && <span>New research</span>}
-            </Button>
-          </div>
-          {/* Tab Content */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {!isLeftSidebarOpen ? (
-              <div className="flex flex-col items-center gap-2 p-2">
-                <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("history"); }} title="Recent sessions" aria-label="Recent sessions" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Clock className="h-4 w-4" /></button>
-                <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("scope"); }} title="Projects and sources" aria-label="Projects and sources" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Layers className="h-4 w-4" /></button>
-              </div>
-            ) : leftTab === "history" ? (
-              <ResearchHistorySidebar
-                conversations={conversations}
-                isLoading={isLoadingConversations}
-                activeId={conversationId}
-                onSelectConversation={handleSelectConversation}
-                onNewResearch={handleNewResearch}
-                onRenameConversation={handleRenameSession}
-                onDeleteConversation={handleDeleteSession}
-                isDeleting={isDeletingConversation}
-                isUpdating={isUpdatingConversation}
-                className="w-full min-w-0 border-r-0"
-                papers={papers}
-                documentsByPaper={documentsByPaper}
-                selectedPaperIds={selectedPaperIds}
-                onSelectPaper={(id) => selectPapers([id])}
-                onUpdatePaper={updatePaper}
-                onDeletePaper={handleDeletePaper}
-                isDeletingPaper={isDeletingPaper}
-              />
-            ) : (
-              <PaperScopeRail className="w-full min-w-0 border-r-0" />
-            )}
-          </div>
-          <div
-            hidden={!isLeftSidebarOpen}
-            role="separator"
-            aria-label="Resize research sidebar"
-            aria-orientation="vertical"
-            aria-valuemin={250}
-            aria-valuemax={280}
-            aria-valuenow={leftSidebarWidth}
-            tabIndex={0}
-            onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
-            onPointerMove={(event) => {
-              if (event.buttons !== 1) return;
-              const bounds = event.currentTarget.parentElement.getBoundingClientRect();
-              setLeftSidebarWidth(Math.max(250, Math.min(280, event.clientX - bounds.left)));
-            }}
-            onKeyDown={(event) => {
-              const direction = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
-              if (!direction) return;
-              event.preventDefault();
-              setLeftSidebarWidth((width) => Math.max(250, Math.min(280, width + direction)));
-            }}
-            className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize touch-none border-r border-transparent transition-colors hover:border-sky-400 hover:bg-sky-100/60 focus-visible:bg-sky-100"
-          />
+        <div className="shrink-0 border-b border-slate-100 p-3 space-y-2">
+          <Button
+            type="button"
+            onClick={handleNewResearch}
+            className="h-9 w-full justify-center gap-2 rounded-xl bg-[var(--rl-primary)] text-sm font-semibold text-white shadow-sm hover:bg-[#1f659c]"
+          >
+            <Plus className="h-4 w-4" />
+            {isLeftSidebarOpen && <span>New research</span>}
+          </Button>
+
+          {isLeftSidebarOpen && (
+            <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium text-slate-600">
+              <button
+                type="button"
+                onClick={() => setLeftTab("history")}
+                className={`flex-1 py-1.5 px-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${leftTab === "history"
+                    ? "bg-white text-slate-900 font-semibold shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                <span>Sessions</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeftTab("scope")}
+                className={`flex-1 py-1.5 px-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${leftTab === "scope"
+                    ? "bg-white text-slate-900 font-semibold shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Sources {selectedDocumentIds.length > 0 ? `(${selectedDocumentIds.length})` : (selectableIds.length > 0 ? `(${selectableIds.length})` : "")}</span>
+              </button>
+            </div>
+          )}
         </div>
+        {/* Tab Content */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {!isLeftSidebarOpen ? (
+            <div className="flex flex-col items-center gap-2 p-2">
+              <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("history"); }} title="Recent sessions" aria-label="Recent sessions" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Clock className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setIsLeftSidebarOpen(true); setLeftTab("scope"); }} title="Projects and sources" aria-label="Projects and sources" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"><Layers className="h-4 w-4" /></button>
+            </div>
+          ) : leftTab === "history" ? (
+            <ResearchHistorySidebar
+              conversations={conversations}
+              isLoading={isLoadingConversations}
+              activeId={conversationId}
+              onSelectConversation={handleSelectConversation}
+              onNewResearch={handleNewResearch}
+              onRenameConversation={handleRenameSession}
+              onDeleteConversation={handleDeleteSession}
+              isDeleting={isDeletingConversation}
+              isUpdating={isUpdatingConversation}
+              className="w-full min-w-0 border-r-0"
+              papers={papers}
+              documentsByPaper={documentsByPaper}
+              selectedPaperIds={selectedPaperIds}
+              onSelectPaper={(id) => selectPapers([id])}
+              onUpdatePaper={updatePaper}
+              onDeletePaper={handleDeletePaper}
+              isDeletingPaper={isDeletingPaper}
+            />
+          ) : (
+            <PaperScopeRail className="w-full min-w-0 border-r-0" onClose={() => setLeftTab("history")} />
+          )}
+        </div>
+        <div
+          hidden={!isLeftSidebarOpen}
+          role="separator"
+          aria-label="Resize research sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={360}
+          aria-valuemax={540}
+          aria-valuenow={leftSidebarWidth}
+          tabIndex={0}
+          onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+          onPointerMove={(event) => {
+            if (event.buttons !== 1) return;
+            const bounds = event.currentTarget.parentElement.getBoundingClientRect();
+            setLeftSidebarWidth(Math.max(360, Math.min(540, event.clientX - bounds.left)));
+          }}
+          onKeyDown={(event) => {
+            const direction = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
+            if (!direction) return;
+            event.preventDefault();
+            setLeftSidebarWidth((width) => Math.max(360, Math.min(540, width + direction)));
+          }}
+          className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize touch-none border-r border-transparent transition-colors hover:border-sky-400 hover:bg-sky-100/60 focus-visible:bg-sky-100"
+        />
+      </div>
 
       {/* Pane 2: Center Thread Canvas */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -462,11 +492,10 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
               type="button"
               onClick={handleOpenScope}
               title="Click to configure source scope"
-              className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs truncate max-w-xs transition-colors ${
-                selectedPaperIds.length > 0
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs truncate max-w-xs transition-colors ${selectedPaperIds.length > 0
                   ? "border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100"
                   : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-              }`}
+                }`}
             >
               <Layers className="h-3 w-3 shrink-0" />
               <span className="truncate">{scopeLabel}</span>
@@ -615,7 +644,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                         message={msg}
                         autoSelectFirstCitation={msg.id === latestAssistantMessageId}
                         researchQuestion={questionByAssistantId.get(msg.id) || ""}
-                        onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
+                        onFollowUp={(query) => handleSendMessage(query).catch(() => { })}
                       />
                     ) : null}
                     <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 pb-3 text-slate-600">
@@ -631,7 +660,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
                     message={msg}
                     autoSelectFirstCitation={msg.id === latestAssistantMessageId}
                     researchQuestion={questionByAssistantId.get(msg.id) || ""}
-                    onFollowUp={(query) => handleSendMessage(query).catch(() => {})}
+                    onFollowUp={(query) => handleSendMessage(query).catch(() => { })}
                   />
                 )
               )}
@@ -684,8 +713,8 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
             mobilePanel === "history"
               ? "Research history"
               : mobilePanel === "scope"
-              ? "Research sources"
-              : "Evidence Trail"
+                ? "Research sources"
+                : "Evidence Trail"
           }
           className="fixed inset-x-0 bottom-0 top-16 z-40 flex bg-slate-950/35 min-[1024px]:hidden"
           onClick={() => {

@@ -10,6 +10,7 @@ from backend.app.schemas.citation import Source
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     paper_ids: list[str] = Field(min_length=1)
+    document_ids: Optional[list[str]] = Field(default_factory=list)
     conversation_id: Optional[str] = None
     answer_mode: Literal["EVIDENCE_FIRST", "DOCUMENTS_GENERAL", "OPTIONAL_LOCAL_AI", "DOCUMENTS_ONLY", "INDEPENDENT"] = "EVIDENCE_FIRST"
 

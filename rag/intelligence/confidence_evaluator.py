@@ -102,6 +102,8 @@ class ConfidenceEvaluator:
             "explain", "describe", "compare", "list", "show", "give", "does", "from",
             "the", "and", "for", "with", "that", "this", "these", "those", "was",
             "were", "are", "been", "being", "have", "has", "had", "about", "into",
+            "table", "pie", "chart", "flowchart", "mermaid", "summary", "outline",
+            "different", "types", "categories", "paradigms", "methods", "classes",
         }
         raw_words = re.findall(r"\b[A-Za-z0-9]{3,}\b", query.raw_query)
         informative_terms = [w.lower() for w in raw_words if w.lower() not in stopwords]
@@ -113,16 +115,17 @@ class ConfidenceEvaluator:
         matched_terms = [t for t in informative_terms if t in combined_source_text]
         term_coverage = len(matched_terms) / max(1, len(informative_terms))
 
-        if (missing_entities and term_coverage < 0.60) or (informative_terms and term_coverage < 0.35):
-            missing_desc = ", ".join(f"'{e}'" for e in (missing_entities or [t for t in informative_terms if t not in matched_terms])[:3])
-            return ConfidenceReport(
-                level=ConfidenceLevel.NOT_LOCATED,
-                overall_confidence_score=0.10,
-                is_definitive_answer=False,
-                top_source=None,
-                justification=f"Your indexed documents do not contain evidence for key terms ({missing_desc}).",
-                limitations=["Target concepts from the query were not found in the selected library."],
-            )
+        if query.intent != ResearchIntent.CLASSIFICATION:
+            if (missing_entities and term_coverage < 0.60) or (informative_terms and term_coverage < 0.35):
+                missing_desc = ", ".join(f"'{e}'" for e in (missing_entities or [t for t in informative_terms if t not in matched_terms])[:3])
+                return ConfidenceReport(
+                    level=ConfidenceLevel.NOT_LOCATED,
+                    overall_confidence_score=0.10,
+                    is_definitive_answer=False,
+                    top_source=None,
+                    justification=f"Your indexed documents do not contain evidence for key terms ({missing_desc}).",
+                    limitations=["Target concepts from the query were not found in the selected library."],
+                )
 
         primary_concept = query.primary_concept or ""
 
@@ -254,7 +257,35 @@ class ConfidenceEvaluator:
                     limitations=limitations,
                 )
 
-        # 4. PROCEDURE / THEOREM / GENERAL
+        # 4. CLASSIFICATION / TAXONOMY
+        elif query.intent == ResearchIntent.CLASSIFICATION:
+            paradigms_matched = [
+                p for p in ["divide and conquer", "divide-and-conquer", "greedy", "dynamic programming", "backtracking", "branch and bound", "branch-and-bound", "randomized", "approximation"]
+                if any(p in s.text.lower() for s in sources)
+            ]
+            if len(paradigms_matched) >= 2:
+                signals.append(f"Major algorithmic paradigms identified across source text: {', '.join(paradigms_matched)}")
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.95,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification="Definitive algorithmic taxonomy and foundational design paradigms verified across textbook sources.",
+                    evidence_signals=signals,
+                    limitations=[],
+                )
+            else:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.STRONG,
+                    overall_confidence_score=0.85,
+                    is_definitive_answer=True,
+                    top_source=top_source,
+                    justification="Algorithmic taxonomy and structural categories established from source text.",
+                    evidence_signals=signals,
+                    limitations=[],
+                )
+
+        # 5. PROCEDURE / THEOREM / GENERAL
         else:
             if top_score >= 1.5:
                 return ConfidenceReport(

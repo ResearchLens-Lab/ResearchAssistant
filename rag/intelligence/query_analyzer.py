@@ -27,6 +27,7 @@ class ResearchIntent(str, enum.Enum):
     COUNT_RANKING = "COUNT_RANKING"
     RELATIONSHIP = "RELATIONSHIP"
     EVIDENCE_VERIFICATION = "EVIDENCE_VERIFICATION"
+    CLASSIFICATION = "CLASSIFICATION"
     OTHER = "OTHER"
 
 
@@ -162,6 +163,15 @@ DEFAULT_SECTION_PRIORS: Dict[ResearchIntent, Dict[str, float]] = {
         "bibliography": 0.05,
         "index": 0.01,
     },
+    ResearchIntent.CLASSIFICATION: {
+        "body": 1.8,
+        "front_matter": 1.6,
+        "definitions": 1.4,
+        "chapter_notes": 0.5,
+        "exercises": 0.2,
+        "bibliography": 0.01,
+        "index": 0.1,
+    },
     ResearchIntent.OTHER: {
         "body": 1.0,
         "definitions": 1.0,
@@ -198,6 +208,47 @@ class QueryAnalyzer:
 
     def analyze(self, query: str) -> QueryUnderstanding:
         clean = unicodedata.normalize("NFKC", query).strip()
+        orig_query = clean
+
+        # Extract slash command if present at start of query (e.g. /table, /pie, /flowchart, /compare, /summary)
+        slash_match = re.match(
+            r"^\s*/(table|pie|chart|flowchart|mermaid|compare|summary|outline)\b\s*",
+            clean,
+            re.I,
+        )
+        output_format = None
+        if slash_match:
+            cmd = slash_match.group(1).lower()
+            if cmd in ("table", "tabular"):
+                output_format = "table"
+            elif cmd in ("pie", "chart"):
+                output_format = "pie"
+            elif cmd in ("flowchart", "mermaid"):
+                output_format = "flowchart"
+            elif cmd == "compare":
+                output_format = "compare"
+            elif cmd in ("summary", "outline"):
+                output_format = "summary"
+            clean = clean[slash_match.end():].strip()
+            if not clean:
+                clean = "algorithms"
+        elif re.search(
+            r"\b(?:as\s+a\s+table|in\s+a\s+table|tabular\s+format|tabular\s+synthesis|make\s+a\s+table|give\s+(?:me\s+)?a\s+table|table\s+of)\b",
+            clean.casefold(),
+        ):
+            output_format = "table"
+        elif re.search(
+            r"\b(?:pie\s+chart|distribution\s+chart|pie\s+graph)\b",
+            clean.casefold(),
+        ):
+            output_format = "pie"
+        elif re.search(
+            r"\b(?:flowchart|flow\s+chart|process\s+flow)\b", clean.casefold()
+        ):
+            output_format = "flowchart"
+
+        self._current_output_format = output_format
+        self._current_raw_query = orig_query
         lower = clean.casefold()
 
         # 1. DEFINITION
@@ -219,6 +270,33 @@ class QueryAnalyzer:
             return self._build_result(
                 clean, ResearchIntent.DEFINITION, [concept], "definition_pattern",
                 synonyms=self._concept_synonyms(concept)
+            )
+
+        # 1.5. CLASSIFICATION / PARADIGMS / TYPES
+        # "What are the different types of algorithms?", "Types of algorithms", "Categories of algorithms", "Algorithm design paradigms"
+        m_cls = (
+            re.search(r"\b(?:what\s+are\s+(?:the\s+)?)?(?:different\s+|major\s+|main\s+)?(?:types|classes|categories|kinds|paradigms|methods|approaches)\s+of\s+([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"^(?:different\s+|major\s+|main\s+)?(?:types|classes|categories|kinds|paradigms)\s+of\s+([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"\b(?:algorithm|algorithmic)\s+(?:design\s+)?(?:paradigms|techniques|strategies|classes|types|categories)\b", lower)
+            or re.search(r"\bclassification\s+of\s+([a-z0-9\s-]{2,60})\??$", lower)
+        )
+        if m_cls:
+            raw_target = m_cls.group(1) if (m_cls.lastindex and m_cls.group(1)) else "algorithm"
+            concept = self._clean_concept(raw_target) or "algorithm"
+            paradigms = [
+                "divide and conquer",
+                "greedy method",
+                "dynamic programming",
+                "backtracking",
+                "branch and bound",
+                "randomized algorithms",
+                "approximation algorithms",
+                "parallel algorithms",
+            ]
+            return self._build_result(
+                clean, ResearchIntent.CLASSIFICATION, [concept], "classification_pattern",
+                constraints={"taxonomy": "algorithmic_paradigms"},
+                synonyms=[concept, *paradigms]
             )
 
         # 2. COMPLEXITY
@@ -277,9 +355,12 @@ class QueryAnalyzer:
         m_list = re.search(r"\b(?:list|what\s+are)\s+(?:the\s+)?(?:essential\s+)?(?:properties|characteristics|features|components|operations|elements)\s+(?:of|supported\s+by|in)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
         if m_list:
             concept = self._clean_concept(m_list.group(1))
+            syns = [concept, "properties", "characteristics", "criteria"]
+            if concept in ("algorithm", "algorithms"):
+                syns.extend(["criteria", "finiteness", "definiteness", "effectiveness", "input", "output"])
             return self._build_result(
                 clean, ResearchIntent.LIST_PROPERTIES, [concept], "list_properties_pattern",
-                synonyms=[concept, "properties", "characteristics", "criteria"]
+                synonyms=syns
             )
 
         # 6. LOCATE
@@ -404,14 +485,28 @@ class QueryAnalyzer:
 
         search_terms = list(dict.fromkeys(cleaned_concepts + (synonyms or [])))
 
+        merged_constraints = dict(constraints or {})
+        current_fmt = getattr(self, "_current_output_format", None)
+        if current_fmt and "output_format" not in merged_constraints:
+            merged_constraints["output_format"] = current_fmt
+
+        current_raw = getattr(self, "_current_raw_query", None) or raw_query
+
+        # If format is compare and intent not comparison, promote to comparison
+        effective_intent = intent
+        if current_fmt == "compare" and intent != ResearchIntent.COMPARISON:
+            effective_intent = ResearchIntent.COMPARISON
+        elif current_fmt == "summary" and intent == ResearchIntent.OTHER:
+            effective_intent = ResearchIntent.SUMMARIZATION
+
         return QueryUnderstanding(
-            raw_query=raw_query,
-            normalized_query=raw_query.strip(),
-            intent=intent,
+            raw_query=current_raw,
+            normalized_query=current_raw.strip(),
+            intent=effective_intent,
             target_concepts=cleaned_concepts,
             primary_concept=primary,
             secondary_concept=secondary,
-            query_constraints=constraints or {},
+            query_constraints=merged_constraints,
             section_priors=priors,
             expanded_search_terms=search_terms,
             matched_rule=rule_name,

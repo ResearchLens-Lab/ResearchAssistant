@@ -88,6 +88,7 @@ class ChatService:
             question=payload.question,
             user_id=str(user.id),  # SEC-001: Pass authenticated user ID (REQUIRED)
             paper_ids=paper_ids,
+            document_ids=payload.document_ids,
             conversation_context=conversation_context,
             progress_callback=progress_callback,
             answer_mode=payload.answer_mode,

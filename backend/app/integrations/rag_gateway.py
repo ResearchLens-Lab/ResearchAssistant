@@ -116,10 +116,12 @@ class RAGGateway:
         paper_id: str,
         metadata: Optional[dict[str, Any]] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
+        cancel_event: Optional[Any] = None,  # Milestone 1: Accept cancellation event
     ) -> dict[str, Any]:
         return await self._call(
             "ingest_document", file_path=file_path, paper_id=paper_id, metadata=metadata,
             **({"progress_callback": progress_callback} if progress_callback else {}),
+            **({"cancel_event": cancel_event} if cancel_event else {}),
             cooperative_cancel=True,
             timeout_seconds=get_settings().rag_ingest_timeout_seconds,
         )
@@ -132,6 +134,7 @@ class RAGGateway:
         question: str,
         user_id: str,  # SEC-001: Made REQUIRED
         paper_ids: Optional[list[str]] = None,
+        document_ids: Optional[list[str]] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
         progress_callback: Optional[Callable[[dict], None]] = None,
@@ -145,6 +148,7 @@ class RAGGateway:
             question: Research question to answer
             user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
             paper_ids: Optional paper IDs to search within user's scope
+            document_ids: Optional document IDs to search within user's scope
             top_k: Number of sources to retrieve
             conversation_context: Optional conversation history
             progress_callback: Optional callback for progress updates
@@ -167,6 +171,7 @@ class RAGGateway:
             top_k=top_k,
             answer_mode=answer_mode,
             paper_metadata=paper_metadata,
+            **({"document_ids": document_ids} if document_ids else {}),
             **({"conversation_context": conversation_context} if conversation_context else {}),
             **({"progress_callback": progress_callback} if progress_callback else {}),
         )

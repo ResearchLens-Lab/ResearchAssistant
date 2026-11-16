@@ -77,9 +77,23 @@ export function usePaperDetails(paperId) {
     queryKey: ["paperDocuments", paperId],
     queryFn: () => papersService.getDocuments(paperId),
     enabled: !!paperId,
-    refetchInterval: (query) => query.state.data?.some((document) =>
-      document.processing_status === "processing" || document.processing_status === "uploaded"
-    ) ? 3000 : false,
+    refetchInterval: (query) => {
+      const docs = query.state.data;
+      if (!Array.isArray(docs)) return false;
+      const hasActive = docs.some((doc) => {
+        const s = doc.processing_status;
+        const stage = doc.processing_stage;
+        return (
+          s === "processing" ||
+          s === "uploaded" ||
+          s === "extracting" ||
+          s === "ocr_processing" ||
+          s === "indexing" ||
+          (stage && stage !== "ready" && stage !== "failed" && stage !== "cancelled")
+        );
+      });
+      return hasActive ? 2500 : false;
+    },
   });
 
   const summarizeMutation = useMutation({

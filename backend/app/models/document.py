@@ -29,7 +29,25 @@ class DocumentStatus(str, enum.Enum):
     PARTIAL = "partial"
     NEEDS_REVIEW = "needs_review"
     FAILED = "failed"
+    CANCEL_REQUESTED = "cancel_requested"
+    CANCELLING_CLEANUP = "cancelling_cleanup"
     CANCELLED = "cancelled"
+    CLEANUP_FAILED = "cleanup_failed"
+
+
+class CleanupStatus(str, enum.Enum):
+    """Cleanup state for failed/cancelled documents."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class OperationType(str, enum.Enum):
+    """Type of ingestion operation."""
+    INITIAL_UPLOAD = "initial_upload"
+    RETRY = "retry"
+    REINDEX = "reindex"
 
 
 class Document(Base, TimestampMixin):
@@ -58,3 +76,23 @@ class Document(Base, TimestampMixin):
     processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime())
     processing_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime())
     chunk_count: Mapped[Optional[int]] = mapped_column(Integer)
+    
+    # Milestone 1: Document lifecycle fields
+    cleanup_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    operation_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    index_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    file_hash_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+
+
+class DocumentWorkerLease(Base, TimestampMixin):
+    """Durable worker lease for concurrency prevention and recovery."""
+    
+    __tablename__ = "document_worker_leases"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # "active", "released", "abandoned"
+    started_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
+    released_at: Mapped[Optional[datetime]] = mapped_column(DateTime(), nullable=True)

@@ -23,6 +23,17 @@ from rag.ingestion.structure_extractor import StructureExtractor
 logger = logging.getLogger(__name__)
 
 
+def _parallel_ocr_worker(args: tuple) -> tuple:
+    file_path, page_num, dpi = args
+    import pymupdf
+    from rag.ingestion.ocr_engine import LocalOCREngine
+    engine = LocalOCREngine(default_dpi=dpi)
+    with pymupdf.open(str(file_path)) as doc:
+        p = doc[page_num - 1]
+        res = engine.ocr_page(p, page_num, dpi=dpi)
+        return page_num, res.text or "", res.confidence
+
+
 class BaseDocumentLoader(ABC):
     """
     Abstract interface for document loaders.
@@ -122,8 +133,23 @@ class PDFDocumentLoader(BaseDocumentLoader):
 
             # Checkpoint file for resilient resumption across application restarts
             doc_id = (metadata or {}).get("document_id") or path.stem
+            file_hash = (metadata or {}).get("file_hash")
+            if not file_hash and path.is_file():
+                try:
+                    import hashlib
+                    h = hashlib.sha256()
+                    with path.open("rb") as f_in:
+                        h.update(f_in.read(2 * 1024 * 1024))
+                        h.update(str(path.stat().st_size).encode("utf-8"))
+                    file_hash = h.hexdigest()
+                except Exception:
+                    file_hash = None
+
             checkpoint_file = path.parent / f".ocr-{doc_id}.json"
+            hash_checkpoint_file = path.parent / f".ocr-{file_hash}.json" if file_hash else None
             saved_ocr_pages: Dict[str, Dict[str, Any]] = {}
+
+            # 1. Check doc_id checkpoint
             if checkpoint_file.is_file():
                 try:
                     saved_ocr_pages = json.loads(checkpoint_file.read_text(encoding="utf-8"))
@@ -131,11 +157,40 @@ class PDFDocumentLoader(BaseDocumentLoader):
                 except Exception as exc:
                     logger.warning("Could not read OCR checkpoint for %s: %s", doc_id, exc)
 
+            # 2. Check file_hash checkpoint
+            if not saved_ocr_pages and hash_checkpoint_file and hash_checkpoint_file.is_file():
+                try:
+                    saved_ocr_pages = json.loads(hash_checkpoint_file.read_text(encoding="utf-8"))
+                    logger.info("Resumed %d cached OCR pages from hash checkpoint for %s", len(saved_ocr_pages), file_hash)
+                except Exception as exc:
+                    logger.warning("Could not read hash OCR checkpoint for %s: %s", file_hash, exc)
+
+            # 3. Scan directory for existing OCR cache matching total pages
+            if not saved_ocr_pages and path.parent.is_dir() and ocr_needed_pages:
+                target_count = len(ocr_needed_pages)
+                for candidate in path.parent.glob(".ocr-*.json"):
+                    if candidate.name == checkpoint_file.name or (hash_checkpoint_file and candidate.name == hash_checkpoint_file.name):
+                        continue
+                    try:
+                        data = json.loads(candidate.read_text(encoding="utf-8"))
+                        if isinstance(data, dict) and len(data) >= target_count:
+                            if any(str(p) in data for p in ocr_needed_pages):
+                                saved_ocr_pages = data
+                                logger.info("Discovered and reused %d cached OCR pages from %s", len(data), candidate.name)
+                                break
+                    except Exception:
+                        continue
+
             def _save_checkpoint_atomic(data: dict) -> None:
                 tmp_file = checkpoint_file.parent / f"{checkpoint_file.name}.tmp"
                 try:
                     tmp_file.write_text(json.dumps(data), encoding="utf-8")
                     os.replace(tmp_file, checkpoint_file)
+                    if hash_checkpoint_file:
+                        try:
+                            hash_checkpoint_file.write_text(json.dumps(data), encoding="utf-8")
+                        except Exception:
+                            pass
                 except Exception as exc:
                     logger.debug("Checkpoint write notice: %s", exc)
                     if tmp_file.is_file():
@@ -150,6 +205,38 @@ class PDFDocumentLoader(BaseDocumentLoader):
                         meta.title = str(title)
 
                 page_count = len(reader)
+
+                # Fast parallel extraction for uncached OCR pages across CPU cores
+                uncached_ocr_indices = [idx for idx in sorted(ocr_needed_pages) if str(idx) not in saved_ocr_pages]
+                if len(uncached_ocr_indices) > 2 and ocr_engine.is_available():
+                    chunk_size = min(12, max(4, len(uncached_ocr_indices)))
+                    max_workers = min(4, os.cpu_count() or 4)
+                    try:
+                        from concurrent.futures import ProcessPoolExecutor, as_completed
+                        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                            tasks = [(str(path), p_idx, ocr_engine.default_dpi) for p_idx in uncached_ocr_indices]
+                            for i in range(0, len(tasks), chunk_size):
+                                if cancel_event is not None and cancel_event.is_set():
+                                    _save_checkpoint_atomic(saved_ocr_pages)
+                                    raise RuntimeError("Ingestion cancelled during extraction.")
+                                batch = tasks[i:i + chunk_size]
+                                futures = [executor.submit(_parallel_ocr_worker, item) for item in batch]
+                                for fut in as_completed(futures):
+                                    p_num, p_text, p_conf = fut.result()
+                                    saved_ocr_pages[str(p_num)] = {"text": p_text, "confidence": p_conf}
+                                _save_checkpoint_atomic(saved_ocr_pages)
+                                if progress_callback:
+                                    completed_count = len(saved_ocr_pages)
+                                    progress_val = round(10 + 40 * completed_count / max(page_count, 1))
+                                    progress_callback({
+                                        "stage": "ocr_processing",
+                                        "progress": progress_val,
+                                        "progress_type": "actual",
+                                        "completed_pages": completed_count,
+                                        "total_pages": page_count,
+                                    })
+                    except Exception as mp_exc:
+                        logger.info("ProcessPool OCR notice (%s); proceeding with serial fallback", mp_exc)
 
                 for idx, pdf_page in enumerate(reader, start=1):
                     if cancel_event is not None and cancel_event.is_set():

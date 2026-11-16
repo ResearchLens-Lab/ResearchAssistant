@@ -5,7 +5,7 @@ Supports PersistentClient (local storage) and HttpClient (remote server).
 
 import os
 import logging
-from typing import Optional
+from typing import Optional, Any
 try:
     import chromadb
     from chromadb.config import Settings as ChromaSettings
@@ -79,5 +79,5 @@ class ChromaClientFactory:
         cls.reset_client()
 
     @classmethod
-    def persist_dir_for(cls, client: chromadb.ClientAPI) -> str:
+    def persist_dir_for(cls, client: Any) -> str:
         return cls._client_persist_dirs.get(id(client), settings.chroma_persist_dir)
