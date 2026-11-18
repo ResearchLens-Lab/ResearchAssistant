@@ -769,20 +769,25 @@ class QueryPipeline:
             raise ValueError("user_id is required (SEC-001 compliance)")
 
         from rag.intelligence.summarizer import build_paper_summary
+        from rag.citations.citation_mapper import SourceCitation
         summary_dict = build_paper_summary(paper_id=paper_id, user_id=user_id)
 
         sources = []
         for s in summary_dict.get("sources", []):
-            sources.append(RetrievedSource(
+            sources.append(SourceCitation(
+                source_id=s.get("source_id", ""),
+                paper_id=paper_id,
+                document_id=s.get("document_id", paper_id),
                 chunk_id=s.get("chunk_id", ""),
-                text="",
                 page_start=s.get("page", 1),
                 page_end=s.get("page", 1),
-                locator=s.get("locator", ""),
-                source_id=s.get("source_id", ""),
+                locator=s.get("locator", f"p. {s.get('page', 1)}"),
+                section=s.get("section", "Main Content"),
+                text=s.get("text", ""),
                 title=s.get("title", ""),
                 filename=s.get("filename", ""),
-                section=s.get("section", ""),
+                paper_title=s.get("title", ""),
+                citation_label=f"[{s.get('source_id', '')}]",
             ))
 
         return RAGResult(

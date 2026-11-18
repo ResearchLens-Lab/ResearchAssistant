@@ -16,13 +16,21 @@ import { UserDropdown } from "./UserDropdown";
 import { CommandPalette } from "./CommandPalette";
 import { AddSourcesModal } from "@/components/upload/AddSourcesModal";
 import { usePapers } from "@/hooks/usePapers";
+import { useCitationStore } from "@/store/citationStore";
 import { cn } from "@/utils/cn";
 
 function AppShellContent({ children }) {
   const pathname = usePathname();
+  const { closeDrawer } = useCitationStore();
   const [addSourcesOpen, setAddSourcesOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { papers = [] } = usePapers(1, 50);
+
+  useEffect(() => {
+    if (pathname && !pathname.startsWith("/chat")) {
+      closeDrawer();
+    }
+  }, [pathname, closeDrawer]);
 
   // Status bar state
   const [externalLookups, setExternalLookups] = useState(false);

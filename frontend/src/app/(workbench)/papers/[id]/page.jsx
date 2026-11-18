@@ -56,6 +56,13 @@ export default function PaperDetailsPage() {
   }, [paperId, setLastViewedPaperId]);
 
   useEffect(() => {
+    closeDrawer();
+    return () => {
+      closeDrawer();
+    };
+  }, [closeDrawer]);
+
+  useEffect(() => {
     setSources(currentSummary?.sources || []);
   }, [currentSummary, setSources]);
 

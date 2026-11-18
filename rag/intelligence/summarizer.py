@@ -83,12 +83,24 @@ def build_document_summary(
             """
             SELECT chunk_id, page_start, text, section
             FROM lexical_chunks
-            WHERE document_id = ? AND page_start >= 20 AND length(text) > 200
+            WHERE document_id = ? AND page_start >= 20 AND length(text) > 150
             ORDER BY page_start ASC
             LIMIT 1
             """,
             (document_id,),
         ).fetchone()
+
+        if not first_body_row:
+            first_body_row = conn.execute(
+                """
+                SELECT chunk_id, page_start, text, section
+                FROM lexical_chunks
+                WHERE document_id = ? AND page_start >= 1 AND length(text) > 150
+                ORDER BY page_start ASC
+                LIMIT 1
+                """,
+                (document_id,),
+            ).fetchone()
 
         overview_text = ""
         overview_page = 1
@@ -114,10 +126,23 @@ def build_document_summary(
             """,
             (document_id,),
         )
+        sec_rows = cur.fetchall()
+        if len(sec_rows) < 4:
+            cur = conn.execute(
+                """
+                SELECT section, MIN(page_start) as p_start, chunk_id, text
+                FROM lexical_chunks
+                WHERE document_id = ? AND section IS NOT NULL AND length(trim(section)) > 3
+                GROUP BY section
+                ORDER BY p_start ASC
+                """,
+                (document_id,),
+            )
+            sec_rows = cur.fetchall()
 
         sections = []
         seen_sec = set()
-        for r in cur.fetchall():
+        for r in sec_rows:
             sec = r["section"].strip()
             if JUNK_HEADING_PAT.search(sec) or re.search(r"^\d+\s*$", sec):
                 continue
@@ -127,7 +152,7 @@ def build_document_summary(
             seen_sec.add(sec_norm)
 
             is_chapter = bool(re.search(r"\b(?:chapter\s+\d+|part\s+[ivx]+|\d+\.\d+)\b", sec, re.I))
-            if is_chapter or (r["p_start"] > 22 and len(sections) < max_sections):
+            if is_chapter or (r["p_start"] > 10 and len(sections) < max_sections) or len(sections) < 8:
                 sections.append({
                     "section": sec,
                     "page": r["p_start"],
@@ -159,6 +184,8 @@ def build_document_summary(
                 "locator": f"p.{overview_page}",
                 "title": display_title,
                 "filename": filename,
+                "document_id": document_id,
+                "text": overview_text,
             })
 
         for sec_info in sections[:max_sections]:
@@ -197,6 +224,8 @@ def build_document_summary(
                     "section": sec_name,
                     "title": display_title,
                     "filename": filename,
+                    "document_id": document_id,
+                    "text": bullets[0] if bullets else "",
                 })
 
         markdown = "\n".join(lines).strip()

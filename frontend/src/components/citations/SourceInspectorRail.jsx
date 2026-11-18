@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useCitationStore } from "@/store/citationStore";
 import { SourceCard } from "./SourceCard";
-import { BookOpen, FileText } from "lucide-react";
+import { BookOpen, FileText, X } from "lucide-react";
 import { openAuthenticatedPdfSource } from "@/services/documents.service";
 import { getSourceIdentity } from "@/utils/sourceIdentity";
 import { filterSourcesByScopedAnswer } from "@/utils/citationNumbering.mjs";
@@ -78,6 +78,17 @@ export function SourceInspectorRail({ className = "", onClose }) {
               </p>
             </div>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              title="Close evidence panel"
+              aria-label="Close evidence panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* C3: Scope Toggle */}
