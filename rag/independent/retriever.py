@@ -19,8 +19,22 @@ class IndependentIndexUnavailable(RuntimeError):
     pass
 
 
-def configured_lexical_collection_name() -> str:
+def configured_lexical_collection_name(db_path: Path | None = None) -> str:
     """Mirror collection naming using package metadata only; never load a model."""
+    lexical_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
+    if lexical_path.is_file():
+        try:
+            uri = lexical_path.resolve().as_uri() + "?mode=ro"
+            connection = sqlite3.connect(uri, uri=True, timeout=5)
+            try:
+                names = [row[0] for row in connection.execute("SELECT DISTINCT collection_name FROM lexical_chunks WHERE collection_name IS NOT NULL")]
+                if len(names) == 1:
+                    return names[0]
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            pass
+
     collection_name = settings.chroma_collection_name
     embedding_model = settings.embedding_model
     provider = settings.embedding_provider
@@ -30,7 +44,6 @@ def configured_lexical_collection_name() -> str:
         except PackageNotFoundError:
             # Reuse a uniquely identifiable existing namespace from FTS metadata;
             # this permits reads when the FastEmbed package is not installed.
-            lexical_path = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
             if lexical_path.is_file():
                 try:
                     uri = lexical_path.resolve().as_uri() + "?mode=ro"
@@ -67,7 +80,7 @@ class IndependentRetriever:
                  collection_name: str | None = None):
         self.db_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
         self.max_candidates = max(20, min(max_candidates, 3000))
-        self.collection_name = collection_name or configured_lexical_collection_name()
+        self.collection_name = collection_name or configured_lexical_collection_name(self.db_path)
 
     def retrieve(self, analysis: Any = None, paper_ids: list[str] | None = None,
                  document_ids: list[str] | None = None, section_names: list[str] | None = None,
@@ -257,10 +270,12 @@ class IndependentRetriever:
             # Boost direct definition copula sentences for definition queries
             if analysis.intent in {QuestionIntent.DEFINITION, QuestionIntent.DIRECT_DEFINITION}:
                 for q_term in analysis.important_terms[:2]:
-                    if re.search(rf"\b(?:an?|the)?\s*{re.escape(q_term)}\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way)\b", str(row[9]), re.I):
-                        score += 0.04
-                        reasons.append("passage contains explicit definition copula for target concept")
-                        break
+                    is_ex_passage = bool(re.search(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", str(row[9]), re.I))
+                    if not is_ex_passage and re.search(rf"\b(?:an?|the)?\s*{re.escape(q_term)}\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way)\b", str(row[9]), re.I):
+                        if not re.search(rf"\b(?:left|right|this|that|such\s+a)\s+{re.escape(q_term)}\b", str(row[9]), re.I):
+                            score += 0.04
+                            reasons.append("passage contains explicit definition copula for target concept")
+                            break
                     elif len(_tokens(q_term)) >= 2 and re.search(rf"\b{re.escape(q_term)}\b", str(row[9]), re.I):
                         score += 0.015
                         reasons.append(f"passage contains exact phrase '{q_term}'")
@@ -270,6 +285,9 @@ class IndependentRetriever:
                 if re.search(re.escape(primary_phrase), str(row[9]), re.I):
                     score += 0.03
                     reasons.append(f"exact phrase '{primary_phrase}' found in passage")
+                if primary_phrase.casefold() in section.casefold():
+                    score += 0.035
+                    reasons.append(f"section title matched target concept '{primary_phrase}'")
 
             # Boost results and findings for summary or table synthesis
             if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS}:

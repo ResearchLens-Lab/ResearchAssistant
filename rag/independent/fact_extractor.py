@@ -65,29 +65,29 @@ class FactExtractor:
                         rf"\b{phrase_re}(?:s|es)?\s+(?:is|are|refers?\s+to|means?|(?:is|are)\s+defined\s+as|can\s+be\s+defined\s+as)\b",
                         sentence.casefold()
                     )
-                    # Negative: sentence where concept is just mentioned as example
-                    is_example = re.search(
-                        rf"\bis\s+(?:an?\s+)?(?:example|instance|type|kind)\s+of\b.{{0,60}}{phrase_re}",
-                        sentence.casefold()
-                    ) or re.search(
-                        rf"\b{phrase_re}\s+(?:such\s+as|like|for\s+example|e\.g\.|including)\b",
-                        sentence.casefold()
+                    # Negative: sentence where concept is just mentioned as example or qualified
+                    is_example = (
+                        bool(re.match(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", sentence.casefold()))
+                        or bool(re.search(rf"\bis\s+(?:an?\s+)?(?:example|instance|type|kind)\s+of\b.{{0,60}}{phrase_re}", sentence.casefold()))
+                        or bool(re.search(rf"\b{phrase_re}\s+(?:such\s+as|like|for\s+example|e\.g\.|including)\b", sentence.casefold()))
+                        or bool(re.search(rf"\b(?:left|right|this|that|such\s+a)\s+{phrase_re}\b", sentence.casefold()))
                     )
                     if targeted_def_match and not is_example:
                         self._add(facts, seen, source, "definition", sentence, sentence,
                                   "targeted_phrase_definition_pattern", "exact_source_sentence")
                         # Skip generic definition check for this sentence
                     elif primary_phrase:
-                        is_just_example = re.search(
+                        is_just_example = is_example or bool(re.search(
                             rf"\bis\s+(?:an?\s+)?(?:example|instance|type|kind)\s+of\b",
                             sentence.casefold()
-                        )
+                        ))
                         if not is_just_example:
                             if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
                                 self._add(facts, seen, source, "definition", sentence, sentence,
                                           "definition_copula_pattern", "exact_source_sentence")
                 else:
-                    if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
+                    is_ex = bool(re.match(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", sentence.casefold()))
+                    if not is_ex and re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
                         self._add(facts, seen, source, "definition", sentence, sentence,
                                   "definition_copula_pattern", "exact_source_sentence")
                 if re.search(r"\b(?:method(?:ology)?|approach|algorithm|procedure|technique|architecture|design)\b", sentence, re.I):
@@ -109,11 +109,11 @@ class FactExtractor:
                     self._add(facts, seen, source, "date", value, sentence,
                               "calendar_date_or_year_pattern", "exact_source_span")
 
-            for line in cleaned_text.splitlines():
-                item = re.match(r"\s*(?:[-*•]|\d+[.)])\s+(.{8,})", line)
-                if item:
-                    value = _clean(item.group(1))
-                    self._add(facts, seen, source, "list_item", value, _clean(line),
+            # Extract bullet and numbered list items from raw_text to preserve line breaks
+            for match in re.finditer(r"(?:^|\n)\s*(?:[-*•]|\d+[.)])\s+([^\n]{8,})", raw_text):
+                value = _clean(match.group(1))
+                if value and len(value) >= 8:
+                    self._add(facts, seen, source, "list_item", value, _clean(match.group(0)),
                               "explicit_bullet_or_numbered_line", "exact_source_line")
 
             self._extract_authors(raw_text, source, facts, seen)

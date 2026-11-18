@@ -1,6 +1,7 @@
 """End-to-end deterministic document question answering, isolated from all model providers."""
 
 import logging
+from pathlib import Path
 import re
 import time
 from typing import Callable, Any
@@ -26,8 +27,9 @@ class IndependentResearchEngine:
                  fact_extractor: FactExtractor | None = None,
                  composer: StructuredAnswerComposer | None = None,
                  validator: EvidenceValidator | None = None,
+                 db_path: str | Path | None = None,
                  **kwargs):
-        self.retriever = retriever or IndependentRetriever()
+        self.retriever = retriever or IndependentRetriever(db_path=db_path)
         self.classifier = classifier or QuestionIntentClassifier()
         self.fact_extractor = fact_extractor or FactExtractor()
         self.composer = composer or StructuredAnswerComposer()

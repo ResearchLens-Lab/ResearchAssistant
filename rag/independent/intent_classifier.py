@@ -96,6 +96,12 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bwhat\s+is\s+meant\s+by\s+[A-Za-z0-9\s-]{2,60}\??$",
         r"^\s*what\s+(?:is|are)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s-]{2,60})\??$",
     ), ("definition", "core concept", "meaning")),
+    (QuestionIntent.PROCEDURAL_QUESTION, (
+        r"\b(?:steps|process|workflow|procedure)\s+(?:to|of|for|in)\b",
+        r"\bhow\s+to\b",
+        r"\bstep-by-step\b",
+        r"\bexplain\s+(?:the\s+)?steps\b",
+    ), ("ordered steps", "conditions", "sources")),
     (QuestionIntent.CONCEPT_EXPLANATION, (
         r"\bexplain\s+(?:the\s+)?(?:concept\s+of\s+)?([A-Za-z0-9\s-]{2,60})\b",
     ), ("concept explanation", "principles", "evidence")),
@@ -249,9 +255,10 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bwhat\s+are\s+the\b",
     ), ("direct answer", "evidence", "explanation")),
     (QuestionIntent.PROCEDURAL_QUESTION, (
-        r"\b(?:steps|process|workflow|procedure)\s+to\b",
+        r"\b(?:steps|process|workflow|procedure)\s+(?:to|of|for|in)\b",
         r"\bhow\s+to\b",
         r"\bstep-by-step\b",
+        r"\bexplain\s+(?:the\s+)?steps\b",
     ), ("ordered steps", "conditions", "sources")),
     (QuestionIntent.EVIDENCE_LOOKUP, (
         r"\b(?:show|find|give|provide)\b.{0,24}\b(?:evidence|passages?|quotes?|citations?)\b",
@@ -374,24 +381,37 @@ class QuestionIntentClassifier:
 
         # Extract primary phrase for multi-word concepts
         primary_phrase = ""
-        if intent in {QuestionIntent.DEFINITION, QuestionIntent.DIRECT_DEFINITION, QuestionIntent.CONCEPT_EXPLANATION, QuestionIntent.EXPLANATION, QuestionIntent.FACT_LOOKUP}:
-            # Try to extract: "what is [a/an/the] <concept>", "define <concept>", "explain <concept>"
-            phrase_match = re.search(
-                r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain(?:\s+the\s+concept\s+of)?|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z][A-Za-z0-9\s-]{1,60}?)(?:\s+(?:mean|is|are|defined|in\s+detail)|\?|$)",
-                normalized.casefold()
-            )
-            if phrase_match:
-                primary_phrase = phrase_match.group(1).strip().rstrip("?").strip()
-            # Also check for "what are the properties/types of X"
-            if not primary_phrase:
-                props_match = re.search(r"\bwhat\s+are\s+the\s+(?:properties|types|advantages|disadvantages|applications|uses|features)\s+of\s+([A-Za-z][A-Za-z0-9\s-]{1,60}?)(?:\?|$)", normalized.casefold())
-                if props_match:
-                    primary_phrase = props_match.group(1).strip()
-            # Ensure important_terms has the full phrase as first element (if multi-word)
-            if primary_phrase and len(primary_phrase.split()) >= 2:
-                clean_phrase = " ".join(_tokens(primary_phrase))
-                if clean_phrase and clean_phrase not in important:
-                    important.insert(0, clean_phrase)
+        q_clean = normalized.strip().rstrip(".").strip()
+        # 1. Steps / procedure: e.g. "Explain the steps of Dijkstra's algorithm"
+        m = re.search(r"\b(?:steps|process|procedure|workflow)\s+(?:of|for|to|in)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+        if m and len(m.group(1).strip()) >= 2:
+            primary_phrase = m.group(1).strip()
+        # 2. Properties / characteristics / types / advantages: e.g. "List the properties of a B-tree"
+        if not primary_phrase:
+            m = re.search(r"\b(?:properties|characteristics|features|types|advantages|disadvantages|applications|uses)\s+(?:of|for|in)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+        # 3. Compare X and Y
+        if not primary_phrase:
+            m = re.search(r"\bcompare\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)\s+and\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+            if m:
+                primary_phrase = f"{m.group(1).strip()} and {m.group(2).strip()}"
+        # 4. Why is X required/needed/used: e.g. "Why is normalization required in DBMS?"
+        if not primary_phrase:
+            m = re.search(r"\bwhy\s+(?:is|are|do|does)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\s+(?:required|needed|used|important|necessary)|\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+        # 5. Definition / explanation
+        if not primary_phrase:
+            m = re.search(r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain(?:\s+the\s+concept\s+of|\s+how)?|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\s+(?:mean|is|are|defined|works|operates|functions|in\s+detail)|\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+
+        # Ensure important_terms has the full phrase as first element (if multi-word)
+        if primary_phrase and len(primary_phrase.split()) >= 2:
+            clean_phrase = " ".join(_tokens(primary_phrase))
+            if clean_phrase and clean_phrase not in important:
+                important.insert(0, clean_phrase)
 
         self_terms = _expand_with(important, self.synonyms)
         filters: dict[str, object] = {}

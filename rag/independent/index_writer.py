@@ -12,9 +12,9 @@ from rag.independent.retriever import configured_lexical_collection_name
 class IndependentIndexWriter:
     """Maintain the lexical index and rich document structure metadata without Chroma or embeddings."""
 
-    def __init__(self, db_path: str | Path | None = None):
+    def __init__(self, db_path: str | Path | None = None, collection_name: str | None = None):
         self.db_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
-        self.collection_name = configured_lexical_collection_name()
+        self.collection_name = collection_name or configured_lexical_collection_name(self.db_path)
 
     def _ensure_schema(self, connection: sqlite3.Connection) -> None:
         """Create tables and indexes in WAL mode."""

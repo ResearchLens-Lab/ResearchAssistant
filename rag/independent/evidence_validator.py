@@ -47,23 +47,30 @@ class EvidenceValidator:
         # Remove fenced code blocks (```pie ... ```, ```mermaid ... ```) so diagram/chart syntax isn't flagged as claims
         clean_for_validation = re.sub(r"```[\s\S]*?```", "", answer)
 
-        factual_lines = [line.strip() for line in clean_for_validation.splitlines()
-                         if line.strip() and not line.lstrip().startswith("#")]
-        factual_lines = [line for line in factual_lines if not line.startswith((
-            "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
-            "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
-            "The names were extracted from an explicit author label/byline;", "Not found in your selected documents.",
-            "The names were extracted from title-page or bibliographic structure;",
-            "The retrieved text does not contain a clear definition; these passages are related evidence:",
-            "The source passages do not expose a clearly ordered list; the following passages describe the process:",
-            "Sections are analyzed hierarchically:", "Sections are ranked primarily",
-            "Sections are analyzed and ranked", "According to the selected document",
-            "Comparison between", "Between **Section", "The document covers **",
-            "- **Listed subtopics**:", "- **Leaf-level topic entries**:",
-            "- **Curriculum volume**:", "- **Structure**:",
-            "*Not explicitly detailed", "Not explicitly detailed",
-            "###", "| Source |", "|---|", "|", ">",
-        ))]
+        raw_lines = [line.strip() for line in clean_for_validation.splitlines()
+                     if line.strip() and not line.lstrip().startswith("#")]
+        factual_lines = []
+        for line in raw_lines:
+            clean_l = line.lstrip("> ").strip() if line.startswith(">") else line
+            if not clean_l or clean_l.startswith((
+                "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
+                "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
+                "The names were extracted from an explicit author label/byline;", "Not found in your selected documents.",
+                "The names were extracted from title-page or bibliographic structure;",
+                "The retrieved text does not contain a clear definition; these passages are related evidence:",
+                "The source passages do not expose a clearly ordered list; the following passages describe the process:",
+                "Sections are analyzed hierarchically:", "Sections are ranked primarily",
+                "Sections are analyzed and ranked", "According to the selected document",
+                "Comparison between", "Between **Section", "The document covers **",
+                "- **Listed subtopics**:", "- **Leaf-level topic entries**:",
+                "- **Curriculum volume**:", "- **Structure**:",
+                "*Not explicitly detailed", "Not explicitly detailed",
+                "###", "| Source |", "|---|", "|",
+            )):
+                continue
+            if line.startswith("|") and "No matching detail in retrieved passages" in line:
+                continue
+            factual_lines.append(clean_l)
         factual_lines = [line for line in factual_lines if not (line.startswith("|") and "No matching detail in retrieved passages" in line)]
         uncited = [line for line in factual_lines if not _CITATION.search(line)
                    and not line.startswith("Not found in the retrieved passages.")]

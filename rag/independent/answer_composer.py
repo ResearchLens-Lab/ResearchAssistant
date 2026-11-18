@@ -7,7 +7,12 @@ from collections import OrderedDict
 from rag.independent.models import ExtractedFact, QueryAnalysis, QuestionIntent
 from rag.retrieval.query import RetrievedSource
 from rag.independent.fact_extractor import clean_academic_text
+from rag.independent.intent_classifier import STOPWORDS
 from rag.independent.topic_analyzer import TopicCoverageAnalyzer, SectionTopicProfile, TopicRankingResult
+
+
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"[\w]+", unicodedata.normalize("NFKC", text).casefold(), flags=re.UNICODE)
 
 
 def _sentences(text: str) -> list[str]:
@@ -153,8 +158,15 @@ class StructuredAnswerComposer:
 
         def direct_subject(fact):
             text = unicodedata.normalize("NFKC", fact.supporting_passage).casefold().strip(" \t\r\n\"'“”")
+            if re.match(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", text):
+                return 0
             for subject in subjects:
                 phrase = re.escape(subject.casefold())
+                if re.search(rf"\b(?:appropriate|best|chosen|selected|auxiliary|left|right|this|that|such\s+a|required|another|underlying|different|new)\s+{phrase}\b", text):
+                    continue
+                # Direct subject definition has highest priority
+                if re.match(rf"^\s*(?:an?|the\s+)?{phrase}\s+(?:is|are|refers\s+to|means?|can\s+be\s+defined\s+as|is\s+defined\s+as|defined\s+to\s+be)\b", text):
+                    return 3
                 if re.search(rf"\b(?:an?|the)?\s*{phrase}\s+(?:is|are|refers\s+to|means?|can\s+be\s+defined\s+as|is\s+defined\s+as|defined\s+to\s+be)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+format|a\s+specialized|particular\s+way)?\b", text):
                     return 2
                 if re.search(rf"\b(?:define|defining|definition\s+of)\s+(?:an?|the\s+)?{phrase}\b", text):
@@ -633,6 +645,29 @@ class StructuredAnswerComposer:
         anchor_words = {"finding", "method", "result", "experiment", "model", "approach", "conclusion", "table", "evidence"}
         substantive = [t for t in terms if t.casefold() not in anchor_words]
         concept_title = " ".join(t.title() for t in substantive) if substantive else (" ".join(t.title() for t in terms) if terms else (target.section or "Topic"))
+
+        # Verify that the retrieved passage actually mentions the requested concept!
+        primary_p = getattr(analysis, "primary_phrase", "") or ""
+        if primary_p:
+            p_tokens = _tokens(primary_p)
+            has_concept = (
+                primary_p.casefold() in target.text.casefold() or
+                primary_p.casefold() in (target.section or "").casefold() or
+                (len(p_tokens) >= 2 and all(t in target.text.casefold() for t in p_tokens if t not in {"and", "or", "in", "of", "to", "for", "how", "the", "a", "an"}))
+            )
+            if not has_concept:
+                return StructuredAnswerComposer._not_found(
+                    analysis,
+                    f"The selected documents do not contain information explaining '{concept_title}'."
+                )
+        else:
+            check_terms = substantive or terms
+            if check_terms and _overlap_score(target.text, check_terms) <= 0:
+                return StructuredAnswerComposer._not_found(
+                    analysis,
+                    f"The selected documents do not contain information explaining '{concept_title}'."
+                )
+
         answer = (
             f"### Direct answer\n"
             f"According to the selected document ({target.section or 'Source'}), **{concept_title}** covers:\n\n"
@@ -1050,8 +1085,22 @@ class StructuredAnswerComposer:
 
     @staticmethod
     def _procedure(analysis, sources, facts):
-        steps = [fact for fact in facts if fact.fact_type == "list_item"]
-        steps = StructuredAnswerComposer._rank_facts(steps, [*analysis.important_terms, *analysis.expanded_terms], 12)
+        all_steps = [fact for fact in facts if fact.fact_type == "list_item"]
+        primary_p = getattr(analysis, "primary_phrase", "") or ""
+        target_sources = []
+        if primary_p:
+            p_lower = primary_p.casefold()
+            for s in sources:
+                if p_lower in (s.section or "").casefold() or p_lower in s.text.casefold():
+                    target_sources.append(s.source_id)
+        if not target_sources and sources:
+            target_sources = [sources[0].source_id]
+
+        target_steps = [f for f in all_steps if f.source_id in target_sources]
+        if target_steps:
+            steps = target_steps[:12]
+        else:
+            steps = StructuredAnswerComposer._rank_facts(all_steps, [*analysis.important_terms, *analysis.expanded_terms], 12)
         if steps:
             return "### Steps explicitly listed in the documents\n" + "\n".join(
                 f"{number}. {fact.value} [{fact.source_id}]" for number, fact in enumerate(steps, 1)
@@ -1065,9 +1114,23 @@ class StructuredAnswerComposer:
     @staticmethod
     def _list(analysis, sources, facts):
         all_items = [fact for fact in facts if fact.fact_type == "list_item"]
-        items = StructuredAnswerComposer._rank_facts(all_items, [*analysis.important_terms, *analysis.expanded_terms], 16)
-        if not items:
-            items = all_items[:16]
+        primary_p = getattr(analysis, "primary_phrase", "") or ""
+        target_sources = []
+        if primary_p:
+            p_lower = primary_p.casefold()
+            for s in sources:
+                if p_lower in (s.section or "").casefold() or p_lower in s.text.casefold():
+                    target_sources.append(s.source_id)
+        if not target_sources and sources:
+            target_sources = [sources[0].source_id]
+
+        target_items = [f for f in all_items if f.source_id in target_sources]
+        if target_items:
+            items = target_items[:16]
+        else:
+            items = StructuredAnswerComposer._rank_facts(all_items, [*analysis.important_terms, *analysis.expanded_terms], 16)
+            if not items and all_items:
+                items = all_items[:16]
         if items:
             return "### Items explicitly listed\n" + "\n".join(f"- {fact.value} [{fact.source_id}]" for fact in items)
         return StructuredAnswerComposer._evidence(analysis, sources)
@@ -1112,17 +1175,23 @@ class StructuredAnswerComposer:
             "want", "know", "system", "syllabus", "document", "documents", "paper",
             "topic", "topics", "research", "information", "overview", "main", "content",
             "source", "sources", "selected", "please", "tell", "show", "give",
+            "required", "needed", "used", "important", "works", "work", "mean", "means",
+            "difference", "differences", "role", "way", "ways",
         }
+        primary_p = getattr(analysis, "primary_phrase", "") or ""
+        primary_tokens = [t for t in _tokens(primary_p) if t not in STOPWORDS] if primary_p else []
         subject_terms = [term for term in analysis.important_terms if term.casefold() not in generic_terms]
+        filter_terms = primary_tokens or subject_terms or None
+
         passages = StructuredAnswerComposer._best_sentences(
-            analysis, sources, 10, required_terms=subject_terms or None
+            analysis, sources, 10, required_terms=filter_terms
         )
-        if not passages:
-            passages = StructuredAnswerComposer._best_sentences(analysis, sources, 10)
-        if not passages and sources:
-            for s in sources:
-                for sent in _sentences(s.text):
-                    passages.append((s, sent, 1))
+        if not passages and filter_terms:
+            concept_name = primary_p or (" ".join(subject_terms) if subject_terms else analysis.normalized_question)
+            return StructuredAnswerComposer._not_found(
+                analysis,
+                f"The selected documents do not contain information about '{concept_name}'."
+            )
         if not passages:
             return StructuredAnswerComposer._not_found(analysis, "The retrieved passages do not contain an identifiable answer.")
         first = passages[0]
@@ -1174,13 +1243,19 @@ class StructuredAnswerComposer:
                     continue
 
                 s_lower = clean_s.casefold()
+                # Heavy penalty if sentence starts with example marker
+                if re.match(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", s_lower):
+                    score -= 5.0
+                if re.search(r"\b(?:declaration|prototype|syntax)\b", s_lower):
+                    score -= 3.0
+
                 if primary_concept and primary_concept.casefold() in s_lower:
                     score += 3.0
                     # Major bonus if the sentence starts with the primary concept (subject/definition)
-                    if re.match(rf"^\s*(?:an?|the)?\s*{re.escape(primary_concept.casefold())}\b", s_lower):
+                    if re.match(rf"^\s*(?:in|for)?\s*(?:an?|the)?\s*{re.escape(primary_concept.casefold())}\b", s_lower):
                         score += 5.0
-                    # Bonus for defining copulas
-                    if re.search(r"\b(?:is defined as|are defined as|means|refers to|is an?|are an?|is a\s+|are a\s+|is basically|used to|a\s+way|a\s+format|a\s+collection)\b", s_lower):
+                    # Bonus for defining copulas or describing core properties
+                    if re.search(r"\b(?:is defined as|are defined as|means|refers to|is an?|are an?|is a\s+|are a\s+|is basically|used to|a\s+way|a\s+format|a\s+collection|property|properties|variant)\b", s_lower):
                         score += 3.0
 
                 # Penalty for incidental mentions where query concept is merely an example of another topic
