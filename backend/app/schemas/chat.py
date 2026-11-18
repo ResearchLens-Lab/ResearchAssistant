@@ -26,7 +26,7 @@ class ChatResponse(BaseModel):
 
 class ChatStreamEvent(BaseModel):
     event_id: str
-    type: Literal["started", "planning_started", "planning_completed", "retrieval_started", "sources_found", "additional_retrieval", "evidence_ready", "generation_skipped", "generation_started", "verification_started", "verification_completed", "token", "completed", "error"]
+    type: str
     data: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

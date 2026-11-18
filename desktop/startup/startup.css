@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/inter-latin-wght-normal.woff2') format('woff2');
+}
+
 :root {
   --bg-primary: #F3F9FE;
   --bg-card: #FFFFFF;
@@ -7,8 +15,8 @@
   --text-main: #183B56;
   --text-muted: #5A7184;
   --text-dim: #8297A7;
-  --accent-sky: #3199D0;
-  --accent-sky-hover: #2581B0;
+  --accent-sky: #1d6fc4;
+  --accent-sky-hover: #185ea8;
   --accent-sky-light: #DDEFFA;
   --accent-sky-tint: #F0F8FD;
   --accent-green: #10B981;
@@ -23,8 +31,19 @@
   padding: 0;
 }
 
+.window-drag-strip {
+  -webkit-app-region: drag;
+  height: 40px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding-right: 140px;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, -apple-system, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-main);
   min-height: 100vh;

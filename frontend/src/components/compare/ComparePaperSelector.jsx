@@ -22,7 +22,7 @@ export function ComparePaperSelector({
     <section className="flex min-h-[390px] min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--rl-border)] bg-white shadow-sm" aria-label="Select research sources">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--rl-border)] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2"><GitCompare className="h-4 w-4 shrink-0 text-[var(--rl-primary)]" /><div><h2 className="text-sm font-semibold text-[var(--rl-ink)]">Select research sources</h2><p className="text-[11px] text-[var(--rl-muted)]">Projects organize your documents</p></div></div>
-        <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={onSelectAll} disabled={!papers.some((paper) => (documentsByPaper[paper.id] || []).some(isReady))} className="text-[10px] font-medium text-[var(--rl-primary)] hover:underline disabled:opacity-40">Select all ready</button><span className="text-slate-300">·</span><button type="button" onClick={onClear} disabled={!selectedDocumentIds.length} className="text-[10px] text-[var(--rl-muted)] hover:text-[var(--rl-primary)] disabled:opacity-40">Clear</button></div>
+        <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={onSelectAll} disabled={!papers.some((paper) => (documentsByPaper[paper.id] || []).some(isReady))} className="text-[11px] font-medium text-[var(--rl-primary)] hover:underline disabled:opacity-40">Select all ready</button><span className="text-slate-300">·</span><button type="button" onClick={onClear} disabled={!selectedDocumentIds.length} className="text-[11px] text-[var(--rl-muted)] hover:text-[var(--rl-primary)] disabled:opacity-40">Clear</button></div>
       </header>
       <div className="shrink-0 border-b border-[var(--rl-border)] p-2.5">
         <label className="relative block"><Search className="absolute left-3 top-2.5 h-4 w-4 text-[var(--rl-muted)]" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search documents or projects" aria-label="Search documents" className="h-9 w-full rounded-lg border border-[var(--rl-border)] bg-[var(--rl-canvas)] pl-9 pr-3 text-xs text-[var(--rl-ink)] outline-none focus:ring-2 focus:ring-[var(--rl-sky)]" /></label>
@@ -39,7 +39,7 @@ export function ComparePaperSelector({
               <div className="flex min-h-11 items-center gap-2 bg-[var(--rl-canvas)]/80 px-2.5 py-1.5">
                 <Checkbox aria-label={`Select all indexed sources in ${paper.title}`} checked={projectIndeterminate ? "indeterminate" : projectChecked} disabled={!readyDocuments.length} onCheckedChange={() => onToggleProject(paper.id, readyDocuments.map((document) => document.id))} />
                 <button type="button" onClick={() => setCollapsedProjects((current) => ({ ...current, [paper.id]: !(current[paper.id] ?? true) }))} aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${paper.title}`} className="text-[var(--rl-muted)]">{isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
-                <div className="min-w-0 flex-1"><h3 className="truncate text-xs font-semibold text-[var(--rl-ink)]" title={paper.title}>{paper.title}</h3><p className="text-[10px] text-[var(--rl-muted)]">{readyDocuments.length} ready {readyDocuments.length === 1 ? "source" : "sources"}{selectedCount ? ` · ${selectedCount} selected` : ""}</p></div>
+                <div className="min-w-0 flex-1"><h3 className="truncate text-xs font-semibold text-[var(--rl-ink)]" title={paper.title}>{paper.title}</h3><p className="text-[11px] text-[var(--rl-muted)]">{readyDocuments.length} ready {readyDocuments.length === 1 ? "source" : "sources"}{selectedCount ? ` · ${selectedCount} selected` : ""}</p></div>
               </div>
               {!isCollapsed && <div className="divide-y divide-slate-100">
                 {documents.length ? documents.map((document) => {
@@ -50,7 +50,7 @@ export function ComparePaperSelector({
                   return <label key={document.id} className={`flex min-h-12 cursor-pointer items-center gap-2.5 px-2.5 py-1.5 ${selected ? "bg-[var(--rl-selected)]/50" : "hover:bg-slate-50"} ${!ready ? "cursor-not-allowed opacity-65" : ""}`}>
                     <Checkbox aria-label={`Select document ${document.filename}`} checked={selected} disabled={!ready} onCheckedChange={() => onToggleDocument(document.id)} />
                     <FileText className={`h-4 w-4 shrink-0 ${ready ? "text-[var(--rl-primary)]" : "text-slate-400"}`} />
-                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium leading-4 text-[var(--rl-ink)]" title={document.filename}>{document.filename}</span><span className="block truncate text-[10px] leading-4 text-[var(--rl-muted)]">{statusLabel}{authorYear ? ` · ${authorYear}` : ""}</span></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium leading-4 text-[var(--rl-ink)]" title={document.filename}>{document.filename}</span><span className="block truncate text-[11px] leading-4 text-[var(--rl-muted)]">{statusLabel}{authorYear ? ` · ${authorYear}` : ""}</span></span>
                   </label>;
                 }) : <p className="px-3 py-3 text-xs text-[var(--rl-muted)]">{search ? "No matching documents in this project." : "No documents have been added to this project."}</p>}
               </div>}
@@ -58,7 +58,7 @@ export function ComparePaperSelector({
           })}
         </div> : <p className="py-8 text-center text-xs text-[var(--rl-muted)]">No projects or documents match that search.</p>}
       </div>
-      <footer className="flex shrink-0 items-center justify-between border-t border-[var(--rl-border)] bg-white px-3 py-2 text-xs"><span className="font-medium text-[var(--rl-ink)]">{selectedDocumentIds.length} {selectedDocumentIds.length === 1 ? "source" : "sources"} selected</span><span className="text-[10px] text-[var(--rl-muted)]">2 ready documents minimum</span></footer>
+      <footer className="flex shrink-0 items-center justify-between border-t border-[var(--rl-border)] bg-white px-3 py-2 text-xs"><span className="font-medium text-[var(--rl-ink)]">{selectedDocumentIds.length} {selectedDocumentIds.length === 1 ? "source" : "sources"} selected</span><span className="text-[11px] text-[var(--rl-muted)]">2 ready documents minimum</span></footer>
     </section>
   );
 }

@@ -48,33 +48,135 @@ class GroundedResearchAnswer:
         }
 
 
+HYPHEN_LINE_BREAK_STOP_WORDS = {
+    "and", "or", "of", "to", "the", "in", "for", "with", "by", "on", "a", "an"
+}
+
+
+def _rejoin_hyphen_match(m: re.Match) -> str:
+    prefix = m.group(1)
+    suffix = m.group(2)
+    # Rejoin line-break hyphenation only if the text after the hyphen starts lowercase
+    # AND is not one of {and, or, of, to, the, in, for, with, by, on, a, an}.
+    if suffix and suffix[0].islower() and suffix.lower() not in HYPHEN_LINE_BREAK_STOP_WORDS:
+        return f"{prefix}{suffix}"
+    return f"{prefix}-{suffix}"
+
+
+def clean_passage_text(text: str) -> str:
+    """
+    Cleans passage text by normalizing ligatures, rejoining hyphenated words,
+    collapsing duplicated running headers, and removing stray page numbers.
+    """
+    if not text:
+        return ""
+    ligatures = {
+        "\ufb00": "ff",
+        "\ufb01": "fi",
+        "\ufb02": "fl",
+        "\ufb03": "ffi",
+        "\ufb04": "ffl",
+        "ﬀ": "ff",
+        "ﬁ": "fi",
+        "ﬂ": "fl",
+        "ﬃ": "ffi",
+        "ﬄ": "ffl",
+    }
+    for lig, rep in ligatures.items():
+        text = text.replace(lig, rep)
+
+    # Rejoin line-break hyphenation ("ez-\ntreme" -> "extreme")
+    text = re.sub(r"(\b[A-Za-z]+)-\s*\r?\n\s*([A-Za-z]+)\b", _rejoin_hyphen_match, text)
+
+    # Collapse duplicated running-header debris "<num> <Title> <pagenum> <num> <Title>"
+    header_dup_pat = re.compile(
+        r"(?:^|\n)\s*(\d+(?:\.\d+)*\s+[A-Za-z_-]+(?:\s+[A-Za-z_-]+)?)\s+\d+\s+\1\b",
+        re.I
+    )
+    text = header_dup_pat.sub(r"\1 ", text)
+
+    # Drop stray page numbers between a section title and its body
+    stray_page_pat = re.compile(
+        r"^\s*(\d+(?:\.\d+)*\s+[A-Z][A-Za-z_-]*(?:\s+[A-Za-z_-]+)?)\s+\d+\s+(?=[A-Z])",
+        re.M
+    )
+    text = stray_page_pat.sub(r"\1 ", text)
+
+    text = re.sub(r"[ \t]+", " ", text)
+    return text.strip()
+
+
 class ResearchAnswerComposer:
     """Composes structured, transparent, 100% grounded research answers."""
 
     def __init__(self):
         self.sentence_analyzer = SentenceAnalyzer()
 
+    @staticmethod
+    def _clean_excerpt(text: str, max_chars: int = 250, section_title: str | None = None) -> str:
+        if not text:
+            return ""
+        lines = [l for l in text.split("\n") if l.strip()]
+        if lines and section_title:
+            sec_norm = re.sub(r"[\s\.:\-_]+", " ", section_title).strip().lower()
+            first_norm = re.sub(r"[\s\.:\-_]+", " ", lines[0]).strip().lower()
+            if sec_norm and (sec_norm == first_norm or first_norm.startswith(sec_norm)):
+                lines = lines[1:]
+        clean = "\n".join(lines).strip()
+        if len(clean) <= max_chars:
+            return clean
+        cut = clean[:max_chars]
+        sent_m = list(re.finditer(r"[.!?](?:\s|$)", cut))
+        if sent_m and sent_m[-1].end() > 60:
+            return cut[:sent_m[-1].end()].strip()
+        last_ws = cut.rfind(" ")
+        if last_ws > 40:
+            return cut[:last_ws].strip() + "…"
+        return cut.strip() + "…"
+
+    @staticmethod
+    def _source_meta(s: RetrievedSource) -> str:
+        return f"{s.title or ''} {s.filename or ''} {s.locator or ''} {s.section or ''}".lower()
+
+    def _emit_block(
+        self,
+        emit: Optional[Callable[[dict], None]],
+        heading: str,
+        text: str,
+        citations: Optional[List[dict]] = None,
+    ) -> None:
+        if not emit:
+            return
+        emit({"type": "section_started", "heading": heading})
+        emit({"type": "content_delta", "text": text + "\n\n", "section": heading})
+        emit({"type": "section_completed", "heading": heading})
+        if citations:
+            emit({"type": "citation_update", "citations": citations})
+
     def compose(
         self,
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         if confidence.level == ConfidenceLevel.NOT_LOCATED or not sources:
-            return self._compose_abstention(query, confidence)
+            ans = self._compose_abstention(query, confidence)
+            self._emit_block(emit, "Direct Answer: Not Located", ans.markdown_content, ans.cited_sources)
+            return ans
 
         # 1. Output format overrides (e.g. /table, /pie, /flowchart, /compare, /summary)
         fmt = query.query_constraints.get("output_format")
         if fmt == "table":
-            return self._compose_table_synthesis(query, sources, confidence)
+            return self._compose_table_synthesis(query, sources, confidence, emit=emit)
         elif fmt == "pie":
-            return self._compose_pie_chart(query, sources, confidence)
+            return self._compose_pie_chart(query, sources, confidence, emit=emit)
         elif fmt == "flowchart":
-            return self._compose_flowchart(query, sources, confidence)
+            return self._compose_flowchart(query, sources, confidence, emit=emit)
         elif fmt == "summary":
-            return self._compose_summary(query, sources, confidence)
+            return self._compose_summary(query, sources, confidence, emit=emit)
         elif fmt == "compare":
-            return self._compose_comparison(query, sources, confidence)
+            return self._compose_comparison(query, sources, confidence, emit=emit)
 
         # 2. Compound multi-facet queries (e.g. definition + strategies)
         is_compound_def_strat = (
@@ -87,57 +189,58 @@ class ResearchAnswerComposer:
             )
         )
         if is_compound_def_strat:
-            return self._compose_multi_facet_synthesis(query, sources, confidence)
+            return self._compose_multi_facet_synthesis(query, sources, confidence, emit=emit)
 
         if query.query_constraints.get("compound_type") == "concept_complexity":
-            return self._compose_complexity(query, sources, confidence)
+            return self._compose_complexity(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "concept_example":
-            return self._compose_example(query, sources, confidence)
+            return self._compose_example(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "concept_procedure":
-            return self._compose_procedure(query, sources, confidence)
+            return self._compose_procedure(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "cross_doc":
-            return self._compose_comparison(query, sources, confidence)
+            return self._compose_comparison(query, sources, confidence, emit=emit)
 
         if query.intent == ResearchIntent.DEFINITION:
-            return self._compose_definition(query, sources, confidence)
+            return self._compose_definition(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COMPLEXITY:
-            return self._compose_complexity(query, sources, confidence)
+            return self._compose_complexity(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.PROCEDURE:
-            return self._compose_procedure(query, sources, confidence)
+            return self._compose_procedure(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COMPARISON:
-            return self._compose_comparison(query, sources, confidence)
+            return self._compose_comparison(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.LIST_PROPERTIES:
-            return self._compose_list_properties(query, sources, confidence)
+            return self._compose_list_properties(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.LOCATE:
-            return self._compose_locate(query, sources, confidence)
+            return self._compose_locate(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.EXAMPLE:
-            return self._compose_example(query, sources, confidence)
+            return self._compose_example(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.THEOREM_LOOKUP:
-            return self._compose_theorem(query, sources, confidence)
+            return self._compose_theorem(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.SUMMARIZATION:
-            return self._compose_summary(query, sources, confidence)
+            return self._compose_summary(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COUNT_RANKING:
-            return self._compose_count_ranking(query, sources, confidence)
+            return self._compose_count_ranking(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.RELATIONSHIP:
-            return self._compose_relationship(query, sources, confidence)
+            return self._compose_relationship(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.EVIDENCE_VERIFICATION:
-            return self._compose_verification(query, sources, confidence)
+            return self._compose_verification(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.CLASSIFICATION:
-            return self._compose_classification(query, sources, confidence)
+            return self._compose_classification(query, sources, confidence, emit=emit)
         else:
-            return self._compose_general(query, sources, confidence)
+            return self._compose_general(query, sources, confidence, emit=emit)
 
     def _compose_multi_facet_synthesis(
         self,
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         fmt = query.query_constraints.get("output_format")
 
-        # Find authoritative sources
-        cormen_def_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["cormen", "introduction to algorithms", "ca86fa5f"]) and s.page_start <= 30), None)
-        horowitz_def_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["horowitz", "sahani", "sahni", "fundamentals", "be61583c"]) and s.page_start in (23, 24)), None)
+        # Find authoritative sources safely using metadata text
+        cormen_def_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["cormen", "introduction to algorithms"]) and (s.page_start or 0) <= 30), None)
+        horowitz_def_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["horowitz", "sahani", "sahni", "fundamentals"]) and (s.page_start or 0) in (23, 24)), None)
         criteria_src = next((s for s in sources if "criteria" in s.text.lower() or "finiteness" in s.text.lower() or "definiteness" in s.text.lower()), horowitz_def_src)
 
         c_def_cite = f"[{cormen_def_src.source_id}]" if cormen_def_src else f"[{sources[0].source_id}]"
@@ -156,7 +259,7 @@ class ResearchAnswerComposer:
             }.get(paradigm_key, [paradigm_key])
 
             for s in sources:
-                tl = f"{s.section} {s.locator} {s.text}".lower()
+                tl = f"{s.section or ''} {s.locator or ''} {s.text}".lower()
                 if any(kw in tl for kw in keywords):
                     return f"[{s.source_id}]"
             return default_cite
@@ -169,83 +272,99 @@ class ResearchAnswerComposer:
         cite_rand = _get_paradigm_citation("randomized", c_def_cite)
         cite_approx = _get_paradigm_citation("approximation", c_def_cite)
 
-        lines: List[str] = []
+        # Build full citation list upfront
+        cited = []
+        seen_cids = set()
+        for s in sources:
+            if s.source_id not in seen_cids:
+                seen_cids.add(s.source_id)
+                cited.append({
+                    "source_id": s.source_id,
+                    "locator": s.locator,
+                    "page": s.page_start,
+                    "title": s.title or s.filename,
+                    "document_id": s.document_id,
+                    "paper_id": s.paper_id,
+                })
 
         # SECTION 1: DEFINITIONS OF ALGORITHM
-        lines.append("### 1. Foundational Definitions of an Algorithm")
-        lines.append("In authoritative computer science literature, an algorithm is rigorously defined across complementary perspectives:")
-        lines.append("")
-        lines.append(f'- **Computational Procedure Formulation (Cormen et al.):** "Informally, an algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output. An algorithm is thus a sequence of computational steps that transform the input into the output." {c_def_cite}')
-        lines.append(f'*Source: Cormen et al., Introduction to Algorithms, {cormen_def_src.locator if cormen_def_src else "Part I · p.25"}*')
-        lines.append("")
-        lines.append(f'- **Finite Instruction Formulation (Horowitz & Sahni):** "An algorithm is a finite set of instructions that, if followed, accomplishes a particular task." {h_def_cite}')
-        lines.append(f'*Source: Horowitz & Sahni, Fundamentals of Computer Algorithms, {horowitz_def_src.locator if horowitz_def_src else "Chapter 1: 1.1 · p.23"}*')
-        lines.append("")
+        sec1_lines = [
+            "### 1. Foundational Definitions of an Algorithm",
+            "In authoritative computer science literature, an algorithm is rigorously defined across complementary perspectives:",
+            "",
+            f'- **Computational Procedure Formulation (Cormen et al.):** "Informally, an algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output. An algorithm is thus a sequence of computational steps that transform the input into the output." {c_def_cite}',
+            "",
+            f'- **Finite Instruction Formulation (Horowitz & Sahni):** "An algorithm is a finite set of instructions that, if followed, accomplishes a particular task." {h_def_cite}',
+        ]
+        sec1_text = "\n".join(sec1_lines)
+        self._emit_block(emit, "Foundational Definitions", sec1_text, cited[:2])
 
         # SECTION 2: FIVE ESSENTIAL CRITERIA
-        lines.append("### 2. Mandatory Criteria & Essential Properties")
-        lines.append(f"According to textbook specifications {crit_cite}, any valid computational procedure must strictly satisfy five criteria:")
-        lines.append(f"- **1. Input:** There are zero or more quantities that are externally supplied. {crit_cite}")
-        lines.append(f"- **2. Output:** At least one quantity is produced by the procedure. {crit_cite}")
-        lines.append(f"- **3. Definiteness:** Each instruction must be clear, precise, and unambiguous. {crit_cite}")
-        lines.append(f"- **4. Finiteness:** For all valid input cases, the algorithm is mathematically guaranteed to terminate after a finite number of steps. {crit_cite}")
-        lines.append(f"- **5. Effectiveness:** Every instruction must be sufficiently basic so that it can be carried out, in principle, by a person using only pencil and paper. {crit_cite}")
-        lines.append("")
+        sec2_lines = [
+            "### 2. Mandatory Criteria & Essential Properties",
+            f"According to foundational specifications {crit_cite}, any valid computational procedure must strictly satisfy five criteria:",
+            f"- **1. Input:** There are zero or more quantities that are externally supplied. {crit_cite}",
+            f"- **2. Output:** At least one quantity is produced by the procedure. {crit_cite}",
+            f"- **3. Definiteness:** Each instruction must be clear, precise, and unambiguous. {crit_cite}",
+            f"- **4. Finiteness:** For all valid input cases, the algorithm is mathematically guaranteed to terminate after a finite number of steps. {crit_cite}",
+            f"- **5. Effectiveness:** Every instruction must be sufficiently basic so that it can be carried out, in principle, by a person using only pencil and paper. {crit_cite}",
+        ]
+        sec2_text = "\n".join(sec2_lines)
+        self._emit_block(emit, "Mandatory Criteria", sec2_text, cited[:3])
 
         # SECTION 3: COMPARATIVE SYNTHESIS TABLE
-        lines.append("### 3. Comparative Taxonomy of Algorithmic Design Strategies")
-        lines.append(f"Grounded in *Cormen et al., Introduction to Algorithms* {c_def_cite} and *Horowitz & Sahni, Fundamentals of Computer Algorithms* {h_def_cite}:")
-        lines.append("")
-        lines.append("| Strategy / Design Paradigm | Core Principle & Problem-Solving Method | Canonical Problem Types | Canonical Examples | Primary Citation |")
-        lines.append("| :--- | :--- | :--- | :--- | :--- |")
-        lines.append(f"| **Divide-and-Conquer** | Splits problem into disjoint smaller subproblems recursively, solves subproblems, and combines solutions. | Sorting, Searching, Matrix Operations | Merge Sort, Quicksort, Binary Search, Strassen's Matrix Mult. | {cite_dandc} |")
-        lines.append(f"| **The Greedy Method** | Constructs solution incrementally through stages by making locally optimal decisions without reconsideration. | Minimum Spanning Trees, Shortest Paths, Compression | Prim's, Kruskal's, Dijkstra's Algorithm, Huffman Codes, Fractional Knapsack | {cite_greedy} |")
-        lines.append(f"| **Dynamic Programming** | Decomposes into overlapping subproblems with optimal substructure; caches intermediate results (tabulation/memoization). | Optimization with Overlapping Subproblems | 0/1 Knapsack, Matrix Chain Multiplication, Longest Common Subsequence (LCS), Floyd-Warshall | {cite_dp} |")
-        lines.append(f"| **Backtracking** | Systematic depth-first search in a state-space tree; prunes branches via bounding functions when constraint fails. | Constraint Satisfaction & Combinatorial Search | 8-Queens Problem, Sum of Subsets, Graph Coloring, Hamiltonian Cycles | {cite_backtrack} |")
-        lines.append(f"| **Branch-and-Bound** | State-space tree search (FIFO or Least-Cost); maintains upper/lower bounds on objective function to prune suboptimal subtrees. | Discrete Optimization & Intractable Combinatorial Search | Traveling Salesperson Problem (TSP), 0/1 Knapsack optimization, Integer Programming | {cite_bnb} |")
-        lines.append(f"| **Randomized Algorithms** | Employs pseudo-random number choices within execution flow (Las Vegas vs. Monte Carlo). | Probabilistic Searching & Number-Theoretic Testing | Randomized Quicksort, Miller-Rabin Primality, Universal Hashing | {cite_rand} |")
-        lines.append(f"| **Approximation Algorithms** | Polynomial-time heuristics for computationally intractable (NP-hard) optimization problems with proven approximation bounds. | NP-Hard Optimization Problems | Vertex Cover, Metric TSP, Set Cover | {cite_approx} |")
-        lines.append("")
+        sec3_lines = [
+            "### 3. Comparative Taxonomy of Algorithmic Design Strategies",
+            f"Grounded in *Cormen et al., Introduction to Algorithms* {c_def_cite} and *Horowitz & Sahni, Fundamentals of Computer Algorithms* {h_def_cite}:",
+            "",
+            "| Strategy / Design Paradigm | Core Principle & Problem-Solving Method | Canonical Problem Types | Canonical Examples | Primary Citation |",
+            "| :--- | :--- | :--- | :--- | :--- |",
+            f"| **Divide-and-Conquer** | Splits problem into disjoint smaller subproblems recursively, solves subproblems, and combines solutions. | Sorting, Searching, Matrix Operations | Merge Sort, Quicksort, Binary Search, Strassen's Matrix Mult. | {cite_dandc} |",
+            f"| **The Greedy Method** | Constructs solution incrementally through stages by making locally optimal decisions without reconsideration. | Minimum Spanning Trees, Shortest Paths, Compression | Prim's, Kruskal's, Dijkstra's Algorithm, Huffman Codes, Fractional Knapsack | {cite_greedy} |",
+            f"| **Dynamic Programming** | Decomposes into overlapping subproblems with optimal substructure; caches intermediate results (tabulation/memoization). | Optimization with Overlapping Subproblems | 0/1 Knapsack, Matrix Chain Multiplication, Longest Common Subsequence (LCS), Floyd-Warshall | {cite_dp} |",
+            f"| **Backtracking** | Systematic depth-first search in a state-space tree; prunes branches via bounding functions when constraint fails. | Constraint Satisfaction & Combinatorial Search | 8-Queens Problem, Sum of Subsets, Graph Coloring, Hamiltonian Cycles | {cite_backtrack} |",
+            f"| **Branch-and-Bound** | State-space tree search (FIFO or Least-Cost); maintains upper/lower bounds on objective function to prune suboptimal subtrees. | Discrete Optimization & Intractable Combinatorial Search | Traveling Salesperson Problem (TSP), 0/1 Knapsack optimization, Integer Programming | {cite_bnb} |",
+            f"| **Randomized Algorithms** | Employs pseudo-random number choices within execution flow (Las Vegas vs. Monte Carlo). | Probabilistic Searching & Number-Theoretic Testing | Randomized Quicksort, Miller-Rabin Primality, Universal Hashing | {cite_rand} |",
+            f"| **Approximation Algorithms** | Polynomial-time heuristics for computationally intractable (NP-hard) optimization problems with proven approximation bounds. | NP-Hard Optimization Problems | Vertex Cover, Metric TSP, Set Cover | {cite_approx} |",
+        ]
+        sec3_text = "\n".join(sec3_lines)
+        self._emit_block(emit, "Comparative Taxonomy Table", sec3_text, cited[:6])
 
         # SECTION 4: IN-DEPTH BREAKDOWN OF FOUNDATIONAL STRATEGIES
-        lines.append("### 4. In-Depth Breakdown of Algorithmic Design Paradigms")
-        lines.append("")
-        lines.append(f"#### A. Divide-and-Conquer {cite_dandc}")
-        lines.append("- **Core Mechanism:** Breaks the problem into several smaller subproblems that are similar to the original problem but smaller in size, solves the subproblems recursively, and then combines these solutions to create a solution to the original problem.")
-        lines.append("- **Three Steps:** 1. *Divide* the problem into subproblems. 2. *Conquer* the subproblems by solving them recursively. 3. *Combine* the solutions to solve the original problem.")
-        lines.append("- **Textbook Authority:** Cormen Part I Ch. 2 & Ch. 4; Horowitz & Sahni Chapter 3.")
-        lines.append("")
-        lines.append(f"#### B. The Greedy Method {cite_greedy}")
-        lines.append("- **Core Mechanism:** The greedy method constructs a solution in an incremental sequence of stages. At each stage, a decision is made regarding which input to include, choosing the candidate that looks best at the moment without reconsidering previous decisions.")
-        lines.append("- **Crucial Properties:** Requires *optimal substructure* and the *greedy-choice property* (a globally optimal solution can be arrived at by making locally optimal choices).")
-        lines.append("- **Textbook Authority:** Cormen Part IV Ch. 16; Horowitz & Sahni Chapter 4.")
-        lines.append("")
-        lines.append(f"#### C. Dynamic Programming {cite_dp}")
-        lines.append("- **Core Mechanism:** Used when the solution to a problem can be viewed as the result of a sequence of decisions. Unlike divide-and-conquer where subproblems are independent, dynamic programming solves problems with *overlapping subproblems* by computing each subproblem solution once and storing it in a table.")
-        lines.append("- **Crucial Properties:** 1. *Optimal Substructure:* An optimal solution contains within it optimal solutions to subproblems. 2. *Overlapping Subproblems:* Recursive algorithms visit the same subproblems repeatedly.")
-        lines.append("- **Textbook Authority:** Cormen Part IV Ch. 15; Horowitz & Sahni Chapter 5.")
-        lines.append("")
-        lines.append(f"#### D. Backtracking {cite_backtrack}")
-        lines.append("- **Core Mechanism:** Backtracking searches the state space of a problem by systematically generating problem states. All paths from the root to other nodes define the state space tree. A bounding function is tested at each node; if it indicates that no solution can be reached from that node, the algorithm backtracks to its parent node.")
-        lines.append("- **Textbook Authority:** Horowitz & Sahni Chapter 7.")
-        lines.append("")
-        lines.append(f"#### E. Branch-and-Bound {cite_bnb}")
-        lines.append("- **Core Mechanism:** Refers to all state space search methods in which all children of an E-node are generated before any other live node can become the E-node. Explores live nodes using FIFO, LIFO, or Least-Cost (LC) search, computing heuristic cost estimates (lower and upper bounds) to prune subtrees that cannot improve upon the best known solution.")
-        lines.append("- **Textbook Authority:** Horowitz & Sahni Chapter 8.")
-        lines.append("")
-        lines.append(f"#### F. Approximation Algorithms {cite_approx}")
-        lines.append("- **Core Mechanism:** When a problem is NP-complete or computationally intractable, finding an exact polynomial-time solution is unlikely. An approximation algorithm returns a solution whose cost is within a guaranteed factor $\\rho(n)$ of the optimal cost in polynomial time.")
-        lines.append("- **Textbook Authority:** Cormen Part VII Ch. 35; Horowitz & Sahni Chapter 12.")
-        lines.append("")
+        sec4_lines = [
+            "### 4. In-Depth Breakdown of Algorithmic Design Paradigms",
+            "",
+            f"#### A. Divide-and-Conquer {cite_dandc}",
+            "- **Core Mechanism:** Breaks the problem into several smaller subproblems that are similar to the original problem but smaller in size, solves the subproblems recursively, and then combines these solutions to create a solution to the original problem.",
+            "- **Three Steps:** 1. *Divide* the problem into subproblems. 2. *Conquer* the subproblems by solving them recursively. 3. *Combine* the solutions to solve the original problem.",
+            "- **Source Authority:** Cormen Part I Ch. 2 & Ch. 4; Horowitz & Sahni Chapter 3.",
+            "",
+            f"#### B. The Greedy Method {cite_greedy}",
+            "- **Core Mechanism:** The greedy method constructs a solution in an incremental sequence of stages. At each stage, a decision is made regarding which input to include, choosing the candidate that looks best at the moment without reconsidering previous decisions.",
+            "- **Crucial Properties:** Requires *optimal substructure* and the *greedy-choice property* (a globally optimal solution can be arrived at by making locally optimal choices).",
+            "- **Source Authority:** Cormen Part IV Ch. 16; Horowitz & Sahni Chapter 4.",
+            "",
+            f"#### C. Dynamic Programming {cite_dp}",
+            "- **Core Mechanism:** Used when the solution to a problem can be viewed as the result of a sequence of decisions. Unlike divide-and-conquer where subproblems are independent, dynamic programming solves problems with *overlapping subproblems* by computing each subproblem solution once and storing it in a table.",
+            "- **Crucial Properties:** 1. *Optimal Substructure:* An optimal solution contains within it optimal solutions to subproblems. 2. *Overlapping Subproblems:* Recursive algorithms visit the same subproblems repeatedly.",
+            "- **Source Authority:** Cormen Part IV Ch. 15; Horowitz & Sahni Chapter 5.",
+            "",
+            f"#### D. Backtracking {cite_backtrack}",
+            "- **Core Mechanism:** Backtracking searches the state space of a problem by systematically generating problem states. All paths from the root to other nodes define the state space tree. A bounding function is tested at each node; if it indicates that no solution can be reached from that node, the algorithm backtracks to its parent node.",
+            "- **Source Authority:** Horowitz & Sahni Chapter 7.",
+            "",
+            f"#### E. Branch-and-Bound {cite_bnb}",
+            "- **Core Mechanism:** Refers to all state space search methods in which all children of an E-node are generated before any other live node can become the E-node. Explores live nodes using FIFO, LIFO, or Least-Cost (LC) search, computing heuristic cost estimates (lower and upper bounds) to prune subtrees that cannot improve upon the best known solution.",
+            "- **Source Authority:** Horowitz & Sahni Chapter 8.",
+            "",
+            f"#### F. Approximation Algorithms {cite_approx}",
+            "- **Core Mechanism:** When a problem is NP-complete or computationally intractable, finding an exact polynomial-time solution is unlikely. An approximation algorithm returns a solution whose cost is within a guaranteed factor $\\rho(n)$ of the optimal cost in polynomial time.",
+            "- **Source Authority:** Cormen Part VII Ch. 35; Horowitz & Sahni Chapter 12.",
+        ]
+        sec4_text = "\n".join(sec4_lines)
+        self._emit_block(emit, "Strategy Breakdowns", sec4_text, cited)
 
-        # SECTION 5: VERIFICATION & CONFIDENCE
-        unique_titles = list(dict.fromkeys(s.title or s.filename for s in sources if s.title or s.filename))
-        lines.append("### 5. Verification & Grounding Assurance")
-        lines.append(f"- **Confidence Tier:** {confidence.level.value} ({int(confidence.overall_confidence_score * 100)}%)")
-        lines.append(f"- **Cross-Textbook Grounding:** Verified across {len(sources)} cited passages from {len(unique_titles)} indexed sources ({', '.join(unique_titles)}).")
-        lines.append("- **Claim-Level Traceability:** Every factual definition, criterion, and strategy is attributed to an explicit textbook section and page.")
-
-        markdown = "\n".join(lines).strip()
+        markdown = "\n\n".join([sec1_text, sec2_text, sec3_text, sec4_text]).strip()
         headline = "An algorithm is a finite, well-defined sequence of computational steps. The foundational algorithm design strategies in computer science literature comprise Divide-and-Conquer, the Greedy Method, Dynamic Programming, Backtracking, Branch-and-Bound, Randomized Algorithms, and Approximation Algorithms."
 
         cited = []
@@ -279,16 +398,26 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the requested topic"
         top_source = confidence.top_source or sources[0]
         top_def = confidence.top_definition
 
         def _clean_def_sentence(raw_sentence: str) -> str:
-            s = raw_sentence.strip()
+            s = clean_passage_text(raw_sentence).strip()
             s = re.sub(r"^(?:(?:section|chapter|part|def|definition)\s*\d+(?:\.\d+)*\s*(?:\[.*?\])?\s*[:\.-]?\s*)", "", s, flags=re.I).strip()
             s = re.sub(r"^(?:\[.*?\]\s*[:\.-]?\s*)", "", s).strip()
             s = re.sub(r"^\d+(?:\.\d+)*\s+[A-Za-z0-9_-]+\s+(?=(?:informally|formally|an?\s+|the\s+))", "", s, flags=re.I).strip()
+            # If definition ends with trailing list marker e.g. ": 1." or " 1.", strip it
+            s = re.sub(r":?\s*\b\d+\.\s*$", "", s).strip()
+            if len(s) > 300:
+                cut = s[:300].rsplit(" ", 1)[0].rstrip(" ,;:-")
+                cut = re.sub(r":?\s*\b\d+\.\s*$", "", cut).strip()
+                s = cut + "..."
+            if not s.endswith((".", "!", "?", "...", '."')):
+                s += "."
             return s
 
         # Discover definitions across all distinct documents
@@ -297,7 +426,7 @@ class ResearchAnswerComposer:
             doc_key = s.document_id or s.title or s.source_id
             if doc_key in definitions_by_doc:
                 continue
-            defs = self.sentence_analyzer.find_definition_sentences(s.text, concept)
+            defs = self.sentence_analyzer.find_definition_sentences(clean_passage_text(s.text), concept)
             if defs:
                 cleaned_def = _clean_def_sentence(defs[0].sentence)
                 definitions_by_doc[doc_key] = (cleaned_def, s)
@@ -309,8 +438,9 @@ class ResearchAnswerComposer:
         criteria_list: List[Tuple[str, str, str]] = []  # (Name, Description, SourceId)
         criteria_source: Optional[RetrievedSource] = None
         for s in sources:
+            s_clean_txt = clean_passage_text(s.text)
             pattern = re.compile(r"^\s*(\d+)\.\s+([A-Z][a-z]+)\.\s*(.*?)(?=(?:^\s*\d+\.\s+[A-Z]|\Z))", re.M | re.S)
-            for m in pattern.finditer(s.text):
+            for m in pattern.finditer(s_clean_txt):
                 num, c_name, c_desc = m.groups()
                 clean_desc = " ".join(c_desc.split()).strip()
                 clean_desc = re.sub(r"\s+ia\b", "", clean_desc)
@@ -321,29 +451,57 @@ class ResearchAnswerComposer:
                 break
 
         # Dynamically extract key characteristics across sources
+        is_time_query = bool(re.search(r"\b(?:time|complexity|runtime|running\s+time|big\s*o|theta|omega|fast|slow)\b", query.raw_query, re.I))
+        concept_base = re.sub(r"^(?:an?|the)\s+", "", concept.strip().lower())
+
+        # Helper to detect exercise or problem references
+        def _is_exercise(text: str) -> bool:
+            if re.search(r"^\s*\d+(?:\.\d+)*-\d+\b", text, re.I):
+                return True
+            if re.search(r"^\s*(?:exercise|problem)\b", text, re.I):
+                return True
+            if re.search(r"\b\d+(?:\.\d+)*-\d+\s+Consider\b", text, re.I):
+                return True
+            return False
+
         key_points: List[str] = []
         for s in sources:
             s_cite = f"[{s.source_id}]"
-            for sentence in self.sentence_analyzer.segment_sentences(s.text):
-                clean_s = sentence.strip()
+            s_clean_txt = clean_passage_text(s.text)
+            for sentence in self.sentence_analyzer.segment_sentences(s_clean_txt):
+                clean_s = clean_passage_text(sentence).strip()
                 if any(clean_s in def_val[0] or def_val[0] in clean_s for def_val in definitions_by_doc.values()):
                     continue
                 if clean_s.endswith("?") or re.match(r"^(?:what|why|how|when|where|which|who)\b", clean_s, re.I):
                     continue
                 if len(clean_s) < 25 or len(clean_s) > 220:
                     continue
-                if re.search(r"\b(?:takes|input|produces|output|consists\s+of|transforms|sequence\s+of|tool\s+for|satisfies|is\s+a\s+set|accomplishes|finite\s+number)\b", clean_s, re.I):
-                    bullet = f"- {clean_s} {s_cite}"
-                    if bullet not in key_points and len(key_points) < 5:
-                        key_points.append(bullet)
+
+                # Key Characteristics only takes sentences containing concept AND a property cue
+                has_concept = concept_base in clean_s.lower()
+                has_prop_cue = bool(re.search(r"\b(?:property|properties|satisfies|must|has|consists|invariant|is\s+a\b|is\s+an\b)", clean_s, re.I))
+                if not (has_concept and has_prop_cue):
+                    continue
+
+                # Exclude sentences about running time unless query mentions time/complexity
+                is_time_sentence = bool(re.search(r"\b(?:takes\s+time|running\s+time|runs\s+in|o\s*\(|o\s*\.|\btheta\b|\bomega\b)\b", clean_s, re.I)) or "O(" in clean_s or "O." in clean_s or "takes time" in clean_s.lower()
+                if not is_time_query and is_time_sentence:
+                    continue
+
+                bullet = f"- {clean_s} {s_cite}"
+                if bullet not in key_points and len(key_points) < 5:
+                    key_points.append(bullet)
 
         # Find clean declarative supporting context sentences across sources
         context_bullets: List[str] = []
         for s in sources:
             s_cite = f"[{s.source_id}]"
-            for sentence in self.sentence_analyzer.segment_sentences(s.text):
-                clean_s = sentence.strip()
+            s_clean_txt = clean_passage_text(s.text)
+            for sentence in self.sentence_analyzer.segment_sentences(s_clean_txt):
+                clean_s = clean_passage_text(sentence).strip()
                 if clean_s.endswith("?"):
+                    continue
+                if _is_exercise(clean_s):
                     continue
                 if re.match(r"^(?:what|why|how|when|where|which|who)\b", clean_s, re.I):
                     continue
@@ -364,45 +522,110 @@ class ResearchAnswerComposer:
             if len(context_bullets) >= 3:
                 break
 
-        # Search for textbook examples across the sources
         example_found = None
         for s in sources:
-            for sent in self.sentence_analyzer.segment_sentences(s.text):
-                if re.search(r"\b(?:for\s+example|consider|as\s+an\s+example)\b", sent, re.I) and len(sent) > 35:
-                    example_found = (sent.strip(), s.source_id)
+            s_clean_txt = clean_passage_text(s.text)
+            for sent in self.sentence_analyzer.segment_sentences(s_clean_txt):
+                sent_clean = clean_passage_text(sent).strip()
+                if _is_exercise(sent_clean):
+                    continue
+                if re.search(r"\b(?:for\s+example|consider|as\s+an\s+example)\b", sent_clean, re.I) and len(sent_clean) > 35:
+                    example_found = (sent_clean, s.source_id)
                     break
             if example_found:
                 break
 
-        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK) and not definitions_by_doc and not top_def:
-            fallback_text = sources[0].text[:200]
-            lines = [
-                f"### Direct Answer: No Formal Definition Found",
-                f"The selected documents discuss '{concept}' in context, but do not contain a canonical formal definition.",
-                "",
-                "### Contextual Mentions from Retrieved Passages",
-                f"> \"{fallback_text}\" [{top_source.source_id}]",
-                "",
-                f"*Source: {top_source.title}, {top_source.locator}*",
+        if not definitions_by_doc and not top_def:
+            from rag.intelligence.retrieval_engine import norm, body_text
+            norm_c = norm(concept)
+            cues = [
+                "paradigm", "strategy", "technique", "method", "approach",
+                "involves", "consists of", "steps", "is a ", "is an ",
+                "refers to", "general method", "design technique"
             ]
-            if context_bullets:
-                lines.extend(["", "### Related Context", *context_bullets])
-            lines.extend([
+
+            best_src: Optional[RetrievedSource] = None
+            best_passage: str = ""
+
+            for s in sources:
+                sec = s.section or ""
+                if re.search(r"\b(?:contents|table\s+of\s+contents|preface|index|exercises|problems|bibliography|references)\b", sec, re.I):
+                    continue
+                bt = body_text(clean_passage_text(s.text), sec)
+                if re.match(r"^\s*(?:figure|fig\.|table)\b", bt, re.I):
+                    continue
+                norm_bt = norm(bt)
+                if norm_c not in norm_bt:
+                    continue
+
+                sentences = self.sentence_analyzer.segment_sentences(bt)
+                candidate_sentences = []
+                for sent in sentences:
+                    s_clean = clean_passage_text(sent).strip()
+                    if norm_c in norm(s_clean):
+                        has_cue = any(cue in norm(s_clean) for cue in cues)
+                        candidate_sentences.append((2 if has_cue else 1, s_clean))
+
+                if candidate_sentences:
+                    candidate_sentences.sort(key=lambda x: x[0], reverse=True)
+                    best_src = s
+                    best_passage = candidate_sentences[0][1]
+                    break
+
+            if not best_src:
+                for s in sources:
+                    sec = s.section or ""
+                    bt = body_text(clean_passage_text(s.text), sec)
+                    if not re.match(r"^\s*(?:figure|fig\.|table)\b", bt, re.I):
+                        sentences = self.sentence_analyzer.segment_sentences(bt)
+                        if sentences:
+                            best_src = s
+                            best_passage = clean_passage_text(sentences[0]).strip()
+                            break
+
+            if not best_src:
+                best_src = top_source
+                best_passage = self._clean_excerpt(clean_passage_text(best_src.text), max_chars=200)
+
+            best_passage = best_passage.strip()
+            if not best_passage.endswith((".", "!", "?")):
+                best_passage += "."
+
+            lines = [
+                "### How the selected sources describe it",
+                f"> \"{best_passage}\" [{best_src.source_id}]",
                 "",
-                "### Confidence Assessment",
-                f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-                "- **Notice:** No definitive subject-copula definition was established in the indexed text.",
-            ])
+                "The sources describe this topic but do not state a one-line definition.",
+            ]
+            if criteria_list and criteria_source:
+                lines.extend([
+                    "",
+                    "### Formal Criteria & Essential Properties",
+                    f"According to foundational specifications [{criteria_source.source_id}], all algorithms must satisfy five mandatory criteria:",
+                ])
+                for c_name, c_desc, c_src in criteria_list:
+                    lines.append(f"- **{c_name}:** {c_desc} [{c_src}]")
+
+            if key_points:
+                lines.extend(["", "### Key Characteristics", *key_points])
+
+            if context_bullets:
+                lines.extend(["", "### More from the sources", *context_bullets])
+
+            if example_found:
+                lines.extend(["", "### Foundational Example", f"> \"{example_found[0]}\" [{example_found[1]}]"])
+
+            markdown = "\n".join(lines).strip()
             return GroundedResearchAnswer(
                 query=query.raw_query,
                 intent=ResearchIntent.DEFINITION,
                 confidence_level=confidence.level,
                 confidence_score=confidence.overall_confidence_score,
-                headline_answer=f"No formal definition of '{concept}' found in selected documents.",
-                markdown_content="\n".join(lines),
-                primary_citation=f"[{top_source.source_id}]",
+                headline_answer=f"How the selected sources describe '{concept}'.",
+                markdown_content=markdown,
+                primary_citation=f"[{best_src.source_id}]",
                 cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
-                limitations=confidence.limitations or [f"Authoritative definition for '{concept}' is absent from the indexed text."],
+                limitations=confidence.limitations or [f"A canonical one-line definition for '{concept}' was not stated in the sources."],
             )
 
         lines = []
@@ -412,7 +635,6 @@ class ResearchAnswerComposer:
             lines.append("")
             for doc_key, (def_str, src) in definitions_by_doc.items():
                 lines.append(f"> \"{def_str}\" [{src.source_id}]")
-                lines.append(f"*Source: {src.title}, {src.locator}*")
                 lines.append("")
         else:
             top_def_text = next(iter(definitions_by_doc.values()))[0] if definitions_by_doc else (top_def.sentence if top_def else top_source.text[:200])
@@ -421,13 +643,11 @@ class ResearchAnswerComposer:
                 f"### Definition of {concept.title()}",
                 f"> \"{top_def_text}\" [{first_src.source_id}]",
                 "",
-                f"*Source: {first_src.title}, {first_src.locator}*",
-                "",
             ])
 
         if criteria_list and criteria_source:
             lines.append("### Formal Criteria & Essential Properties")
-            lines.append(f"According to textbook specifications [{criteria_source.source_id}], all algorithms must satisfy five mandatory criteria:")
+            lines.append(f"According to foundational specifications [{criteria_source.source_id}], all algorithms must satisfy five mandatory criteria:")
             for c_name, c_desc, c_src in criteria_list:
                 lines.append(f"- **{c_name}:** {c_desc} [{c_src}]")
             lines.append("")
@@ -438,21 +658,17 @@ class ResearchAnswerComposer:
             lines.append("")
 
         if context_bullets:
-            lines.append("### Supporting Context & Theoretical Nuances")
+            lines.append("### More from the sources")
             lines.extend(context_bullets)
             lines.append("")
 
         if example_found:
-            lines.append("### Textbook Example")
+            lines.append("### Foundational Example")
             lines.append(f"> \"{example_found[0]}\" [{example_found[1]}]")
             lines.append("")
 
-        distinct_docs_count = len(set(s.document_id for s in sources))
-        lines.extend([
-            "### Verification & Confidence",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            f"- **Grounding Status:** 100% deterministic source quotes synthesized across {distinct_docs_count} indexed textbook source{'s' if distinct_docs_count != 1 else ''}.",
-        ])
+        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
+            lines.append(f"The indexed text discusses '{concept}' in context, but evidence is partially complete.")
 
         markdown = "\n".join(lines).strip()
         headline = next(iter(definitions_by_doc.values()))[0] if definitions_by_doc else (top_def.sentence if top_def else top_source.text[:200])
@@ -489,6 +705,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the algorithm"
         claims = []
@@ -504,7 +722,6 @@ class ResearchAnswerComposer:
             headline = f"{top_claim.bound_type.title()}: {top_claim.formula} [{top_s.source_id}]"
             lines.extend([
                 f"> **{headline}**",
-                f"*Source: {top_s.locator}*",
                 "",
                 "### Reported Bounds",
                 "| Case / Resource | Bound | Source Passage | Citation |",
@@ -522,12 +739,11 @@ class ResearchAnswerComposer:
             for s in sources[:2]:
                 lines.append(f"- {s.text[:250].strip()} [{s.source_id}] · {s.locator}")
 
-        lines.extend([
-            "",
-            "### Confidence & Grounding",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            "- **Evaluation:** Deterministic asymptotic extraction from local document.",
-        ])
+        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
+            lines.extend([
+                "",
+                f"The indexed text discusses efficiency for '{concept}' in context, but does not state formal asymptotic bounds.",
+            ])
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -546,6 +762,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         c1 = query.primary_concept or (query.target_concepts[0] if query.target_concepts else "Entity 1")
         c2 = query.secondary_concept or (query.target_concepts[1] if len(query.target_concepts) > 1 else "Entity 2")
@@ -591,12 +809,11 @@ class ResearchAnswerComposer:
         if s_c2:
             lines.append(f"- **{c2.title()}:** {s_c2[0].text[:220].strip()} [{s_c2[0].source_id}]")
 
-        lines.extend([
-            "",
-            "### Grounding Assurance",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            "- Attributes derived strictly from cited passages without speculative comparisons.",
-        ])
+        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
+            lines.extend([
+                "",
+                f"The indexed text discusses both concepts, but complete comparative specifications were not fully located.",
+            ])
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -615,6 +832,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the procedure"
         top_s = sources[0]
@@ -628,7 +847,6 @@ class ResearchAnswerComposer:
 
         lines = [
             f"### Procedure: {concept.title()}",
-            f"*Source: {top_s.title}, {top_s.locator}*",
             "",
         ]
 
@@ -642,12 +860,11 @@ class ResearchAnswerComposer:
             for st in sentences[:4]:
                 lines.append(f"- {st} [{top_s.source_id}]")
 
-        lines.extend([
-            "",
-            "### Verification Note",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            "- Steps are reproduced verbatim from the source textbook without generative alterations.",
-        ])
+        if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
+            lines.extend([
+                "",
+                f"The indexed text discusses this procedure, but operational execution steps were not fully extracted.",
+            ])
 
         headline = steps[0] if steps else sentences[0] if sentences else f"Procedure for {concept}"
         return GroundedResearchAnswer(
@@ -667,6 +884,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the concept"
         top_s = sources[0]
@@ -689,23 +908,16 @@ class ResearchAnswerComposer:
         if criteria_list and criteria_source:
             lines = [
                 f"### Essential Properties and Criteria of {concept.title()}",
-                f"According to textbook specifications [{criteria_source.source_id}], all algorithms must satisfy five mandatory criteria:",
+                f"According to foundational specifications [{criteria_source.source_id}], all algorithms must satisfy five mandatory criteria:",
                 "",
             ]
             for c_name, c_desc, c_src in criteria_list:
                 lines.append(f"- **{c_name}:** {c_desc} [{c_src}]")
-            lines.extend([
-                "",
-                "### Verification & Confidence",
-                f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-                f"- **Grounding:** 100% deterministic criteria reproduced verbatim from {criteria_source.locator}.",
-            ])
             headline = f"Five mandatory criteria of an algorithm: {', '.join(c[0] for c in criteria_list)}"
         else:
             sentences = self.sentence_analyzer.segment_sentences(top_s.text)
             lines = [
                 f"### Properties of {concept.title()}",
-                f"*Source: {top_s.locator}*",
                 "",
                 "### Document-Stated Characteristics",
             ]
@@ -713,10 +925,11 @@ class ResearchAnswerComposer:
             for s in items[:5]:
                 lines.append(f"- {s} [{top_s.source_id}]")
 
-            lines.extend([
-                "",
-                f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            ])
+            if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
+                lines.extend([
+                    "",
+                    f"The indexed text discusses properties of '{concept}', but explicit foundational criteria were not located.",
+                ])
             headline = items[0] if items else f"Properties of {concept}"
 
         return GroundedResearchAnswer(
@@ -736,6 +949,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the topic"
         top_s = sources[0]
@@ -768,6 +983,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the concept"
         example_sent = None
@@ -787,8 +1004,6 @@ class ResearchAnswerComposer:
         lines = [
             f"### Example: {concept.title()}",
             f"> \"{example_sent}\" [{ex_source.source_id}]",
-            "",
-            f"*Source: {ex_source.locator}*",
         ]
 
         return GroundedResearchAnswer(
@@ -808,6 +1023,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the theorem"
         top_s = sources[0]
@@ -817,8 +1034,6 @@ class ResearchAnswerComposer:
         lines = [
             f"### Theorem Statement: {concept.title()}",
             f"> \"{thm_sent}\" [{top_s.source_id}]",
-            "",
-            f"*Source: {top_s.locator}*",
         ]
         if len(sentences) > 1:
             lines.extend(["", "### Context / Proof Overview", *[f"- {s} [{top_s.source_id}]" for s in sentences[1:3]]])
@@ -840,6 +1055,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "the document"
         lines = [
@@ -868,6 +1085,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         lines = [
             "### Coverage Ranking",
@@ -898,14 +1117,14 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         c1 = query.primary_concept or "Concept 1"
         c2 = query.secondary_concept or "Concept 2"
         lines = [
             f"### Relationship between {c1.title()} and {c2.title()}",
             f"> \"{sources[0].text[:300].strip()}\" [{sources[0].source_id}]",
-            "",
-            f"*Source: {sources[0].locator}*",
         ]
 
         return GroundedResearchAnswer(
@@ -925,6 +1144,8 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         claim = query.query_constraints.get("claim", query.raw_query)
         top_s = sources[0]
@@ -934,10 +1155,6 @@ class ResearchAnswerComposer:
             "",
             "### Relevant Source Text",
             f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
-            "",
-            f"*Source: {top_s.locator}*",
-            "",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
         ]
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -956,11 +1173,12 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "algorithms"
-        # Identify specific textbook sources
-        cormen_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["cormen", "introduction to algorithms", "ca86fa5f"])), None)
-        horowitz_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["horowitz", "sahani", "sahni", "fundamentals", "be61583c"])), None)
+        # Identify specific textbook sources safely using metadata text
+        cormen_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["cormen", "introduction to algorithms"])), None)
+        horowitz_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["horowitz", "sahani", "sahni", "fundamentals"])), None)
 
         c_cite = f"[{cormen_src.source_id}]" if cormen_src else f"[{sources[0].source_id}]"
         h_cite = f"[{horowitz_src.source_id}]" if horowitz_src else (f"[{sources[1].source_id}]" if len(sources) > 1 else c_cite)
@@ -971,7 +1189,23 @@ class ResearchAnswerComposer:
                     return f"[{s.source_id}]"
             return c_cite
 
-        lines = [
+        # Pre-build citations list
+        cited = []
+        seen_cids = set()
+        for s in sources:
+            if s.source_id not in seen_cids:
+                seen_cids.add(s.source_id)
+                cited.append({
+                    "source_id": s.source_id,
+                    "locator": s.locator,
+                    "page": s.page_start,
+                    "title": s.title or s.filename,
+                    "document_id": s.document_id,
+                    "paper_id": s.paper_id,
+                })
+
+        # SECTION 1: Paradigms
+        sec1_lines = [
             f"### Taxonomy and Classes of {concept.title()}",
             f"In computer science literature (grounded in *Cormen et al., Introduction to Algorithms* {c_cite} and *Horowitz & Sahni, Fundamentals of Computer Algorithms* {h_cite}), algorithms are systematically classified along three primary dimensions: **algorithmic design paradigms**, **computational execution models**, and **operational problem domains**.",
             "",
@@ -1005,40 +1239,34 @@ class ResearchAnswerComposer:
             f"- **Approximation Algorithms:** Polynomial-time algorithms designed for computationally intractable (NP-hard) optimization problems that are proven to return solutions within a guaranteed approximation ratio of the optimal solution. {_get_paradigm_citation('approximation')}",
             "  *Canonical Examples:* Vertex Cover, Metric TSP, Set Cover.",
             "  *Textbook Authority:* Cormen Part VII Ch. 35; Horowitz & Sahni Ch. 12.",
-            "",
+        ]
+        sec1_text = "\n".join(sec1_lines)
+        self._emit_block(emit, "Algorithmic Design Paradigms", sec1_text, cited[:6])
+
+        # SECTION 2: Architecture
+        sec2_lines = [
             "### 2. Classification by Computational & Execution Architecture",
             f"- **Sequential (Deterministic) Algorithms:** Instructions execute in a fixed, step-by-step sequence on a single processor with predictable state transitions. {c_cite}",
             f"- **Parallel and Distributed Algorithms:** Instructions execute simultaneously across multiple processors or distributed computing nodes (such as PRAM, Mesh architectures, and Hypercube networks). {h_cite}",
             "  *Textbook Authority:* Horowitz & Sahni Chapters 13–15; Cormen Ch. 27.",
             f"- **Exact vs. Heuristic / Approximation:** Guaranteed globally optimal mathematical solution versus bounded heuristic approximation for intractable problems.",
-            "",
+        ]
+        sec2_text = "\n".join(sec2_lines)
+        self._emit_block(emit, "Computational & Execution Architecture", sec2_text, cited)
+
+        # SECTION 3: Problem Domains & Verification
+        sec3_lines = [
             "### 3. Classification by Operational Problem Domain",
             f"- **Sorting and Order Statistics:** Reordering collections into monotonic sequences (Insertion Sort, Heapsort, Quicksort, Linear sorts) (Cormen Part II).",
             f"- **Searching & Dictionary Structures:** Hash tables, Binary Search Trees, Red-Black Trees, B-Trees (Cormen Part III, Horowitz & Sahni Ch. 2).",
             f"- **Graph and Network Flow Algorithms:** BFS, DFS, Minimum Spanning Trees, Shortest Paths, Maximum Flow (Cormen Part VI, Horowitz & Sahni Ch. 6).",
             f"- **Geometric & Number-Theoretic Algorithms:** Convex hulls, GCD, modular arithmetic, and RSA cryptography (Cormen Part VII).",
-            "",
-            "### Verification & Confidence",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            f"- **Evidence Grounding:** Authoritative taxonomy verified across {len(set(s.document_id for s in sources))} indexed textbook source{'s' if len(set(s.document_id for s in sources)) != 1 else ''} ({', '.join(dict.fromkeys(s.title or s.filename for s in sources))}).",
         ]
+        sec3_text = "\n".join(sec3_lines)
+        self._emit_block(emit, "Operational Problem Domain", sec3_text, cited)
 
-        markdown = "\n".join(lines).strip()
+        markdown = "\n\n".join([sec1_text, sec2_text, sec3_text]).strip()
         headline = f"Algorithms are classified primarily by design paradigm (Divide & Conquer, Greedy, Dynamic Programming, Backtracking, Branch & Bound, Randomized, Approximation), computational architecture (Sequential vs. Parallel), and operational domain."
-
-        cited = []
-        seen_cids = set()
-        for s in sources:
-            if s.source_id not in seen_cids:
-                seen_cids.add(s.source_id)
-                cited.append({
-                    "source_id": s.source_id,
-                    "locator": s.locator,
-                    "page": s.page_start,
-                    "title": s.title or s.filename,
-                    "document_id": s.document_id,
-                    "paper_id": s.paper_id,
-                })
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1057,10 +1285,11 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "Algorithms"
-        cormen_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["cormen", "introduction to algorithms", "9a75d507"])), None)
-        horowitz_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["horowitz", "sahani", "sahni", "fundamentals", "be61583c"])), None)
+        cormen_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["cormen", "introduction to algorithms"])), None)
+        horowitz_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["horowitz", "sahani", "sahni", "fundamentals"])), None)
 
         c_cite = f"[{cormen_src.source_id}]" if cormen_src else f"[{sources[0].source_id}]"
         h_cite = f"[{horowitz_src.source_id}]" if horowitz_src else (f"[{sources[1].source_id}]" if len(sources) > 1 else c_cite)
@@ -1070,6 +1299,21 @@ class ResearchAnswerComposer:
                 if paradigm_name.lower() in s.text.lower():
                     return f"[{s.source_id}]"
             return c_cite
+
+        # Pre-build citations list
+        cited = []
+        seen_cids = set()
+        for s in sources:
+            if s.source_id not in seen_cids:
+                seen_cids.add(s.source_id)
+                cited.append({
+                    "source_id": s.source_id,
+                    "locator": s.locator,
+                    "page": s.page_start,
+                    "title": s.title or s.filename,
+                    "document_id": s.document_id,
+                    "paper_id": s.paper_id,
+                })
 
         lines = []
 
@@ -1114,7 +1358,7 @@ class ResearchAnswerComposer:
 
         # Branch C: Comparison
         elif query.intent == ResearchIntent.COMPARISON:
-            return self._compose_comparison(query, sources, confidence)
+            return self._compose_comparison(query, sources, confidence, emit=emit)
 
         # Branch D: Complexity
         elif query.intent == ResearchIntent.COMPLEXITY:
@@ -1138,27 +1382,11 @@ class ResearchAnswerComposer:
                 title = (s.title or s.filename or "Source").replace("|", "/")
                 lines.append(f"| **{s.section or concept}** | {excerpt} | {title} (p. {s.page_start}) | [{s.source_id}] |")
 
-        lines.append("")
-        lines.append("### Verification & Confidence")
-        lines.append(f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)")
-        lines.append(f"- **Evidence Grounding:** Authoritative tabular synthesis verified across {len(set(s.document_id for s in sources))} indexed textbook source{'s' if len(set(s.document_id for s in sources)) != 1 else ''}.")
+        table_body = "\n".join(lines).strip()
+        self._emit_block(emit, f"Tabular Synthesis: {concept.title()}", table_body, cited)
 
-        markdown = "\n".join(lines).strip()
-        headline = f"Tabular synthesis of {concept} grounded in textbook sources."
-
-        cited = []
-        seen_cids = set()
-        for s in sources:
-            if s.source_id not in seen_cids:
-                seen_cids.add(s.source_id)
-                cited.append({
-                    "source_id": s.source_id,
-                    "locator": s.locator,
-                    "page": s.page_start,
-                    "title": s.title or s.filename,
-                    "document_id": s.document_id,
-                    "paper_id": s.paper_id,
-                })
+        markdown = table_body
+        headline = f"Tabular synthesis of {concept} grounded in selected sources."
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1177,39 +1405,15 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "Algorithms"
-        cormen_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["cormen", "introduction to algorithms", "9a75d507"])), None)
-        horowitz_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["horowitz", "sahani", "sahni", "fundamentals", "be61583c"])), None)
+        cormen_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["cormen", "introduction to algorithms"])), None)
+        horowitz_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["horowitz", "sahani", "sahni", "fundamentals"])), None)
         c_cite = f"[{cormen_src.source_id}]" if cormen_src else f"[{sources[0].source_id}]"
         h_cite = f"[{horowitz_src.source_id}]" if horowitz_src else (f"[{sources[1].source_id}]" if len(sources) > 1 else c_cite)
 
-        lines = [
-            f"### Algorithmic Design Paradigms Breakdown",
-            f"Distribution of foundational algorithm categories and study scope based on textbook coverage (*Cormen et al.* {c_cite} and *Horowitz & Sahni* {h_cite}):",
-            "",
-            "```pie",
-            "Divide-and-Conquer: 20",
-            "Greedy Method: 20",
-            "Dynamic Programming: 20",
-            "Backtracking & Branch-and-Bound: 15",
-            "Graph & Network Algorithms: 15",
-            "Approximation & Randomized: 10",
-            "```",
-            "",
-            "### Scope Summary",
-            f"- **Exact Optimization Paradigms (60%):** Divide-and-Conquer, Greedy Methods, and Dynamic Programming form the core of classical deterministic algorithm design. {c_cite}",
-            f"- **State-Space Exploration (15%):** Backtracking and Branch-and-Bound explore exponential search spaces with bounding functions. {h_cite}",
-            f"- **Specialized & Intractable Domains (25%):** Graph theory, randomized techniques, and approximation algorithms handle complex network and NP-hard problems. {c_cite}",
-            "",
-            "### Verification & Confidence",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            "- **Evidence Grounding:** Proportional distribution compiled from curriculum chapters across both textbooks.",
-        ]
-
-        markdown = "\n".join(lines).strip()
-        headline = f"Pie chart distribution of {concept} paradigms across textbook sources."
-
+        # Pre-build citations
         cited = []
         seen_cids = set()
         for s in sources:
@@ -1223,6 +1427,34 @@ class ResearchAnswerComposer:
                     "document_id": s.document_id,
                     "paper_id": s.paper_id,
                 })
+
+        chart_lines = [
+            f"### Algorithmic Design Paradigms Breakdown",
+            f"Distribution of foundational algorithm categories and study scope based on literature coverage (*Cormen et al.* {c_cite} and *Horowitz & Sahni* {h_cite}):",
+            "",
+            "```pie",
+            "Divide-and-Conquer: 20",
+            "Greedy Method: 20",
+            "Dynamic Programming: 20",
+            "Backtracking & Branch-and-Bound: 15",
+            "Graph & Network Algorithms: 15",
+            "Approximation & Randomized: 10",
+            "```",
+        ]
+        chart_text = "\n".join(chart_lines)
+        self._emit_block(emit, "Algorithmic Design Paradigms Breakdown", chart_text, cited)
+
+        scope_lines = [
+            "### Scope Summary",
+            f"- **Exact Optimization Paradigms (60%):** Divide-and-Conquer, Greedy Methods, and Dynamic Programming form the core of classical deterministic algorithm design. {c_cite}",
+            f"- **State-Space Exploration (15%):** Backtracking and Branch-and-Bound explore exponential search spaces with bounding functions. {h_cite}",
+            f"- **Specialized & Intractable Domains (25%):** Graph theory, randomized techniques, and approximation algorithms handle complex network and NP-hard problems. {c_cite}",
+        ]
+        scope_text = "\n".join(scope_lines)
+        self._emit_block(emit, "Scope Summary", scope_text, cited)
+
+        markdown = f"{chart_text}\n\n{scope_text}"
+        headline = f"Pie chart distribution of {concept} paradigms across selected sources."
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1241,14 +1473,30 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
     ) -> GroundedResearchAnswer:
         concept = query.primary_concept or "Algorithms"
-        cormen_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["cormen", "introduction to algorithms", "9a75d507"])), None)
-        horowitz_src = next((s for s in sources if any(k in (s.title + s.filename + s.locator).lower() for k in ["horowitz", "sahani", "sahni", "fundamentals", "be61583c"])), None)
+        cormen_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["cormen", "introduction to algorithms"])), None)
+        horowitz_src = next((s for s in sources if any(k in self._source_meta(s) for k in ["horowitz", "sahani", "sahni", "fundamentals"])), None)
         c_cite = f"[{cormen_src.source_id}]" if cormen_src else f"[{sources[0].source_id}]"
         h_cite = f"[{horowitz_src.source_id}]" if horowitz_src else (f"[{sources[1].source_id}]" if len(sources) > 1 else c_cite)
 
-        lines = [
+        # Pre-build citations
+        cited = []
+        seen_cids = set()
+        for s in sources:
+            if s.source_id not in seen_cids:
+                seen_cids.add(s.source_id)
+                cited.append({
+                    "source_id": s.source_id,
+                    "locator": s.locator,
+                    "page": s.page_start,
+                    "title": s.title or s.filename,
+                    "document_id": s.document_id,
+                    "paper_id": s.paper_id,
+                })
+
+        flowchart_lines = [
             f"### Algorithmic Problem-Solving & Design Flowchart",
             f"Decision framework for selecting algorithmic paradigms based on problem structure (*Cormen et al.* {c_cite} and *Horowitz & Sahni* {h_cite}):",
             "",
@@ -1271,34 +1519,22 @@ class ResearchAnswerComposer:
             "P6 -->|No| P8",
             "P8 -->|Yes| P9",
             "```",
-            "",
+        ]
+        flowchart_text = "\n".join(flowchart_lines)
+        self._emit_block(emit, "Algorithmic Design Flowchart", flowchart_text, cited)
+
+        principles_lines = [
             "### Decision Steps & Principles",
             f"1. **Divide-and-Conquer:** When subproblems are independent and can be solved recursively, then combined. {c_cite}",
             f"2. **Dynamic Programming:** When subproblems overlap, requiring a memoization table or bottom-up tabulation. {c_cite}",
             f"3. **Greedy Method:** When the greedy-choice property and optimal substructure guarantee global optimality. {c_cite}",
             f"4. **State-Space & Heuristics:** For intractable problems, Backtracking and Branch-and-Bound prune search trees, or Approximation algorithms guarantee bounded ratios. {h_cite}",
-            "",
-            "### Verification & Confidence",
-            f"- **Confidence Tier:** {confidence.level.value} ({confidence.overall_confidence_score * 100:.0f}%)",
-            "- **Evidence Grounding:** Decision hierarchy constructed from algorithmic design principles across both textbooks.",
         ]
+        principles_text = "\n".join(principles_lines)
+        self._emit_block(emit, "Decision Steps & Principles", principles_text, cited)
 
-        markdown = "\n".join(lines).strip()
-        headline = f"Process flowchart for selecting {concept} paradigms grounded in textbook sources."
-
-        cited = []
-        seen_cids = set()
-        for s in sources:
-            if s.source_id not in seen_cids:
-                seen_cids.add(s.source_id)
-                cited.append({
-                    "source_id": s.source_id,
-                    "locator": s.locator,
-                    "page": s.page_start,
-                    "title": s.title or s.filename,
-                    "document_id": s.document_id,
-                    "paper_id": s.paper_id,
-                })
+        markdown = f"{flowchart_text}\n\n{principles_text}"
+        headline = f"Process flowchart for selecting {concept} paradigms grounded in selected sources."
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1317,13 +1553,13 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
         top_s = sources[0]
         lines = [
             "### Research Findings",
             f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
-            "",
-            f"*Source: {top_s.locator}*",
         ]
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1341,8 +1577,13 @@ class ResearchAnswerComposer:
         self,
         query: QueryUnderstanding,
         confidence: ConfidenceReport,
+        emit: Optional[Callable[[dict], None]] = None,
+        **kwargs
     ) -> GroundedResearchAnswer:
-        concept = query.primary_concept or query.raw_query
+        concept = (query.primary_concept or "").strip()
+        if not concept:
+            from rag.intelligence.query_analyzer import strip_query_prefixes
+            concept = strip_query_prefixes(query.raw_query) or query.raw_query.strip()
         lines = [
             f"### Direct Answer: Not Located in Selected Documents",
             f"ResearchLens searched your library for '{concept}' but found no matching evidence establishing an answer.",

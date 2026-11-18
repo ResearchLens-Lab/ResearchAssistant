@@ -27,15 +27,15 @@ export function GroundedSummaryCard({
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 space-y-4 font-serif shadow-2xs min-h-[340px]">
+    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 space-y-4 shadow-2xs min-h-[340px]">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-[#1d6fc4]" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-serif">
-            RAG Grounded Summary
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+            Grounded summary
           </h3>
           {summary && (
-            <Badge variant="grounded" className="text-[10px] gap-1 font-serif">
+            <Badge variant="grounded" className="text-[11px] gap-1">
               <ShieldCheck className="h-3 w-3" />
               {summary.sources?.length || 0} citations
             </Badge>
@@ -48,7 +48,7 @@ export function GroundedSummaryCard({
           onClick={handleGenerate}
           disabled={isLoading || !hasIndexedSources}
           title={!hasIndexedSources ? "Add and index a source before generating a grounded summary" : undefined}
-          className="h-7 text-xs gap-1.5 font-serif rounded-full"
+          className="h-7 text-xs gap-1.5 rounded-full"
         >
           {isLoading ? (
             <>
@@ -62,8 +62,8 @@ export function GroundedSummaryCard({
             </>
           ) : (
             <>
-              <Sparkles className="h-3 w-3" />
-              <span>Generate Grounded Summary</span>
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Generate grounded summary</span>
             </>
           )}
         </Button>
@@ -77,7 +77,7 @@ export function GroundedSummaryCard({
       )}
 
       {isSourceError ? (
-        <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 font-serif">
+        <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           Project source status is unavailable. Retry the source list before generating a summary.
         </p>
       ) : isCheckingSources ? (
@@ -90,7 +90,7 @@ export function GroundedSummaryCard({
         <div className="pt-1 space-y-4">
           <GroundedAnswer content={summary.answer} sources={summary.sources} />
           <div className="flex items-center justify-between pt-3 border-t border-slate-100 flex-wrap gap-2">
-            <span className="text-[11px] text-slate-400 font-serif">
+            <span className="text-[11px] text-slate-400">
               Click any citation badge to view source excerpt
             </span>
             {onAskInDesk && (
@@ -98,7 +98,7 @@ export function GroundedSummaryCard({
                 variant="ghost"
                 size="sm"
                 onClick={onAskInDesk}
-                className="h-7 text-xs font-serif text-[#1d6fc4] hover:bg-sky-50 gap-1 rounded-full"
+                className="h-7 text-xs text-[#1d6fc4] hover:bg-sky-50 gap-1 rounded-full"
               >
                 <span>Ask questions in Research Desk</span>
                 <ArrowRight className="h-3 w-3" />
@@ -111,25 +111,14 @@ export function GroundedSummaryCard({
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-[#1d6fc4]">
             <BookOpen className="h-5 w-5" />
           </div>
-          <p className="text-sm font-medium text-slate-700 font-serif">
+          <p className="text-sm font-medium text-slate-700">
             {hasIndexedSources ? "No grounded summary generated yet" : "No indexed sources yet"}
           </p>
-          <p className="text-[11px] text-slate-400 font-serif max-w-sm mx-auto leading-relaxed">
+          <p className="text-[11px] text-slate-400 max-w-sm mx-auto leading-relaxed">
             {hasIndexedSources
               ? "Synthesize key arguments and research evidence across your project sources with precise citation links."
               : "Upload and index at least one source document in the left pane to generate a cited synthesis."}
           </p>
-          {hasIndexedSources && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleGenerate}
-              className="mt-2 h-8 text-xs font-serif rounded-full text-[#1d6fc4] border-sky-200 hover:bg-sky-50"
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              <span>Generate Grounded Summary</span>
-            </Button>
-          )}
         </div>
       ) : null}
     </div>

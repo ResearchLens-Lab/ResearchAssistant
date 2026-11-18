@@ -108,9 +108,14 @@ class ConfidenceEvaluator:
             "define", "definition", "definitions", "meaning", "meant", "their", "theirs",
             "its", "they", "them", "can", "could", "should", "would", "will", "shall",
             "steps", "work", "works", "used", "approach", "approaches",
+            "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "last",
+            "one", "ones", "detail", "details", "depth", "more", "now", "tell",
+            "discussed", "above", "below", "also", "please", "example", "examples",
         }
+        concept_terms = [w.lower() for w in re.findall(r"\b[A-Za-z0-9]{3,}\b", query.primary_concept or "") if w.lower() not in stopwords]
+        target_terms = [w.lower() for tc in (query.target_concepts or []) for w in re.findall(r"\b[A-Za-z0-9]{3,}\b", tc) if w.lower() not in stopwords]
         raw_words = re.findall(r"\b[A-Za-z0-9]{3,}\b", query.raw_query)
-        informative_terms = [w.lower() for w in raw_words if w.lower() not in stopwords]
+        informative_terms = list(dict.fromkeys(concept_terms + target_terms + [w.lower() for w in raw_words if w.lower() not in stopwords]))
 
         tokens = re.findall(r"\b[A-Za-z0-9_-]+\b", query.raw_query)
         non_initial_tokens = tokens[1:] if len(tokens) > 1 else []
@@ -137,7 +142,7 @@ class ConfidenceEvaluator:
                 (missing_entities and term_coverage < 0.60)
                 or (len(informative_terms) >= 3 and term_coverage < 0.67)
                 or (informative_terms and term_coverage < 0.50)
-                or (top_score < 1.05 and term_coverage < 0.70)
+                or (top_score < 1.05 and term_coverage < 0.80)
             )
             if is_unrelated:
                 missing_desc = ", ".join(f"'{e}'" for e in (missing_entities or [t for t in informative_terms if t not in matched_terms])[:3])
@@ -478,7 +483,7 @@ class ConfidenceEvaluator:
                     evidence_signals=signals,
                     limitations=[],
                 )
-            elif term_coverage >= 0.40 or top_score >= 0.6:
+            elif term_coverage >= 0.60 and top_score >= 1.05:
                 return ConfidenceReport(
                     level=ConfidenceLevel.PARTIAL,
                     overall_confidence_score=0.55,

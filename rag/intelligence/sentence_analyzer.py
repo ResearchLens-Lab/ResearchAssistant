@@ -48,7 +48,7 @@ class SentenceAnalyzer:
     # Common honorifics and academic abbreviations that do not end a sentence
     ABBREVIATIONS = (
         r"\b(?:e\.g|i\.e|et\s+al|vs|etc|fig|figs|sec|secs|ch|ref|refs|vol|vols|no|nos|p|pp|"
-        r"dr|prof|mr|mrs|ms|al|cf|eq|eqs|approx|def)\."
+        r"dr|prof|mr|mrs|ms|al|cf|eq|eqs|approx|def|thm|thms)\."
     )
     # Author initials: e.g. "C. E.", "T. H.", "R. L."
     INITIALS = r"\b[A-Z]\."
@@ -101,24 +101,30 @@ class SentenceAnalyzer:
 
     def segment_sentences(self, text: str) -> List[str]:
         """
-        Splits academic text into sentences while protecting abbreviations and initials.
+        Splits academic text into sentences while protecting abbreviations, initials,
+        decimals, and list markers.
         """
         if not text or not text.strip():
             return []
 
         clean = unicodedata.normalize("NFKC", text).strip()
-        # Protect abbreviations and initials with placeholder
-        placeholder = "@@ABBR@@"
+        placeholder = "@@DOT@@"
 
         def mask_match(m):
             return m.group(0).replace(".", placeholder)
 
+        # Decimals & section numbers (e.g. 13.4, 3.14)
+        masked = re.sub(r"\b\d+\.\d+\b", mask_match, clean)
+        # Numbered list markers: '1.', '2.', '10.'
+        masked = re.sub(r"(?:(?<=\s)|(?<=^))\d{1,4}\.", mask_match, masked)
+        # Parenthesized list markers: '(a)', '(b)', '(1)'
+        masked = re.sub(r"\([a-zA-Z0-9]{1,4}\)\.?", mask_match, masked)
         # Mask initials like "T. H.", "C. E."
-        masked = re.sub(self.INITIALS, mask_match, clean)
-        # Mask abbreviations like "e.g.", "i.e."
+        masked = re.sub(self.INITIALS, mask_match, masked)
+        # Mask abbreviations like "e.g.", "i.e.", "Thm.", "Sec."
         masked = re.sub(self.ABBREVIATIONS, mask_match, masked, flags=re.IGNORECASE)
 
-        # Split on sentence boundaries: period/exclamation/question followed by space and capital letter or digit
+        # Split on sentence boundaries: period/exclamation/question followed by space and capital letter, digit, or quote
         parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'\(])", masked)
 
         sentences = []

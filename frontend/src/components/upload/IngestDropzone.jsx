@@ -443,7 +443,7 @@ export function IngestDropzone() {
                     )}
 
                     {isCancelled ? (
-                      <span className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                      <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
                         Cancelled
                       </span>
                     ) : isProcessing ? (
@@ -549,7 +549,7 @@ export function IngestDropzone() {
               ingestMutation.isPending ||
               existingPapersQuery.isLoading
             }
-            className="h-10 gap-2 px-5 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#1f659c] text-white shadow-xs hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50"
+            className="h-10 gap-2 px-5 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#185ea8] text-white shadow-xs hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-50"
           >
             {ingestMutation.isPending ? (
               <>
@@ -588,7 +588,7 @@ export function IngestDropzone() {
                       <span>View project sources</span>
                     </Link>
                   </Button>
-                  <Button size="sm" asChild className="h-8 gap-1.5 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#1f659c] text-white">
+                  <Button size="sm" asChild className="h-8 gap-1.5 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#185ea8] text-white">
                     <Link href={`/chat?paper_id=${targetPaperId}`}>
                       <span>Open in Research Desk</span>
                       <ArrowRight className="h-3.5 w-3.5" />

@@ -107,6 +107,11 @@ class ChatService:
             meta={"paper_ids": result.get("paper_ids", paper_ids),
                   "research": result.get("metadata", {}).get("research", {}),
                   "answer_mode": result.get("metadata", {}).get("answer_mode", "unknown"),
+                  "confidence_tier": result.get("metadata", {}).get("confidence_tier"),
+                  "confidence_score": result.get("metadata", {}).get("confidence_score"),
+                  "weak_matches": result.get("metadata", {}).get("weak_matches", []),
+                  "retrieval_summary": result.get("metadata", {}).get("retrieval_summary"),
+                  "error_kind": result.get("metadata", {}).get("error_kind"),
                   "follow_up_suggestions": result.get("metadata", {}).get("follow_up_suggestions", []),
                   "generation_reason": result.get("metadata", {}).get("generation_reason"),
                   "generation_provider": result.get("metadata", {}).get("generation_provider"),
@@ -131,8 +136,30 @@ class ChatService:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue = asyncio.Queue()
         request_id = str(uuid.uuid4())
-        allowed_events = {"retrieval_started", "sources_found", "additional_retrieval", "evidence_ready",
-                          "generation_skipped", "generation_started", "verification_started", "verification_completed", "planning_completed", "token"}
+        allowed_events = {
+            "status",
+            "query_plan",
+            "retrieval_started",
+            "sources_found",
+            "additional_retrieval",
+            "evidence_batch",
+            "evidence_ready",
+            "retrieval_summary",
+            "generation_started",
+            "generation_skipped",
+            "generation_fallback",
+            "section_started",
+            "content_delta",
+            "section_completed",
+            "citation_update",
+            "generation_completed",
+            "token",
+            "planning_started",
+            "planning_completed",
+            "verification_started",
+            "verification_completed",
+            "tool_result",
+        }
         cancelled = asyncio.Event()
 
         def event(event_type: str, data: dict[str, Any] | None = None):
@@ -170,6 +197,6 @@ class ChatService:
             task.cancel()
             raise
         except Exception as exc:
-            logger.error("chat stream failed request_id=%s exception_type=%s", request_id, type(exc).__name__)
+            logger.error("chat stream failed request_id=%s exception_type=%s: %s", request_id, type(exc).__name__, exc, exc_info=True)
             message = str(exc) if isinstance(exc, RAGUnavailableError) else "The research request could not be completed. Please retry."
             yield event("error", {"message": message})

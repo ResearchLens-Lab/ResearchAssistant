@@ -47,22 +47,22 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [], ou
         <section className="rounded-xl bg-[var(--rl-tint)] p-3.5" aria-label="Evidence coverage">
           <h3 className="text-xs font-semibold text-[var(--rl-ink)]">Retrieved evidence</h3>
           <p className="mt-1 text-sm text-[var(--rl-muted)]">{result?.metadata?.research?.evidence_count ?? result?.sources?.length ?? 0} passages · coverage: <span className="font-medium text-[var(--rl-ink)]">{sufficiency || "not recorded"}</span></p>
-          <p className="mt-1 text-[10px] leading-4 text-[var(--rl-muted)]">Coverage indicates how well retrieval matched the question. It does not prove that a claim is true.</p>
+          <p className="mt-1 text-[11px] leading-4 text-[var(--rl-muted)]">Coverage indicates how well retrieval matched the question. It does not prove that a claim is true.</p>
         </section>
         <section className="rounded-xl bg-[var(--rl-tint)] p-3.5" aria-label="Claim checks">
           <h3 className="text-xs font-semibold text-[var(--rl-ink)]">Claim review</h3>
-          {claimSummary.available ? <><p className="mt-1 text-sm text-[var(--rl-muted)]">{claimSummary.supported} supported · {claimSummary.partial} partial · {claimSummary.issues} needing review</p><p className="mt-1 text-[10px] leading-4 text-[var(--rl-muted)]">{research.claim_verification?.method?.includes("heuristic") ? "Lexical/numeric screening only; inspect the cited passage to judge meaning." : "Automated support checks can be fallible; inspect citations for context."}</p></> : <p className="mt-1 text-sm text-[var(--rl-muted)]">Claim checks are unavailable. Citations still link to the retrieved passages.</p>}
+          {claimSummary.available ? <><p className="mt-1 text-sm text-[var(--rl-muted)]">{claimSummary.supported} supported · {claimSummary.partial} partial · {claimSummary.issues} needing review</p><p className="mt-1 text-[11px] leading-4 text-[var(--rl-muted)]">{research.claim_verification?.method?.includes("heuristic") ? "Lexical/numeric screening only; inspect the cited passage to judge meaning." : "Automated support checks can be fallible; inspect citations for context."}</p></> : <p className="mt-1 text-sm text-[var(--rl-muted)]">Claim checks are unavailable. Citations still link to the retrieved passages.</p>}
         </section>
       </div>
 
-      {paperTitles.length > 0 && <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--rl-border)] px-4 py-3 sm:px-5"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Compared sources</span>{paperTitles.map((title) => <span key={title} title={title} className="max-w-64 truncate rounded-full border border-[var(--rl-border)] bg-white px-2.5 py-1 text-[10px] text-[var(--rl-ink)]">{title}</span>)}</div>}
+      {paperTitles.length > 0 && <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--rl-border)] px-4 py-3 sm:px-5"><span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Compared sources</span>{paperTitles.map((title) => <span key={title} title={title} className="max-w-64 truncate rounded-full border border-[var(--rl-border)] bg-white px-2.5 py-1 text-[11px] text-[var(--rl-ink)]">{title}</span>)}</div>}
 
       {documentScope.length > 0 && <section className="border-b border-[var(--rl-border)] px-4 py-3 sm:px-5" aria-label="Selected document coverage">
-        <div className="mb-2 flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Selected scope</span>{projectTitles.map((title, index) => <span key={`${title}-${index}`} className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1 text-[10px] text-[var(--rl-muted)]">{title}</span>)}</div>
+        <div className="mb-2 flex flex-wrap items-center gap-2"><span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--rl-muted)]">Selected scope</span>{projectTitles.map((title, index) => <span key={`${title}-${index}`} className="rounded-full bg-[var(--rl-tint)] px-2.5 py-1 text-[11px] text-[var(--rl-muted)]">{title}</span>)}</div>
         <ul className="grid gap-1.5 sm:grid-cols-2">{documentScope.map((document) => <li key={document.document_id} className="flex min-w-0 items-center gap-2 rounded-lg border border-[var(--rl-border)] px-2.5 py-2 text-xs">
           <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${document.contributed_evidence ? "bg-emerald-500" : "bg-amber-500"}`} />
           <span className="min-w-0 flex-1 truncate text-[var(--rl-ink)]" title={`${document.project_title} · ${document.filename}`}>{document.filename}</span>
-          <span className={`shrink-0 text-[10px] ${document.contributed_evidence ? "text-emerald-700" : "text-amber-700"}`}>{document.contributed_evidence ? "Evidence retrieved" : "No relevant passage retrieved"}</span>
+          <span className={`shrink-0 text-[11px] ${document.contributed_evidence ? "text-emerald-700" : "text-amber-700"}`}>{document.contributed_evidence ? "Evidence retrieved" : "No relevant passage retrieved"}</span>
         </li>)}</ul>
       </section>}
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage, clipboard } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, safeStorage, clipboard, screen, Menu } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
@@ -14,6 +14,9 @@ app.setPath("userData", RUNTIME_HOME);
 
 const settingsFile = path.join(RUNTIME_HOME, "desktop-settings.json");
 const jwtKeyFile = path.join(RUNTIME_HOME, "secrets", "jwt-signing.key");
+const profileFile = path.join(RUNTIME_HOME, "profile.json");
+function readJsonSafe(file, fallback) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; } }
+function writeJsonSafe(file, data) { try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(data, null, 2), { mode: 0o600 }); } catch (e) { appendPrivateLog(`profile write failed: ${e.message}`); } }
 const selectedLibraries = new Set();
 let mainWindow = null;
 let appSettings = null;
@@ -39,7 +42,15 @@ const pythonRoot = path.join(runtimeRoot, "python");
 const onboardingFile = path.join(__dirname, "onboarding", "index.html");
 const startupFile = path.join(__dirname, "startup", "index.html");
 
-const defaultSuggestedLibrary = path.join(os.homedir(), "Documents", "ResearchLens Library");
+const userDocuments = path.join(os.homedir(), "Documents");
+const isOneDrive = Boolean(
+  (process.env.OneDrive && userDocuments.toLowerCase().startsWith(process.env.OneDrive.toLowerCase())) ||
+  userDocuments.toLowerCase().includes("onedrive") ||
+  fs.existsSync(path.join(os.homedir(), "OneDrive", "Documents"))
+);
+const defaultSuggestedLibrary = isOneDrive
+  ? path.join(LOCAL_APP_DATA, "ResearchLens", "Library")
+  : path.join(os.homedir(), "Documents", "ResearchLens Library");
 selectedLibraries.add(defaultSuggestedLibrary.toLowerCase());
 
 const trackedProcesses = new Map();
@@ -150,15 +161,19 @@ function appendPrivateLog(message) {
   } catch {}
 }
 
-function listenForPort() {
-  return new Promise((resolve, reject) => {
+function listenForPort(preferred = 0) {
+  const tryPort = (port) => new Promise((resolve, reject) => {
     const server = http.createServer();
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const port = server.address().port;
-      server.close((error) => error ? reject(error) : resolve(port));
+    server.listen(port, "127.0.0.1", () => {
+      const boundPort = server.address().port;
+      server.close((error) => (error ? reject(error) : resolve(boundPort)));
     });
   });
+  if (preferred && Number.isInteger(preferred) && preferred > 0 && preferred <= 65535) {
+    return tryPort(preferred).catch(() => tryPort(0));
+  }
+  return tryPort(0);
 }
 
 function waitForHttp(url, headers = {}, timeoutMs = 45000, childProc = null) {
@@ -340,7 +355,7 @@ async function ensureLocalIntelligence() {
       env: {
         OLLAMA_HOST: "127.0.0.1:11434",
         OLLAMA_MODELS: modelsDir,
-        OLLAMA_ORIGINS: "*",
+        OLLAMA_ORIGINS: "http://127.0.0.1",
         OLLAMA_KEEP_ALIVE: "15m",
       },
     });
@@ -375,6 +390,7 @@ function appApiEnvironment() {
     DESKTOP_RUNTIME: "true",
     DESKTOP_REQUEST_KEY: requestKey,
     DESKTOP_UI_ORIGIN: origin,
+    REFRESH_TOKEN_EXPIRE_DAYS: "30",
     UPLOAD_DIR: documents,
     RAG_ENGINE_MODE: "independent",
     RAG_ANSWER_MODE: "INDEPENDENT",
@@ -391,6 +407,7 @@ function appApiEnvironment() {
     FASTEMBED_CACHE_DIR: path.join(library, "cache", "models"),
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || localIntelligenceUrl,
     OLLAMA_MODEL: process.env.OLLAMA_MODEL || "qwen3.5:0.8b",
+    EXTERNAL_LOOKUPS_ENABLED: (readJsonSafe(profileFile, {}).allowExternalLookups === true) ? "true" : "false",
     NODE_OPTIONS: "",
   };
 }
@@ -423,6 +440,7 @@ function emitStartupProgress(payload) {
 }
 
 async function startLocalServices() {
+  const isWindows = process.platform === "win32";
   const overallStart = Date.now();
   requestKey = crypto.randomBytes(32).toString("base64url");
   let activeStageId = "runtime";
@@ -468,8 +486,11 @@ async function startLocalServices() {
       process.execPath,
     ].find((candidate) => fs.existsSync(candidate)) || "node";
 
-    const apiPort = await listenForPort();
-    const uiPort = await listenForPort();
+    const saved = readJsonSafe(profileFile, {});
+    const apiPort = await listenForPort(saved.apiPort);
+    let uiPort = await listenForPort(saved.uiPort);
+    if (uiPort === apiPort) uiPort = await listenForPort(0);
+    writeJsonSafe(profileFile, { ...readJsonSafe(profileFile, {}), apiPort, uiPort });
     apiBaseUrl = `http://127.0.0.1:${apiPort}/api/v1`;
     uiOrigin = `http://127.0.0.1:${uiPort}`;
     const runtimeMs = Date.now() - t0;
@@ -568,6 +589,7 @@ function registerIpc() {
   guarded("onboarding:state", async () => ({
     configured: Boolean(appSettings?.libraryPath),
     suggestedLibrary: defaultSuggestedLibrary,
+    isOneDriveSynced: isOneDrive,
   }));
 
   guarded("onboarding:choose-library", async () => {
@@ -634,10 +656,7 @@ function registerIpc() {
     appendPrivateLog("Local library verified and configured.");
     try {
       await startLocalServices();
-      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents?.session) {
-        try { await mainWindow.webContents.session.clearCache(); } catch {}
-      }
-      await mainWindow.loadURL(`${uiOrigin}/login`);
+      await mainWindow.loadURL(`${uiOrigin}/papers`);
     } catch (error) {
       appendPrivateLog(`First-run service initialization failed: ${error.message}`);
       throw new Error(`The local library was prepared, but ResearchLens could not start. Your data was preserved. ${error.message}`);
@@ -648,16 +667,17 @@ function registerIpc() {
   guarded("desktop:runtime-config", async () => ({ apiBaseUrl, requestKey }));
   guarded("desktop:save-session", async (sessionData) => {
     if (!sessionData || typeof sessionData !== "object") return { ok: false };
+    if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
+      appendPrivateLog("Session save rejected: DPAPI safeStorage encryption unavailable.");
+      return { ok: false };
+    }
     try {
       const raw = JSON.stringify(sessionData);
-      let payload = raw;
-      let encrypted = false;
-      if (safeStorage && safeStorage.isEncryptionAvailable()) {
-        payload = safeStorage.encryptString(raw).toString("base64");
-        encrypted = true;
-      }
+      const payload = safeStorage.encryptString(raw).toString("base64");
       const sessionFile = path.join(RUNTIME_HOME, "session.dat");
-      await fsp.writeFile(sessionFile, JSON.stringify({ encrypted, payload }), { encoding: "utf8" });
+      const tempFile = path.join(RUNTIME_HOME, "session.dat.tmp");
+      await fsp.writeFile(tempFile, JSON.stringify({ encrypted: true, payload }), { encoding: "utf8", mode: 0o600 });
+      await fsp.rename(tempFile, sessionFile);
       return { ok: true };
     } catch (err) {
       appendPrivateLog(`Session encryption save notice: ${err.message}`);
@@ -670,20 +690,63 @@ function registerIpc() {
     try {
       const content = await fsp.readFile(sessionFile, "utf8");
       const data = JSON.parse(content);
-      if (data.encrypted && safeStorage && safeStorage.isEncryptionAvailable()) {
+      if (!data.encrypted) {
+        return null;
+      }
+      if (safeStorage && safeStorage.isEncryptionAvailable()) {
         const buf = Buffer.from(data.payload, "base64");
         const decrypted = safeStorage.decryptString(buf);
         return JSON.parse(decrypted);
       }
-      return JSON.parse(data.payload);
+      return null;
     } catch {
       return null;
     }
   });
 
+  guarded("desktop:get-profile", async () => {
+    const p = readJsonSafe(profileFile, {});
+    return { lastUsername: p.lastUsername || "", rememberMe: p.rememberMe !== false };
+  });
+
+  guarded("desktop:save-profile", async (data) => {
+    if (!data || typeof data !== "object") return { ok: false };
+    const current = readJsonSafe(profileFile, {});
+    const update = {};
+    if (typeof data.lastUsername === "string") {
+      update.lastUsername = data.lastUsername.slice(0, 64);
+    }
+    if (typeof data.rememberMe === "boolean") {
+      update.rememberMe = data.rememberMe;
+    }
+    writeJsonSafe(profileFile, { ...current, ...update });
+    return { ok: true };
+  });
+
   guarded("desktop:clear-session", async () => {
     const sessionFile = path.join(RUNTIME_HOME, "session.dat");
     try { await fsp.unlink(sessionFile); } catch {}
+    return { ok: true };
+  });
+
+  guarded("desktop:get-external-lookups", async () => {
+    const p = readJsonSafe(profileFile, {});
+    return Boolean(p.allowExternalLookups);
+  });
+
+  guarded("desktop:set-external-lookups", async (enabled) => {
+    const current = readJsonSafe(profileFile, {});
+    current.allowExternalLookups = Boolean(enabled);
+    writeJsonSafe(profileFile, current);
+    return { ok: true };
+  });
+
+  guarded("desktop:restart-app", async () => {
+    try {
+      app.releaseSingleInstanceLock();
+    } catch {}
+    app.relaunch();
+    app.quit();
     return { ok: true };
   });
 
@@ -729,7 +792,7 @@ function registerIpc() {
     libraryPath: appSettings?.libraryPath || "",
     diskFreeBytes: appSettings?.libraryPath ? await getFreeBytes(appSettings.libraryPath) : null,
     activeJobs: currentJobs,
-    networkFeatures: "disabled",
+    networkFeatures: (readJsonSafe(profileFile, {}).allowExternalLookups === true) ? "online-verification-enabled" : "disabled",
     localIntelligence: {
       available: localIntelligenceActive,
       modelInstalled: localModelInstalled,
@@ -888,10 +951,7 @@ async function openApplication() {
       // Provide a brief pause so user sees 100% completion before UI transition
       setTimeout(async () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          if (mainWindow.webContents?.session) {
-            try { await mainWindow.webContents.session.clearCache(); } catch {}
-          }
-          mainWindow.loadURL(`${uiOrigin}/login`);
+          mainWindow.loadURL(`${uiOrigin}/papers`);
         }
       }, 450);
       return;
@@ -923,13 +983,50 @@ function createWindow() {
         ? path.join(__dirname, "build", "icon.png")
         : undefined);
 
+  const profileData = readJsonSafe(profileFile, {});
+  const winConfig = profileData.window || {};
+  let winBounds = {
+    width: Number.isInteger(winConfig.width) && winConfig.width >= 1040 ? winConfig.width : 1500,
+    height: Number.isInteger(winConfig.height) && winConfig.height >= 720 ? winConfig.height : 960,
+  };
+  if (Number.isInteger(winConfig.x) && Number.isInteger(winConfig.y)) {
+    const rect = { x: winConfig.x, y: winConfig.y, width: winBounds.width, height: winBounds.height };
+    const displays = screen.getAllDisplays();
+    const visible = displays.some((d) => {
+      const wa = d.workArea;
+      return (
+        rect.x < wa.x + wa.width &&
+        rect.x + rect.width > wa.x &&
+        rect.y < wa.y + wa.height &&
+        rect.y + rect.height > wa.y
+      );
+    });
+    if (visible) {
+      winBounds.x = winConfig.x;
+      winBounds.y = winConfig.y;
+    }
+  }
+
+  const isWindows = process.platform === "win32";
+  const windowChromeOptions = isWindows
+    ? {
+        titleBarStyle: "hidden",
+        titleBarOverlay: {
+          color: "#ffffff",
+          symbolColor: "#203449",
+          height: 40,
+        },
+      }
+    : {};
+
   mainWindow = new BrowserWindow({
     title: process.env.RESEARCHLENS_RUNTIME_HOME ? "[ISOLATED TEST ENVIRONMENT] ResearchLens" : "ResearchLens",
-    width: 1500,
-    height: 960,
+    ...winBounds,
     minWidth: 1040,
     minHeight: 720,
     show: false,
+    autoHideMenuBar: true,
+    ...windowChromeOptions,
     icon: appIcon,
     backgroundColor: "#F3F9FE",
     webPreferences: {
@@ -941,6 +1038,64 @@ function createWindow() {
       allowRunningInsecureContent: false,
       devTools: !app.isPackaged,
     },
+  });
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    const pData = readJsonSafe(profileFile, {});
+    const zLevel = Number(pData.zoomLevel) || 0;
+    mainWindow.webContents.setZoomLevel(Math.max(-2, Math.min(3, zLevel)));
+  });
+
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.control && !input.alt && input.type === "keyDown") {
+      let currentZoom = mainWindow.webContents.getZoomLevel();
+      let changed = false;
+      if (input.key === "=" || input.key === "+") {
+        currentZoom = Math.min(3, currentZoom + 0.5);
+        changed = true;
+      } else if (input.key === "-") {
+        currentZoom = Math.max(-2, currentZoom - 0.5);
+        changed = true;
+      } else if (input.key === "0") {
+        currentZoom = 0;
+        changed = true;
+      }
+      if (changed) {
+        event.preventDefault();
+        mainWindow.webContents.setZoomLevel(currentZoom);
+        const curProf = readJsonSafe(profileFile, {});
+        curProf.zoomLevel = currentZoom;
+        writeJsonSafe(profileFile, curProf);
+      }
+    }
+  });
+
+  if (app.isPackaged) {
+    Menu.setApplicationMenu(null);
+  }
+
+  if (winConfig.maximized) {
+    mainWindow.maximize();
+  }
+
+  mainWindow.on("close", () => {
+    try {
+      const normal = mainWindow.getNormalBounds ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+      const maximized = mainWindow.isMaximized();
+      const current = readJsonSafe(profileFile, {});
+      writeJsonSafe(profileFile, {
+        ...current,
+        window: {
+          x: normal.x,
+          y: normal.y,
+          width: normal.width,
+          height: normal.height,
+          maximized,
+        },
+      });
+    } catch (e) {
+      appendPrivateLog(`Window bounds save notice: ${e.message}`);
+    }
   });
   if (process.env.RESEARCHLENS_RUNTIME_HOME) {
     mainWindow.on("page-title-updated", (event) => {
@@ -972,7 +1127,7 @@ function createWindow() {
         }
       } catch {}
     }
-    if (uiOrigin && target.startsWith(`${uiOrigin}/`)) return;
+    if (uiOrigin && (target === uiOrigin || target.startsWith(`${uiOrigin}/`))) return;
     event.preventDefault();
   });
   mainWindow.webContents.on("will-attach-webview", (event) => event.preventDefault());
@@ -1008,7 +1163,14 @@ function stopOwnedServices() {
   }, 2000).unref();
 }
 
-app.on("before-quit", () => stopOwnedServices());
+app.on("before-quit", () => {
+  if (readJsonSafe(profileFile, {}).rememberMe === false) {
+    try {
+      fs.unlinkSync(path.join(RUNTIME_HOME, "session.dat"));
+    } catch {}
+  }
+  stopOwnedServices();
+});
 app.on("window-all-closed", () => app.quit());
 app.whenReady().then(() => {
   registerIpc();

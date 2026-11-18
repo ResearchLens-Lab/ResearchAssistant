@@ -292,15 +292,15 @@ try {
     const extractAppPackagePath = join(desktop, 'node_modules', 'app-builder-lib', 'templates', 'nsis', 'include', 'extractAppPackage.nsh');
     if (existsSync(extractAppPackagePath)) {
       let content = readFileSync(extractAppPackagePath, 'utf8');
-      if (!content.includes('Direct extraction into $OUTDIR')) {
-        const targetMacro = /!macro extractUsing7za FILE[\s\S]*?!macroend/;
-        const directExtractionMacro = `!macro extractUsing7za FILE\n  # Direct extraction into $OUTDIR ($INSTDIR) avoids the intermediate $PLUGINSDIR\\7z-out\n  # duplicate copy, preventing the progress bar reset and cutting installation time significantly.\n  ClearErrors\n  SetOutPath $OUTDIR\n  Nsis7z::Extract "\${FILE}"\n!macroend`;
-        if (targetMacro.test(content)) {
-          content = content.replace(targetMacro, directExtractionMacro);
-          writeFileSync(extractAppPackagePath, content, 'utf8');
-          console.log(`      Verified and patched NSIS direct-extraction in electron-builder.`);
-        }
-      }
+      const targetMacro = /!macro extractUsing7za FILE[\s\S]*?!macroend/;
+      const directExtractionMacro = `!macro extractUsing7za FILE\n  ClearErrors\n  SetOutPath $OUTDIR\n  Nsis7z::ExtractWithDetails "\${FILE}" "Extracting %s..."\n!macroend`;
+      content = content.replace(targetMacro, directExtractionMacro);
+
+      const targetEmbedded = /!macro extractEmbeddedAppPackage[\s\S]*?!macroend/;
+      const newEmbedded = `!macro extractEmbeddedAppPackage\n  DetailPrint "Stage 1/2: Preparing application packages..."\n  !ifdef COMPRESS\n    SetCompress off\n  !endif\n\n  Var /GLOBAL packageArch\n  \n  !insertmacro identify_package\n  !insertmacro compute_files_for_current_arch\n\n  !ifdef COMPRESS\n    SetCompress "\${COMPRESS}"\n  !endif\n\n  DetailPrint "Stage 2/2: Installing application binaries and local intelligence runtime..."\n  !insertmacro decompress\n  Delete "$PLUGINSDIR\\\\app-$packageArch.7z"\n  !insertmacro custom_files_post_decompression\n!macroend`;
+      content = content.replace(targetEmbedded, newEmbedded);
+      writeFileSync(extractAppPackagePath, content, 'utf8');
+      console.log(`      Verified and applied high-performance NSIS extraction patch.`);
     }
     // Build to local temp outside OneDrive to avoid EPERM file locking
     const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE, 'AppData', 'Local');

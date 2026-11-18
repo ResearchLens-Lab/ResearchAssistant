@@ -54,7 +54,7 @@ def test_conflicting_paper_filters_fail_closed_without_retrieval():
             return []
     retriever = NoRetrieve()
     result = QueryPipeline(retriever=retriever).answer_question(
-        "Find evidence", paper_ids=["authorized"], filters=QueryFilters(paper_ids=["other"])
+        "Find evidence", user_id="test_user", paper_ids=["authorized"], filters=QueryFilters(paper_ids=["other"])
     )
     assert result.metadata["error"] == "scope_conflict"
     assert result.sources == []

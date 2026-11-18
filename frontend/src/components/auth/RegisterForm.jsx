@@ -85,7 +85,7 @@ export function RegisterForm() {
             <p id="username-status" aria-live="polite" className={`min-h-4 text-xs leading-4 ${username && usernameError ? "text-red-700" : "text-[var(--rl-muted)]"}`}>{username ? usernameError || "Format looks good. Availability is checked on submit." : " "}</p>
           </div>
           <div className="space-y-1">
-            <label htmlFor="register-email" className="text-sm font-medium text-[var(--rl-ink)]">Email address</label>
+            <label htmlFor="register-email" className="text-sm font-medium text-[var(--rl-ink)]">Email (used only to sign in, never sent anywhere)</label>
             <Input id="register-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); setFormError(""); }} autoComplete="email" required />
           </div>
           <div className="space-y-1">

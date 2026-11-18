@@ -95,16 +95,8 @@ export function PaperCard({
           openProject();
         }
       }}
-      className="group relative flex flex-col justify-between rounded-3xl border border-slate-100 bg-white p-5 min-h-[310px] font-serif shadow-[0_10px_30px_-6px_rgba(0,0,0,0.05),0_4px_12px_-2px_rgba(0,0,0,0.02)] hover:shadow-[0_18px_36px_-6px_rgba(29,111,196,0.14)] hover:border-sky-200/90 hover:-translate-y-1 active:translate-y-0 transition-all duration-200 cursor-pointer overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+      className="group relative flex flex-col justify-between rounded-3xl border border-slate-100 bg-white p-5 min-h-[310px] shadow-[0_10px_30px_-6px_rgba(0,0,0,0.05),0_4px_12px_-2px_rgba(0,0,0,0.02)] hover:shadow-[0_18px_36px_-6px_rgba(29,111,196,0.14)] hover:border-sky-200/90 hover:-translate-y-1 active:translate-y-0 transition-all duration-200 cursor-pointer overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
     >
-      {/* Decorative Watermark Number in Georgia / Serif font matching user request */}
-      <div
-        aria-hidden="true"
-        className="absolute bottom-4 right-5 text-6xl font-bold font-serif tracking-tighter text-slate-100/90 select-none pointer-events-none z-0"
-      >
-        {watermark}
-      </div>
-
       <div className="relative z-10 flex flex-col justify-between h-full space-y-3">
         <div>
           {/* Card Top Row: Category Icon on Left, Edit & Delete on Right */}
@@ -170,7 +162,7 @@ export function PaperCard({
                   if (onOpenAddSource) onOpenAddSource(paper.id);
                   else router.push(`/papers/upload?paperId=${paper.id}`);
                 }}
-                className="block w-full py-2 rounded-xl border border-slate-100 bg-slate-50/70 text-xs font-medium text-slate-400 hover:text-sky-600 hover:bg-sky-50/60 hover:border-sky-100 text-center transition-all font-serif"
+                className="block w-full py-2 rounded-xl border border-slate-100 bg-slate-50/70 text-xs font-medium text-slate-400 hover:text-sky-600 hover:bg-sky-50/60 hover:border-sky-100 text-center transition-all"
               >
                 + Add your first source
               </button>
@@ -221,7 +213,7 @@ export function PaperCard({
                 {/* Show more badge when sources > 2 */}
                 {sourceCount.total > 2 ? (
                   <div className="flex items-center justify-between text-[11px] pt-1">
-                    <span className="font-medium text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-full text-[10px]">
+                    <span className="font-medium text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-full text-[11px]">
                       +{sourceCount.total - 2} more {sourceCount.total - 2 === 1 ? "source" : "sources"}
                     </span>
                     <button
@@ -244,7 +236,7 @@ export function PaperCard({
                       if (onOpenAddSource) onOpenAddSource(paper.id);
                       else router.push(`/papers/upload?paperId=${paper.id}`);
                     }}
-                    className="block text-center text-[11px] font-medium text-slate-400 hover:text-sky-600 py-0.5 transition-colors font-serif"
+                    className="block text-center text-[11px] font-medium text-slate-400 hover:text-sky-600 py-0.5 transition-colors"
                   >
                     + Add source
                   </button>

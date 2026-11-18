@@ -87,7 +87,7 @@ export default function SearchDiscoveryPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-zinc-100 dark:border-zinc-800">
           <div className="space-y-1">
-            <label className="text-[10px] font-mono text-zinc-500 uppercase">
+            <label className="text-[11px] font-mono text-zinc-500 uppercase">
               Author Match
             </label>
             <Input
@@ -100,7 +100,7 @@ export default function SearchDiscoveryPage() {
 
           <div className="flex items-end gap-2">
             <div className="space-y-1 flex-1">
-              <label className="text-[10px] font-mono text-zinc-500 uppercase">
+              <label className="text-[11px] font-mono text-zinc-500 uppercase">
                 Publication Year
               </label>
               <Input

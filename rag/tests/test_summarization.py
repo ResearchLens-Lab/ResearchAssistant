@@ -19,7 +19,7 @@ def test_summarize_paper(full_rag_pipeline):
     assert ingest_res.chunk_count > 0
 
     # 2. Summarize paper
-    summary_result = query_p.summarize_paper("paper_att_summary")
+    summary_result = query_p.summarize_paper("paper_att_summary", user_id="test_user_fixture")
     assert summary_result.answer is not None
     assert "Overview" in summary_result.answer
     assert "Methodology" in summary_result.answer

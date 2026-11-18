@@ -7,6 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { CitationBadge } from "@/components/citations/CitationBadge";
 import { parseTextWithCitations } from "@/utils/citationParser";
+import { buildCitationIndex, stripSourceLines } from "@/utils/citationNumbering.mjs";
 import { InteractivePieChart } from "./InteractivePieChart";
 import { InteractiveFlowchart } from "./InteractiveFlowchart";
 
@@ -22,7 +23,20 @@ function extractText(children) {
   return "";
 }
 
-export function GroundedAnswer({ content, sources, compact = false, autoSelectFirstCitation = false, question = "", researchPlan = null }) {
+export function GroundedAnswer({
+  rawContent,
+  content: contentProp,
+  sources,
+  compact = false,
+  autoSelectFirstCitation = false,
+  question = "",
+  researchPlan = null,
+  messageId = null,
+}) {
+  const sourceInput = rawContent !== undefined ? rawContent : contentProp;
+  const content = React.useMemo(() => stripSourceLines(sourceInput), [sourceInput]);
+  const citationIndex = React.useMemo(() => buildCitationIndex(content, sources), [content, sources]);
+
   let currentHeading = "";
   let didAutoSelectCitation = false;
   const citationClaimsBySource = React.useMemo(() => {
@@ -82,6 +96,8 @@ export function GroundedAnswer({ content, sources, compact = false, autoSelectFi
             autoSelect={autoSelect}
             question={question}
             researchPlan={researchPlan}
+            number={citationIndex.numberById.get(seg.sourceId)}
+            messageId={messageId}
           />
         );
       }

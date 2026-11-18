@@ -86,7 +86,7 @@ export function PaperScopeRail({ className = "", onClose }) {
 
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--rl-primary)]">RESEARCH LIBRARY</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--rl-primary)]">RESEARCH LIBRARY</p>
             <h2 className="mt-0.5 flex items-center gap-1.5 text-base font-semibold text-[var(--rl-ink)]">
               <Layers className="h-4 w-4 shrink-0 text-[var(--rl-primary)]" />
               <span className="truncate">Sources &amp; projects</span>
@@ -220,7 +220,7 @@ export function PaperScopeRail({ className = "", onClose }) {
                       checked={isChecked}
                       disabled={disabled}
                       onCheckedChange={handleToggleProject}
-                      className="mt-0.5 shrink-0"
+                      className="mt-0.5 shrink-0 data-[state=checked]:bg-[#1d6fc4] data-[state=checked]:border-[#1d6fc4] data-[state=checked]:text-white"
                     />
                     <button
                       type="button"
@@ -234,7 +234,7 @@ export function PaperScopeRail({ className = "", onClose }) {
                       >
                         {paper.title}
                       </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-500">
                         {paper.authors?.join(", ") || "Author not listed"}
                         {paper.publication_year ? ` · ${paper.publication_year}` : ""}
                       </span>
@@ -244,9 +244,9 @@ export function PaperScopeRail({ className = "", onClose }) {
                   {/* Attached Documents Container with Per-Document Selection */}
                   <div className="border-t border-slate-100 p-2.5 bg-white min-w-0 space-y-1.5">
                     {loading ? (
-                      <p className="text-[10px] text-slate-400">Loading document status…</p>
+                      <p className="text-[11px] text-slate-400">Loading document status…</p>
                     ) : docsError ? (
-                      <p role="alert" className="text-[10px] text-rose-700">Document status unavailable</p>
+                      <p role="alert" className="text-[11px] text-rose-700">Document status unavailable</p>
                     ) : documents.length ? (
                       <ul className="space-y-1.5 min-w-0">
                         {documents.map((doc) => {
@@ -287,16 +287,16 @@ export function PaperScopeRail({ className = "", onClose }) {
                               {/* Row 2: Format Badge, Chunk Count, Status Badge, Quick Focus Button */}
                               <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1.5 pl-6">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
                                     {documentType(doc.filename)}
                                   </span>
                                   {doc.chunk_count ? (
-                                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 font-mono">
+                                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 font-mono">
                                       {doc.chunk_count.toLocaleString()} chunks
                                     </span>
                                   ) : null}
                                   <span
-                                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium capitalize ${
+                                    className={`rounded px-1.5 py-0.5 text-[11px] font-medium capitalize ${
                                       statusStyles[doc.processing_status] || "bg-slate-100 text-slate-600"
                                     }`}
                                   >
@@ -310,7 +310,7 @@ export function PaperScopeRail({ className = "", onClose }) {
                                       e.stopPropagation();
                                       selectPapers([paper.id], [doc.id]);
                                     }}
-                                    className="text-[10px] font-medium text-sky-600 hover:text-sky-800 hover:underline px-1 py-0.5 rounded cursor-pointer"
+                                    className="text-[11px] font-medium text-sky-600 hover:text-sky-800 hover:underline px-1 py-0.5 rounded cursor-pointer"
                                     title={`Ask questions specifically from ${doc.filename}`}
                                   >
                                     Only this source
@@ -322,12 +322,12 @@ export function PaperScopeRail({ className = "", onClose }) {
                         })}
                       </ul>
                     ) : (
-                      <p className="text-[10px] text-slate-500">No files attached · paper scope unavailable</p>
+                      <p className="text-[11px] text-slate-500">No files attached · paper scope unavailable</p>
                     )}
 
                     {/* Project Status Summary Footer */}
                     {indexedCount > 0 && (
-                      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-1.5 text-[10px] text-slate-500">
+                      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-1 border-t border-slate-100 pt-1.5 text-[11px] text-slate-500">
                         <span className="flex min-w-0 items-center gap-1 text-emerald-700 font-medium truncate">
                           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{indexedCount} indexed file{indexedCount === 1 ? "" : "s"}</span>
@@ -351,7 +351,7 @@ export function PaperScopeRail({ className = "", onClose }) {
           </div>
         )}
 
-        <p className="mt-3 px-1 text-[10px] leading-relaxed text-slate-400 break-words">
+        <p className="mt-3 px-1 text-[11px] leading-relaxed text-slate-400 break-words">
           Select entire projects or choose individual sources above to precisely control the research boundary for your inquiry.
         </p>
       </ScrollArea>

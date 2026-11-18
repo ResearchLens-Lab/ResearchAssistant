@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { PieChart as PieIcon, Check } from "lucide-react";
 
 const PALETTE = [
-  "#2678b8", // primary sky
+  "#1d6fc4", // primary sky
   "#10b981", // emerald
   "#f59e0b", // amber
   "#6366f1", // indigo
@@ -70,7 +70,7 @@ export function InteractivePieChart({ code }) {
 
   if (!data.length || total <= 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500 font-serif">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
         No numeric proportions found for pie chart.
       </div>
     );
@@ -84,7 +84,7 @@ export function InteractivePieChart({ code }) {
   const activeSlice = hoveredIdx !== null ? slices[hoveredIdx] : null;
 
   return (
-    <div className="my-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm font-serif">
+    <div className="my-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
       {/* Chart Title / Toolbar */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
         <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ export function InteractivePieChart({ code }) {
             Document Content Distribution ({data.length} segments)
           </span>
         </div>
-        <span className="text-[10px] text-slate-400">Proportions from selected source text</span>
+        <span className="text-[11px] text-slate-400">Proportions from selected source text</span>
       </div>
 
       <div className="flex flex-col md:flex-row items-center gap-6">
@@ -150,7 +150,7 @@ export function InteractivePieChart({ code }) {
               x={cx}
               y={cy - 5}
               textAnchor="middle"
-              className="fill-slate-800 text-[13px] font-bold font-serif"
+              className="fill-slate-800 text-[13px] font-bold"
             >
               {activeSlice ? `${activeSlice.percentage}%` : `${data.length}`}
             </text>
@@ -158,7 +158,7 @@ export function InteractivePieChart({ code }) {
               x={cx}
               y={cy + 12}
               textAnchor="middle"
-              className="fill-slate-400 text-[9px] font-medium font-serif"
+              className="fill-slate-400 text-[11px] font-medium"
             >
               {activeSlice ? "of scope" : "Sections"}
             </text>

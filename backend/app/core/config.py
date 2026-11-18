@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     research_max_comparison_papers: int = 4
     research_graph_max_depth: int = 2
     research_external_timeout_seconds: float = 8.0
+    external_lookups_enabled: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

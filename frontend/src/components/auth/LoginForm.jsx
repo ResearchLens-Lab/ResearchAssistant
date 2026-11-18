@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthStore } from "@/store/authStore";
+import { tokenStorage } from "@/utils/tokenStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/auth/PasswordInput";
@@ -51,18 +53,52 @@ export function LoginForm() {
   const [authStatus, setAuthStatus] = useState(AuthStatus.IDLE);
   const [identifier, setIdentifier] = useState(requestedUsername);
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [fieldErrors, setFieldErrors] = useState({ identifier: "", password: "" });
   const [serverError, setServerError] = useState("");
   const [recoveryNotice, setRecoveryNotice] = useState(false);
 
   const { login, isLoggingIn, isAuthenticated } = useAuth();
+  const authStoreLoading = useAuthStore((state) => state.isLoading);
+  const isUnreachable = useAuthStore((state) => state.isUnreachable);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
   const isNavigatingRef = useRef(false);
+
+  const [sessionTimedOut, setSessionTimedOut] = useState(false);
+  const [dismissRestoring, setDismissRestoring] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (authStoreLoading) {
+      timer = setTimeout(() => {
+        setSessionTimedOut(true);
+      }, 10000);
+    } else {
+      setSessionTimedOut(false);
+    }
+    return () => clearTimeout(timer);
+  }, [authStoreLoading]);
 
   useEffect(() => {
     if (requestedUsername && !identifier) {
       setIdentifier(requestedUsername);
     }
   }, [requestedUsername, identifier]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.researchLensDesktop?.getProfile) {
+      window.researchLensDesktop.getProfile().then((profile) => {
+        if (profile) {
+          if (!requestedUsername && profile.lastUsername) {
+            setIdentifier((current) => current || profile.lastUsername);
+          }
+          if (typeof profile.rememberMe === "boolean") {
+            setRememberMe(profile.rememberMe);
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [requestedUsername]);
 
   useEffect(() => {
     if (isAuthenticated && !isNavigatingRef.current) {
@@ -129,7 +165,17 @@ export function LoginForm() {
     setAuthStatus(AuthStatus.AUTHENTICATING);
 
     try {
-      await login({ identifier: trimmedId, password: cleanPass });
+      tokenStorage.setPersist(rememberMe);
+      const user = await login({ identifier: trimmedId, password: cleanPass });
+
+      try {
+        if (typeof window !== "undefined" && window.researchLensDesktop?.saveProfile) {
+          window.researchLensDesktop.saveProfile({
+            lastUsername: user?.username || trimmedId,
+            rememberMe,
+          });
+        }
+      } catch {}
 
       // Transition: AUTHENTICATING -> SUCCESS
       // CRITICAL: DO NOT clear password state here. Clearing password while navigating
@@ -151,6 +197,57 @@ export function LoginForm() {
       setServerError(loginErrorMessage(error));
     }
   };
+
+  const showRestoringCard = !dismissRestoring && (authStoreLoading || (isUnreachable && tokenStorage.isAuthenticated()));
+
+  if (showRestoringCard && authStatus === AuthStatus.IDLE && !isLoggingIn) {
+    const showTimeoutControls = sessionTimedOut || isUnreachable;
+    return (
+      <Card className="w-full max-w-md rounded-2xl border-[var(--rl-border)] shadow-[0_18px_48px_-24px_rgba(38,120,184,0.28)]">
+        <CardHeader className="space-y-2 pb-5 text-left">
+          <CardTitle className="text-2xl font-semibold tracking-tight text-[var(--rl-ink)]">Welcome back</CardTitle>
+          <CardDescription className="text-sm leading-6 text-[var(--rl-muted)]">
+            {isUnreachable ? "Backend service unreachable" : "Restoring your research session…"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center space-y-4 py-6">
+          {!isUnreachable && <Loader2 className="h-6 w-6 animate-spin text-[var(--rl-primary)]" />}
+          {showTimeoutControls && (
+            <div className="flex flex-col items-center gap-3 text-center">
+              <p className="text-xs text-[var(--rl-muted)]">
+                {isUnreachable
+                  ? "Could not reach the local ResearchLens service. Your credentials remain saved."
+                  : "The local service is taking longer than usual to respond."}
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSessionTimedOut(false);
+                    checkAuth();
+                  }}
+                >
+                  Retry
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDismissRestoring(true);
+                    useAuthStore.setState({ isUnreachable: false });
+                  }}
+                  className="text-xs font-medium text-[var(--rl-primary)] underline underline-offset-4"
+                >
+                  Sign in again
+                </button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md rounded-2xl border-[var(--rl-border)] shadow-[0_18px_48px_-24px_rgba(38,120,184,0.28)]">
@@ -222,6 +319,20 @@ export function LoginForm() {
             </p>
           </div>
 
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="login-remember-me"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              disabled={isPending}
+              className="h-4 w-4 rounded border-gray-300 text-[var(--rl-primary)] focus:ring-[var(--rl-sky)] cursor-pointer"
+            />
+            <label htmlFor="login-remember-me" className="text-xs font-medium text-[var(--rl-ink)] cursor-pointer select-none">
+              Keep me signed in on this computer
+            </label>
+          </div>
+
           {recoveryNotice && (
             <div role="status" className="rounded-lg bg-[var(--rl-tint)] p-3 text-xs leading-5 text-[var(--rl-muted)]">
               <strong>Local Account Notice:</strong> ResearchLens Desktop operates privately on your computer. Credentials are stored securely in your local research library. Passwords cannot be recovered via email. If forgotten, create a new local researcher profile or restore from a library backup.
@@ -251,7 +362,7 @@ export function LoginForm() {
 
           <p className="text-center text-sm text-[var(--rl-muted)]">
             New to ResearchLens?{" "}
-            <Link href="/register" className="font-semibold text-[var(--rl-primary)] underline underline-offset-4 hover:text-[#1f659c]">
+            <Link href="/register" className="font-semibold text-[var(--rl-primary)] underline underline-offset-4 hover:text-[#185ea8]">
               Create an account
             </Link>
           </p>

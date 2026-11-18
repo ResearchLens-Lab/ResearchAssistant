@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.researchlens.desktop",
     "productName": "ResearchLens",
+    "compression": "normal",
     "asar": true,
     "files": [
       "main.cjs",

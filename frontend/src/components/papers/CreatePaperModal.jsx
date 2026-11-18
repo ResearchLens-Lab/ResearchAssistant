@@ -57,14 +57,10 @@ export function CreatePaperModal({
       setFormError("Project title is required.");
       return;
     }
-    if (!trimmedDesc) {
-      setFormError("Project description is required. Describe what you are researching.");
-      return;
-    }
 
     setIsSubmitting(true);
     try {
-      const payload = buildProjectCreatePayload(trimmedTitle, trimmedDesc);
+      const payload = buildProjectCreatePayload(trimmedTitle, trimmedDesc || "");
       const created = await onSubmit(payload);
       resetForm();
       onClose();
@@ -117,7 +113,7 @@ export function CreatePaperModal({
               <label htmlFor="create-project-title" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                 Project title <span className="text-rose-500">*</span>
               </label>
-              <span className="text-[10px] text-zinc-400 font-mono">
+              <span className="text-[11px] text-zinc-400 font-mono">
                 {title.length}/500
               </span>
             </div>
@@ -141,13 +137,13 @@ export function CreatePaperModal({
             )}
           </div>
 
-          {/* Project Description Field (Mandatory) */}
+          {/* Project Description Field (Optional) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="create-project-description" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                Project description <span className="text-rose-500">*</span>
+                Project description <span className="text-zinc-400 font-normal">(optional)</span>
               </label>
-              <span className="text-[10px] text-zinc-400 font-mono">
+              <span className="text-[11px] text-zinc-400 font-mono">
                 {description.length}/2000
               </span>
             </div>
@@ -162,18 +158,11 @@ export function CreatePaperModal({
               placeholder="Describe the research topic, its purpose and what you want to explore..."
               maxLength={2000}
               disabled={isSubmitting || isLoading}
-              className={`w-full rounded-lg border border-zinc-200 bg-white p-3 text-xs leading-relaxed text-zinc-900 shadow-2xs outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-100 ${
-                descInvalid ? "border-rose-400 focus:border-rose-400 focus:ring-rose-400" : ""
-              }`}
+              className="w-full rounded-lg border border-zinc-200 bg-white p-3 text-xs leading-relaxed text-zinc-900 shadow-2xs outline-none transition-colors placeholder:text-zinc-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-100"
             />
             <p className="text-[11px] text-zinc-400 leading-normal">
               A clear description frames your literature scope and helps organize citations across papers.
             </p>
-            {descInvalid && (
-              <p className="text-[11px] text-rose-600 font-medium">
-                Please describe what you are studying (required).
-              </p>
-            )}
           </div>
 
           <DialogFooter className="pt-3 gap-2 sm:gap-0">
@@ -190,8 +179,8 @@ export function CreatePaperModal({
             <Button
               type="submit"
               size="sm"
-              disabled={!title.trim() || !description.trim() || isSubmitting || isLoading}
-              className="h-9 gap-1.5 px-4 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#1f659c] text-white shadow-xs hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all focus-visible:ring-2 focus-visible:ring-sky-400"
+              disabled={!title.trim() || isSubmitting || isLoading}
+              className="h-9 gap-1.5 px-4 text-xs font-semibold bg-[var(--rl-primary)] hover:bg-[#185ea8] text-white shadow-xs hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0 transition-all focus-visible:ring-2 focus-visible:ring-sky-400"
             >
               {isSubmitting || isLoading ? (
                 <>

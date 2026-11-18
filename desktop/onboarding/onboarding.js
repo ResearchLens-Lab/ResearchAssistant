@@ -4,26 +4,20 @@ const lead = document.getElementById("lead");
 const stepLabel = document.getElementById("step-label");
 const pathLabel = document.getElementById("library-path");
 const diskSpace = document.getElementById("disk-space");
-const readyPathSummary = document.getElementById("ready-path-summary");
 const errorBox = document.getElementById("error");
 const nextButton = document.getElementById("next");
 const backButton = document.getElementById("back");
+const locationNotice = document.getElementById("location-notice");
 const panels = [...document.querySelectorAll(".step-panel")];
 
 let step = 1;
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 2;
 let selection = null;
-let storageMode = "copy";
-let profile = "low";
 let suggestedPath = "";
 
 const copy = {
   1: ["Welcome to ResearchLens", "Find the evidence. Understand the research."],
   2: ["Choose your research library", "Your projects, source files and indexes stay together in a folder you choose."],
-  3: ["Document handling", "Choose how files are added to your research library."],
-  4: ["Resource profile", "Set a comfortable processing pace for this computer."],
-  5: ["Privacy defaults", "ResearchLens keeps its core research workflow strictly on this computer."],
-  6: ["Ready to initialize", "Review your workspace setup and launch ResearchLens."],
 };
 
 function showStep() {
@@ -40,9 +34,6 @@ function showStep() {
 
   if (step === TOTAL_STEPS) {
     nextButton.innerHTML = "Initialize &amp; Launch <span>→</span>";
-    if (readyPathSummary) {
-      readyPathSummary.textContent = selection?.path || suggestedPath || "Default Library";
-    }
   } else {
     nextButton.innerHTML = "Continue <span>→</span>";
   }
@@ -67,34 +58,6 @@ document.getElementById("choose-folder").addEventListener("click", async () => {
   }
 });
 
-// Storage Mode toggle
-const modeCopy = document.getElementById("mode-copy");
-const modeLink = document.getElementById("mode-link");
-
-if (modeCopy && modeLink) {
-  modeCopy.addEventListener("click", () => {
-    storageMode = "copy";
-    modeCopy.classList.add("selected");
-    modeLink.classList.remove("selected");
-  });
-
-  modeLink.addEventListener("click", () => {
-    storageMode = "link";
-    modeLink.classList.add("selected");
-    modeCopy.classList.remove("selected");
-  });
-}
-
-// Profile buttons
-document.querySelectorAll("[data-profile]").forEach((button) => {
-  button.addEventListener("click", () => {
-    profile = button.dataset.profile;
-    document.querySelectorAll("[data-profile]").forEach((item) => {
-      item.classList.toggle("selected", item === button);
-    });
-  });
-});
-
 backButton.addEventListener("click", () => {
   if (step > 1) {
     step -= 1;
@@ -104,16 +67,12 @@ backButton.addEventListener("click", () => {
 
 nextButton.addEventListener("click", async () => {
   if (step < TOTAL_STEPS) {
-    // If on Step 2 and user hasn't browsed, use the suggested path
-    if (step === 2 && !selection && suggestedPath) {
-      selection = { path: suggestedPath, selectionId: "default-suggested" };
-    }
     step += 1;
     showStep();
     return;
   }
 
-  // Final step: Initialize
+  // Step 2: Initialize & Launch
   const targetSelection = selection || { path: suggestedPath, selectionId: "default-suggested" };
   if (!targetSelection.path) {
     showError("Please select or confirm a folder for your research library.");
@@ -123,7 +82,7 @@ nextButton.addEventListener("click", async () => {
   nextButton.disabled = true;
   nextButton.textContent = "Initializing local library & starting services…";
   try {
-    await bridge.initializeLibrary(targetSelection, { profile, storageMode });
+    await bridge.initializeLibrary(targetSelection, { profile: "standard", storageMode: "copy" });
   } catch (error) {
     showError(error.message || "ResearchLens could not initialize this library.");
     nextButton.disabled = false;
@@ -131,14 +90,18 @@ nextButton.addEventListener("click", async () => {
   }
 });
 
-bridge.getOnboardingState().then((state) => {
-  if (state?.suggestedLibrary) {
-    suggestedPath = state.suggestedLibrary;
-    pathLabel.textContent = suggestedPath;
-    if (diskSpace) diskSpace.textContent = "Local Windows user storage";
-  }
-}).catch(() => {
-  pathLabel.textContent = "Choose a local folder";
-});
-
-showStep();
+if (bridge && typeof bridge.getOnboardingState === "function") {
+  bridge.getOnboardingState().then((state) => {
+    if (state?.suggestedLibrary) {
+      suggestedPath = state.suggestedLibrary;
+      pathLabel.textContent = suggestedPath;
+      if (diskSpace) diskSpace.textContent = "Local Windows user storage";
+      if (state.isOneDriveSynced && locationNotice) {
+        locationNotice.textContent = "Notice: Your Documents folder is synced with OneDrive. Cloud-synced folders can cause database locking and corruption. We recommend this local AppData location instead.";
+        locationNotice.hidden = false;
+      }
+    }
+  }).catch(() => {
+    pathLabel.textContent = "Documents\\ResearchLens Library";
+  });
+}

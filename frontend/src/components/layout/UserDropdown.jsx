@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, LayoutDashboard } from "lucide-react";
 
 export function UserDropdown() {
   const { user, logout, isLoggingOut } = useAuth();
@@ -54,6 +54,13 @@ export function UserDropdown() {
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+            <LayoutDashboard className="h-3.5 w-3.5 text-zinc-500" />
+            <span>Overview</span>
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuItem asChild>
           <Link href="/settings" className="flex items-center gap-2 cursor-pointer">

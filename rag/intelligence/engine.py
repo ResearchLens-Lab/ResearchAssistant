@@ -165,7 +165,8 @@ class ResearchIntelligenceEngine:
         selected_documents = list(dict.fromkeys(document_ids or []))
 
         # 1. Query Normalization & Understanding
-        understanding = self.query_analyzer.analyze(question)
+        emit({"type": "status", "message": "Analyzing question and identifying core research concepts…"})
+        understanding = self.query_analyzer.analyze(question, conversation_context=conversation_context)
         logger.info(
             "Diagnostic Query Trace: raw='%s' | norm='%s' | intent=%s | is_compound=%s | facets=%s",
             question,
@@ -180,10 +181,23 @@ class ResearchIntelligenceEngine:
             "engine": "research_intelligence",
             "primary_concept": understanding.primary_concept,
         })
-        emit({"type": "retrieval_started", "strategy": "fts5_structure_aware"})
+        emit({
+            "type": "query_plan",
+            "primary_concept": understanding.primary_concept,
+            "intent": understanding.intent.value,
+            "facets": [f.facet_id for f in getattr(understanding, "facets", [])],
+            "is_compound": understanding.is_compound,
+            "resolved_question": getattr(understanding, "normalized_query", question),
+        })
+        emit({
+            "type": "retrieval_started",
+            "strategy": "fts5_structure_aware",
+            "concept": understanding.primary_concept,
+        })
 
         # 2. Retrieval via Explainable FTS5 Engine
         try:
+            emit({"type": "status", "message": f"Searching indexed passages for '{understanding.primary_concept}'…"})
             sources, traces = self.retrieval_engine.retrieve(
                 query=understanding,
                 paper_ids=selected_papers or None,
@@ -200,18 +214,36 @@ class ResearchIntelligenceEngine:
         except Exception as exc:
             logger.error("Retrieval failed: %s", exc)
             answer_text = (
-                "Not found in your selected documents. "
-                "The independent local text index is unavailable; no model or embedding fallback was attempted."
+                "The local search index could not be read. "
+                "Your documents are safe; restart ResearchLens and try again."
             )
             emit({"type": "generation_skipped", "reason": "retrieval_failed"})
             return RAGResult(
                 answer=answer_text,
                 sources=[],
                 paper_ids=selected_papers,
-                metadata={"error": str(exc), "confidence_tier": "NOT LOCATED"},
+                metadata={"error_kind": "index_unavailable", "error": str(exc)},
             )
 
         emit({"type": "sources_found", "count": len(sources), "engine": "research_intelligence"})
+
+        # Emit evidence_batch immediately so Evidence & Sources panel renders cards live
+        evidence_cards = []
+        for s in sources:
+            evidence_cards.append({
+                "source_id": s.source_id,
+                "paper_id": s.paper_id,
+                "document_id": s.document_id,
+                "title": s.title or s.filename or "Document",
+                "page": s.page_start,
+                "page_start": s.page_start,
+                "page_end": s.page_end,
+                "section": s.section or "Excerpt",
+                "text": s.text[:400] if s.text else "",
+                "score": round(s.score, 3) if s.score else 1.0,
+                "locator": s.locator,
+            })
+        emit({"type": "evidence_batch", "sources": evidence_cards})
 
         # 3. Confidence & Calibration
         confidence = self.confidence_evaluator.evaluate(
@@ -219,6 +251,40 @@ class ResearchIntelligenceEngine:
             sources=sources,
             traces=traces,
         )
+
+        corpus_docs_count = None
+        if selected_documents:
+            corpus_docs_count = len(set(selected_documents))
+        elif selected_papers:
+            try:
+                uri = self.retrieval_engine.db_path.resolve().as_uri() + "?mode=ro"
+                conn = sqlite3.connect(uri, uri=True)
+                try:
+                    ph = ",".join("?" for _ in selected_papers)
+                    q = f"SELECT count(DISTINCT document_id) FROM lexical_chunks WHERE paper_id IN ({ph})"
+                    p = list(selected_papers)
+                    if effective_owner:
+                        q += " AND owner_id = ?"
+                        p.append(effective_owner)
+                    corpus_docs_count = conn.execute(q, p).fetchone()[0]
+                finally:
+                    conn.close()
+            except Exception:
+                corpus_docs_count = None
+
+        retrieval_summary_payload = {
+            "type": "retrieval_summary",
+            "concept": understanding.primary_concept,
+            "evidence_documents_count": len(set(s.document_id for s in sources if s.document_id)),
+            "passages_count": len(sources),
+            "top_score": round(sources[0].score, 2) if sources and sources[0].score else 1.0,
+            "confidence_tier": confidence.level.value,
+            "confidence_score": round(confidence.overall_confidence_score, 3),
+        }
+        if corpus_docs_count is not None:
+            retrieval_summary_payload["corpus_documents_count"] = corpus_docs_count
+            retrieval_summary_payload["documents_count"] = corpus_docs_count
+        emit(retrieval_summary_payload)
 
         # 4. Grounded Synthesis with Local Intelligence & Extractive Fallback
         emit({"type": "evidence_ready", "count": len(sources), "engine": "research_intelligence"})
@@ -271,14 +337,15 @@ class ResearchIntelligenceEngine:
         # Fallback to deterministic composer if local intelligence was unavailable or returned fallback
         if not final_markdown:
             emit({"type": "generation_fallback", "reason": "deterministic_structured_composition"})
+            emit({"type": "status", "message": "Composing evidence-grounded synthesis…"})
             grounded_answer = self.answer_composer.compose(
                 query=understanding,
                 sources=sources,
                 confidence=confidence,
+                emit=emit,
             )
             final_markdown = grounded_answer.markdown_content
-            reasons_summary = "; ".join(confidence.evidence_signals[:2]) if confidence.evidence_signals else confidence.justification
-            final_markdown += f"\n\nEvidence state: **{confidence.level.value}** — {reasons_summary}"
+            emit({"type": "generation_completed", "provider": "extractive_composer"})
 
         # 5. Map citations to paper metadata and locators
         cited_ids = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", final_markdown, re.I)))
@@ -295,6 +362,27 @@ class ResearchIntelligenceEngine:
 
         trace_dicts = {sid: tr.__dict__ for sid, tr in traces.items()}
 
+        meta_retrieval_summary = {
+            "evidence_documents_count": len(set(s.document_id for s in sources if s.document_id)),
+            "passages_count": len(sources),
+        }
+        if corpus_docs_count is not None:
+            meta_retrieval_summary["corpus_documents_count"] = corpus_docs_count
+
+        weak_matches = []
+        if confidence.level in (ConfidenceLevel.NOT_LOCATED, ConfidenceLevel.WEAK) and sources:
+            weak_matches = [
+                {
+                    "title": s.title,
+                    "page": s.page_start,
+                    "score": round(s.score, 4) if s.score else 0.0,
+                    "excerpt": s.text[:160].strip(),
+                    "chunk_id": s.chunk_id,
+                    "locator": s.locator,
+                }
+                for s in sources[:3]
+            ]
+
         return RAGResult(
             answer=final_markdown,
             sources=citations,
@@ -302,6 +390,10 @@ class ResearchIntelligenceEngine:
             metadata={
                 "answer_mode": "independent_documents_only",
                 "generation_provider": generation_provider,
+                "confidence_tier": confidence.level.value,
+                "confidence_score": round(confidence.overall_confidence_score, 3),
+                "weak_matches": weak_matches,
+                "retrieval_summary": meta_retrieval_summary,
                 "llm_provider": "local_intelligence" if generation_provider == "local_intelligence" else "none",
                 "llm_enabled": generation_provider == "local_intelligence",
                 "llm_model": self.local_intelligence.model if generation_provider == "local_intelligence" else "none",

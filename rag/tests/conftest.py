@@ -14,6 +14,7 @@ os.environ["EMBEDDING_MODEL"] = "mock-dense-384"
 os.environ["EMBEDDING_DIMENSION"] = "384"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["APP_ENV"] = "testing"
+os.environ["RAG_ENGINE_MODE"] = "legacy"
 
 from rag.ingestion.document_normalizer import Page, Section, DocumentMetadata, NormalizedDocument, DocumentNormalizer
 from rag.chunking.chunker import DocumentChunker
@@ -135,6 +136,21 @@ def full_rag_pipeline(vector_repo, mock_embedder):
         embedder=mock_embedder,
         vector_repo=vector_repo,
     )
+    orig_ingest_text = ingest.ingest_text
+    def wrapped_ingest_text(content, paper_id=None, metadata=None, **kwargs):
+        meta = dict(metadata or {})
+        if "owner_id" not in meta:
+            meta["owner_id"] = "test_user_fixture"
+        return orig_ingest_text(content=content, paper_id=paper_id, metadata=meta, **kwargs)
+    ingest.ingest_text = wrapped_ingest_text
+
+    orig_ingest_file = ingest.ingest_file
+    def wrapped_ingest_file(file_path, paper_id=None, metadata=None, **kwargs):
+        meta = dict(metadata or {})
+        if "owner_id" not in meta:
+            meta["owner_id"] = "test_user_fixture"
+        return orig_ingest_file(file_path=file_path, paper_id=paper_id, metadata=meta, **kwargs)
+    ingest.ingest_file = wrapped_ingest_file
 
     retriever = ResearchRetriever(
         embedder=mock_embedder,
@@ -148,5 +164,9 @@ def full_rag_pipeline(vector_repo, mock_embedder):
         context_builder=context_builder,
         generator=generator,
     )
+    orig_answer_q = query_p.answer_question
+    def wrapped_answer_question(question, user_id="test_user_fixture", *args, **kwargs):
+        return orig_answer_q(question=question, user_id=user_id, *args, **kwargs)
+    query_p.answer_question = wrapped_answer_question
 
     return ingest, query_p

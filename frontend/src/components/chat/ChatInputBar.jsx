@@ -110,12 +110,24 @@ export function ChatInputBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleRephrase = (e) => {
+      const q = e.detail?.question;
+      if (q) {
+        setInput(q);
+        setTimeout(() => textareaRef.current?.focus(), 50);
+      }
+    };
+    window.addEventListener("researchlens:rephrase", handleRephrase);
+    return () => window.removeEventListener("researchlens:rephrase", handleRephrase);
+  }, []);
+
   const activeSlash = SLASH_COMMANDS.find((item) =>
     input.trim().toLowerCase().startsWith(item.cmd.toLowerCase())
   );
 
   const handleApplySlash = (slashItem) => {
-    const raw = input || "";
+    const raw = (textareaRef.current ? textareaRef.current.value : input) || "";
     const trimmed = raw.trim();
     // Check if input already starts with an existing slash command (e.g. /table, /pie, /flowchart, /compare, /summary)
     const existingSlashMatch = trimmed.match(/^\/[a-z0-9_-]+\s*/i);
@@ -133,6 +145,14 @@ export function ChatInputBar({
 
     setInput(nextValue);
     setShowSlashMenu(false);
+
+    if (textareaRef.current) {
+      textareaRef.current.value = nextValue;
+      textareaRef.current.focus();
+      const len = nextValue.length;
+      textareaRef.current.selectionStart = len;
+      textareaRef.current.selectionEnd = len;
+    }
 
     setTimeout(() => {
       const textarea = textareaRef.current;
@@ -189,7 +209,7 @@ export function ChatInputBar({
       }
     }
 
-    if (event.key === "Enter" && !event.shiftKey) {
+    if ((event.key === "Enter" && !event.shiftKey) || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
       event.preventDefault();
       handleSubmit();
     }
@@ -218,9 +238,9 @@ export function ChatInputBar({
       {showSlashMenu && (
         <div
           ref={slashMenuRef}
-          className="absolute bottom-full left-4 sm:left-8 mb-2 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl font-serif animate-in fade-in slide-in-from-bottom-2 duration-150"
+          className="absolute bottom-full left-4 sm:left-8 mb-2 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-150"
         >
-          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-400 uppercase tracking-wider font-bold">
             <span>Research Presentation Modes</span>
             <span>Tab / Enter to select</span>
           </div>
@@ -301,16 +321,28 @@ export function ChatInputBar({
                 <DropdownMenuContent align="start" className="w-64 bg-white">
                   {SLASH_COMMANDS.map((item) => {
                     const Icon = item.icon;
-                    return <DropdownMenuItem key={item.cmd} onSelect={() => handleApplySlash(item)} className="gap-2.5 py-2">
-                      <Icon className="h-4 w-4 text-[var(--rl-primary)]" />
-                      <span className="min-w-0"><span className="block font-medium">{item.title}</span><span className="block truncate text-[10px] text-slate-500">{item.desc}</span></span>
-                    </DropdownMenuItem>;
+                    return (
+                      <DropdownMenuItem
+                        key={item.cmd}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          handleApplySlash(item);
+                        }}
+                        className="gap-2.5 py-2 cursor-pointer"
+                      >
+                        <Icon className="h-4 w-4 text-[var(--rl-primary)]" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">{item.title}</span>
+                          <span className="block truncate text-[11px] text-slate-500">{item.desc}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
 
               {activeSlash && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 animate-in fade-in duration-150 shrink-0">
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 animate-in fade-in duration-150 shrink-0">
                   <activeSlash.icon className="h-3 w-3 text-indigo-600" />
                   <span>{activeSlash.title}</span>
                   <button
@@ -324,7 +356,7 @@ export function ChatInputBar({
                 </span>
               )}
 
-              <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200/70 px-2 py-0.5 text-[10px] font-semibold text-[#1d6fc4]">
+              <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200/70 px-2 py-0.5 text-[11px] font-semibold text-[#1d6fc4]">
                 <Layers className="h-3 w-3" />
                 <span className="truncate max-w-[160px] sm:max-w-[220px]">
                   {selectedDocumentIds && selectedDocumentIds.length > 0
@@ -337,7 +369,7 @@ export function ChatInputBar({
 
             {/* Right Action: Send Button / Stop Button */}
             <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden md:inline text-[10px] text-slate-400">
+              <span className="hidden md:inline text-[11px] text-slate-400">
                 Press Enter ↵
               </span>
 
@@ -370,7 +402,7 @@ export function ChatInputBar({
 
         {/* Warning if no document selected */}
         {docCount === 0 && (
-          <p className="mt-1.5 text-center text-xs text-amber-800 font-serif">
+          <p className="mt-1.5 text-center text-xs text-amber-800">
             Select a project with indexed documents in the left sidebar to start asking questions.
           </p>
         )}

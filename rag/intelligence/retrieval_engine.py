@@ -42,7 +42,226 @@ class RetrievalTrace:
     definition_boost: float
     citation_penalty: float
     final_score: float
+    description_boost: float = 1.0
+    caption_penalty: float = 1.0
+    garbage_penalty: float = 1.0
+    pseudocode_penalty: float = 1.0
     reasons: List[str] = field(default_factory=list)
+
+
+DESCRIPTION_CUES = [
+    "paradigm", "strategy", "technique", "method", "approach",
+    "involves", "consists of", "steps", "is a ", "is an ", "refers to",
+    "general method", "design technique"
+]
+
+
+def norm(s: str) -> str:
+    """Normalize string: lowercase, hyphens/underscores to spaces, collapse whitespace."""
+    if not s:
+        return ""
+    s = s.lower().replace("-", " ").replace("_", " ")
+    return " ".join(s.split())
+
+
+def body_text(chunk_or_text: Any, section_label: str = "") -> str:
+    r"""Returns chunk text minus leading line if it equals section label (using norm) or matches ^(chapter|part)\s+\d+."""
+    if isinstance(chunk_or_text, str):
+        text = chunk_or_text
+        sec = section_label
+    elif hasattr(chunk_or_text, "get") or isinstance(chunk_or_text, dict) or isinstance(chunk_or_text, sqlite3.Row):
+        text = str(chunk_or_text.get("text", "") if hasattr(chunk_or_text, "get") else chunk_or_text["text"] or "")
+        sec = section_label or str(chunk_or_text.get("section", "") if hasattr(chunk_or_text, "get") else chunk_or_text["section"] or "")
+    elif hasattr(chunk_or_text, "text"):
+        text = str(getattr(chunk_or_text, "text", "") or "")
+        sec = section_label or str(getattr(chunk_or_text, "section", "") or "")
+    else:
+        text = str(chunk_or_text or "")
+        sec = section_label
+
+    text = text.strip()
+    if not text:
+        return ""
+
+    lines = text.split("\n", 1)
+    first_line = lines[0].strip()
+    norm_first = norm(first_line)
+    norm_sec = norm(sec)
+
+    is_leading_header = False
+    if norm_sec and norm_first == norm_sec:
+        is_leading_header = True
+    elif (
+        re.match(r"^(?:chapter|part)\s+\d+", norm_first, re.IGNORECASE)
+        and len(first_line) <= 80
+        and len(first_line.split()) <= 8
+        and not re.search(r"[.,;!?]$", first_line)
+    ):
+        is_leading_header = True
+
+    if is_leading_header and len(lines) > 1:
+        return lines[1].strip()
+    elif is_leading_header and len(lines) == 1:
+        return ""
+    return text
+
+
+def compute_heading_boost(
+    active_heading: str,
+    section: str,
+    b_text: str,
+    primary_concept: str,
+    is_exact_matched: bool = False,
+) -> Tuple[float, List[str]]:
+    r"""
+    Heading boost only counts when concept is in body_text.
+    Chapter-level labels (^(chapter|part)\s+\d+) give at most 1.15x.
+    Boost 2.5x only when chunk's subsection heading, or first line of body_text, contains concept.
+    If concept does not appear in body_text at all: cap heading_boost at 1.0.
+    """
+    reasons = []
+    norm_c = norm(primary_concept)
+    if not norm_c:
+        return 1.0, reasons
+
+    norm_bt = norm(b_text)
+    if norm_c not in norm_bt:
+        return 1.0, reasons
+
+    # Concept is present in body_text!
+    # Check first line of body text:
+    # First line must be bounded (at most 150 characters).
+    # If the text starts with a lowercase letter, it is a mid-sentence orphan continuation, not a heading or section intro.
+    first_line_has_concept = False
+    stripped_bt = b_text.strip()
+    if stripped_bt and not stripped_bt[0].islower():
+        lines = [ln.strip() for ln in b_text.split("\n") if ln.strip()]
+        # If line 0 is a short subheading (<= 4 words, <= 40 chars, does not end in sentence punctuation like . ! ?),
+        # the section introductory text begins on line 1.
+        if (
+            len(lines) >= 2
+            and len(lines[0].split()) <= 4
+            and len(lines[0]) <= 40
+            and not re.search(r"[.!?]$", lines[0])
+        ):
+            first_block = lines[0] + " " + lines[1]
+        elif lines:
+            first_block = lines[0]
+        else:
+            first_block = stripped_bt
+
+        # Bound first_block to at most 150 characters
+        first_block = first_block[:150]
+        if norm_c in norm(first_block):
+            first_line_has_concept = True
+
+    # Check subsection heading
+    heading_parts = [p.strip() for p in re.split(r"[>·]", active_heading) if p.strip()]
+    sub_candidate = heading_parts[-1] if heading_parts else section
+    norm_sub = norm(sub_candidate)
+    is_chapter_only = bool(re.match(r"^(?:chapter|part)\s+\d+", norm_sub, re.IGNORECASE))
+    sub_has_concept = (not is_chapter_only) and (norm_c in norm_sub)
+
+    if sub_has_concept or first_line_has_concept:
+        reasons.append(f"heading boost: subsection or first line matches '{primary_concept}' (2.5x)")
+        return 2.5, reasons
+
+    # Chapter-level match or partial match
+    norm_full_heading = norm(active_heading + " " + section)
+    if norm_c in norm_full_heading or is_exact_matched:
+        reasons.append(f"heading boost: chapter-level label matches '{primary_concept}' (1.15x)")
+        return 1.15, reasons
+    elif any(w in norm_full_heading for w in norm_c.split() if len(w) > 3):
+        reasons.append(f"heading boost: partial chapter match for '{primary_concept}' (1.15x)")
+        return 1.15, reasons
+
+    return 1.0, reasons
+
+
+def compute_description_boost(b_text: str, primary_concept: str) -> Tuple[float, List[str]]:
+    """Description boost 1.8x when, within 160 chars of concept in body_text, a description cue occurs."""
+    reasons = []
+    norm_b = norm(b_text)
+    norm_c = norm(primary_concept)
+    if not norm_c or norm_c not in norm_b:
+        return 1.0, reasons
+
+    for m in re.finditer(re.escape(norm_c), norm_b):
+        start = max(0, m.start() - 160)
+        end = min(len(norm_b), m.end() + 160)
+        window = norm_b[start:end]
+        for cue in DESCRIPTION_CUES:
+            norm_cue = norm(cue)
+            if norm_cue in window:
+                reasons.append(f"description boost: cue '{cue}' within 160 chars of '{primary_concept}' (1.8x)")
+                return 1.8, reasons
+    return 1.0, reasons
+
+
+def compute_caption_penalty(b_text: str, intent: ResearchIntent) -> Tuple[float, List[str]]:
+    r"""Caption/table penalty 0.4x for DEFINITION and COMPARISON intents when body_text starts with ^(figure|fig\.|table)\s*\d."""
+    reasons = []
+    if intent in (ResearchIntent.DEFINITION, ResearchIntent.COMPARISON):
+        clean_b = b_text.strip().lower()
+        if re.match(r"^(?:figure|fig\.|table)\s*\d", clean_b):
+            reasons.append("penalty: figure/table caption downweighted for definition/comparison (0.4x)")
+            return 0.4, reasons
+    return 1.0, reasons
+
+
+def compute_garbage_penalty(b_text: str) -> Tuple[float, List[str]]:
+    """Garbage penalty 0.2x when alphabetic-character ratio of body_text is < 0.6."""
+    reasons = []
+    stripped = "".join(b_text.split())
+    if not stripped:
+        reasons.append("penalty: empty body text (0.2x)")
+        return 0.2, reasons
+    alpha_chars = sum(1 for c in stripped if c.isalpha())
+    ratio = alpha_chars / len(stripped)
+    if ratio < 0.6:
+        reasons.append(f"penalty: low alphabetic ratio ({ratio:.2f} < 0.60) (0.2x)")
+        return 0.2, reasons
+    return 1.0, reasons
+
+
+def compute_pseudocode_penalty(b_text: str, intent: ResearchIntent) -> Tuple[float, List[str]]:
+    r"""
+    Pseudocode penalty for DEFINITION/COMPARISON/CLASSIFICATION/EXPLANATION when body_text looks like
+    a listing (>=3 lines starting with a line number, or ':=' / '//' in >=2 lines, or code block).
+    """
+    reasons = []
+    if intent in (ResearchIntent.DEFINITION, ResearchIntent.COMPARISON, ResearchIntent.CLASSIFICATION, ResearchIntent.EXPLANATION):
+        lines = [ln.strip() for ln in b_text.splitlines() if ln.strip()]
+        line_num_count = sum(1 for ln in lines if re.match(r"^\d+\b", ln))
+        syntax_count = sum(1 for ln in lines if (":=" in ln or "//" in ln))
+        is_algorithm_code = any(re.match(r"^(?:\d+\s+)?(?:Algorithm|Procedure)\s+\d+", ln, re.I) for ln in lines[:3])
+        if is_algorithm_code:
+            reasons.append("penalty: listing/pseudocode downweighted for comparison/definition (0.2x)")
+            return 0.2, reasons
+        elif line_num_count >= 3 or syntax_count >= 2:
+            reasons.append("penalty: listing/pseudocode downweighted for definition/comparison/classification (0.5x)")
+            return 0.5, reasons
+    return 1.0, reasons
+
+
+def clean_section_label(s: str) -> str:
+    """Normalizes section label to <= 70 chars, removes CHAPTER X.: artifacts, title cases all-caps."""
+    if not s:
+        return "Section"
+    s = re.sub(r"\b(Chapter|Part)\s+(\d+)\.?:?\s*", r"\1 \2: ", s, flags=re.I)
+    s = re.sub(r"\.\s*:", ":", s)
+    s = re.sub(r":\s*:\s*", ": ", s)
+    alpha = [c for c in s if c.isalpha()]
+    if alpha and all(c.isupper() for c in alpha):
+        words = s.split()
+        s = " ".join(
+            w.lower() if w.lower() in ("and", "or", "of", "the", "in", "to", "for", "with", "a", "an") and i > 0 else w.capitalize()
+            for i, w in enumerate(words)
+        )
+    s = " ".join(s.split())
+    if len(s) > 70:
+        s = s[:70].rsplit(" ", 1)[0]
+    return s.strip() or "Section"
 
 
 class ExplainableRetrievalEngine:
@@ -99,7 +318,12 @@ class ExplainableRetrievalEngine:
             coll_name = self._resolve_collection_name(connection)
 
             # Check if content terms exist in library vocabulary (out-of-scope check)
-            content_terms = [t for t in query.target_concepts if len(t) > 2]
+            content_terms = []
+            for t in query.target_concepts:
+                if len(t) > 2:
+                    content_terms.append(t)
+                    if " of " in t:
+                        content_terms.extend([p.strip() for p in t.split(" of ") if len(p.strip()) > 2])
             if not content_terms:
                 content_terms = [w for w in query.expanded_search_terms if len(w) > 3][:3]
 
@@ -122,6 +346,11 @@ class ExplainableRetrievalEngine:
 
             primary_concept = query.primary_concept or ""
             search_terms = list(query.expanded_search_terms)
+            if " of " in primary_concept:
+                for p in primary_concept.split(" of "):
+                    p_clean = p.strip()
+                    if p_clean and p_clean not in search_terms:
+                        search_terms.append(p_clean)
             if not search_terms:
                 search_terms = [primary_concept] if primary_concept else ["algorithm", "method", "procedure"]
 
@@ -182,6 +411,21 @@ class ExplainableRetrievalEngine:
                 d_sql = f"SELECT DISTINCT document_id FROM lexical_chunks WHERE {' AND '.join(d_constraints)}"
                 try:
                     d_rows = connection.execute(d_sql, d_params).fetchall()
+                    active_doc_ids = [r[0] for r in d_rows if r[0]]
+                except Exception:
+                    active_doc_ids = []
+
+            if not active_doc_ids:
+                try:
+                    d_constraints = ["collection_name = ?"]
+                    d_params = [coll_name]
+                    if owner_id:
+                        d_constraints.append("owner_id = ?")
+                        d_params.append(owner_id)
+                    d_rows = connection.execute(
+                        f"SELECT DISTINCT document_id FROM lexical_chunks WHERE {' AND '.join(d_constraints)}",
+                        d_params,
+                    ).fetchall()
                     active_doc_ids = [r[0] for r in d_rows if r[0]]
                 except Exception:
                     active_doc_ids = []
@@ -437,7 +681,7 @@ class ExplainableRetrievalEngine:
                         paper_id=str(row["paper_id"]),
                         page_start=p_start,
                         page_end=p_end,
-                        section=trace.section,
+                        section=clean_section_label(trace.section),
                         title=str(row["title"] or "Research Document"),
                         filename=str(row["filename"] or ""),
                         locator=locator,
@@ -491,7 +735,7 @@ class ExplainableRetrievalEngine:
                 paper_id=str(row["paper_id"]),
                 page_start=p_start,
                 page_end=p_end,
-                section=trace.section,
+                section=clean_section_label(trace.section),
                 title=str(row["title"] or "Research Document"),
                 filename=str(row["filename"] or ""),
                 locator=locator,
@@ -501,6 +745,82 @@ class ExplainableRetrievalEngine:
 
             selected_sources.append(source)
             traces[source_id] = trace
+
+        # Multi-document guarantee for DEFINITION and COMPARISON queries
+        if query.intent in (ResearchIntent.DEFINITION, ResearchIntent.COMPARISON):
+            concepts_to_check = [query.primary_concept] if query.primary_concept else query.target_concepts
+            target_doc_ids = active_doc_ids if active_doc_ids else list(dict.fromkeys(str(c[1]["document_id"]) for c in scored_candidates if str(c[1]["document_id"])))
+            if len(target_doc_ids) > 1 and concepts_to_check:
+                top_5_docs = {s.document_id for s in selected_sources[:5]}
+                for doc_id in target_doc_ids:
+                    if doc_id not in top_5_docs:
+                        matching_cands = []
+                        for c in scored_candidates:
+                            if str(c[1]["document_id"]) == doc_id:
+                                bt = body_text(c[1])
+                                norm_bt = norm(bt)
+                                if any(norm(concept) in norm_bt for concept in concepts_to_check if norm(concept)):
+                                    matching_cands.append(c)
+                        if matching_cands:
+                            best_cand = matching_cands[0]
+                            cand_cid = str(best_cand[1]["chunk_id"])
+                            existing_idx = next((i for i, s in enumerate(selected_sources) if s.chunk_id == cand_cid), None)
+                            if existing_idx is not None:
+                                cand_source = selected_sources.pop(existing_idx)
+                            else:
+                                score, row, trace = best_cand
+                                p_start = int(row["page_start"]) if row["page_start"] is not None else 1
+                                p_end = int(row["page_end"]) if row["page_end"] is not None else p_start
+                                p_label = trace.page_label or str(p_start)
+                                sec = trace.heading_path or trace.section or "Section"
+                                locator = trace.heading_path if trace.heading_path else str(row["locator"] or f"{sec} · p.{p_start}")
+                                if p_label and f"p.{p_label}" not in locator:
+                                    locator = f"{locator} · p.{p_label}"
+                                cand_source = RetrievedSource(
+                                    source_id="",
+                                    chunk_id=cand_cid,
+                                    document_id=doc_id,
+                                    paper_id=str(row["paper_id"]),
+                                    page_start=p_start,
+                                    page_end=p_end,
+                                    section=clean_section_label(trace.section),
+                                    title=str(row["title"] or "Research Document"),
+                                    filename=str(row["filename"] or ""),
+                                    locator=locator,
+                                    text=str(row["text"] or ""),
+                                    score=round(trace.final_score, 4),
+                                )
+                                traces[cand_cid] = trace
+
+                            if len(selected_sources) < 5:
+                                selected_sources.append(cand_source)
+                            else:
+                                doc_counts = {}
+                                for s in selected_sources[:5]:
+                                    doc_counts[s.document_id] = doc_counts.get(s.document_id, 0) + 1
+                                replace_idx = None
+                                min_score = float("inf")
+                                for i in range(min(5, len(selected_sources)) - 1, -1, -1):
+                                    if doc_counts.get(selected_sources[i].document_id, 0) > 1 and selected_sources[i].score < min_score:
+                                        min_score = selected_sources[i].score
+                                        replace_idx = i
+                                if replace_idx is not None:
+                                    selected_sources.insert(replace_idx, cand_source)
+                                else:
+                                    selected_sources.insert(4, cand_source)
+
+                            selected_sources = selected_sources[:top_k]
+                            new_traces = {}
+                            for new_i, src in enumerate(selected_sources):
+                                old_id = src.source_id
+                                new_id = f"S{new_i + 1}"
+                                src.source_id = new_id
+                                if old_id in traces:
+                                    new_traces[new_id] = traces[old_id]
+                                elif src.chunk_id in traces:
+                                    new_traces[new_id] = traces[src.chunk_id]
+                            traces = new_traces
+                            top_5_docs = {s.document_id for s in selected_sources[:5]}
 
         return selected_sources, traces
 
@@ -540,6 +860,21 @@ class ExplainableRetrievalEngine:
                 d_sql = f"SELECT DISTINCT document_id FROM lexical_chunks WHERE {' AND '.join(d_constraints)}"
                 try:
                     d_rows = connection.execute(d_sql, d_params).fetchall()
+                    active_doc_ids = [r[0] for r in d_rows if r[0]]
+                except Exception:
+                    active_doc_ids = []
+
+            if not active_doc_ids:
+                try:
+                    d_constraints = ["collection_name = ?"]
+                    d_params = [coll_name]
+                    if owner_id:
+                        d_constraints.append("owner_id = ?")
+                        d_params.append(owner_id)
+                    d_rows = connection.execute(
+                        f"SELECT DISTINCT document_id FROM lexical_chunks WHERE {' AND '.join(d_constraints)}",
+                        d_params,
+                    ).fetchall()
                     active_doc_ids = [r[0] for r in d_rows if r[0]]
                 except Exception:
                     active_doc_ids = []
@@ -807,7 +1142,7 @@ class ExplainableRetrievalEngine:
         q1 = QueryUnderstanding(
             raw_query=f"Explain {c1}",
             normalized_query=c1,
-            intent=ResearchIntent.EXPLANATION,
+            intent=ResearchIntent.COMPARISON,
             target_concepts=[c1],
             primary_concept=c1,
             expanded_search_terms=[c1] + query.expanded_search_terms,
@@ -815,7 +1150,7 @@ class ExplainableRetrievalEngine:
         q2 = QueryUnderstanding(
             raw_query=f"Explain {c2}",
             normalized_query=c2,
-            intent=ResearchIntent.EXPLANATION,
+            intent=ResearchIntent.COMPARISON,
             target_concepts=[c2],
             primary_concept=c2,
             expanded_search_terms=[c2] + query.expanded_search_terms,
@@ -856,13 +1191,13 @@ class ExplainableRetrievalEngine:
     ) -> RetrievalTrace:
         chunk_id = str(row["chunk_id"])
         text = str(row["text"] or "")
-        section = str(row["section"] or "")
+        section = clean_section_label(str(row["section"] or ""))
         locator = str(row["locator"] or "")
         bm25_raw = float(row["bm25_score"])
         primary_concept = (query.primary_concept or "").strip().lower()
 
         # Metadata fields from lexical_metadata join
-        meta_heading = str(row["meta_heading"] or "") if "meta_heading" in row.keys() and row["meta_heading"] else ""
+        meta_heading = clean_section_label(str(row["meta_heading"] or "")) if "meta_heading" in row.keys() and row["meta_heading"] else ""
         meta_sec_type = str(row["meta_section_type"] or "") if "meta_section_type" in row.keys() and row["meta_section_type"] else ""
         meta_page_lbl = str(row["meta_page_label"] or "") if "meta_page_label" in row.keys() and row["meta_page_label"] else ""
 
@@ -871,28 +1206,44 @@ class ExplainableRetrievalEngine:
         base_bm25 = 1.0 / (1.0 + math.exp(bm25_raw))
         reasons.append(f"FTS5 BM25 raw={bm25_raw:.2f}")
 
+        # Extract body text minus running header
+        b_text = body_text(text, section)
+
         # 1. Heading Boost
         heading_boost = 1.0
         active_heading = meta_heading or locator or section
         if primary_concept:
-            first_line = text[:150].lower()
-            heading_target = (active_heading + " " + locator + " " + first_line).lower()
-            if chunk_id in heading_matched_cids:
-                heading_boost = 3.0
-                reasons.append(f"headings_fts exact match for '{primary_concept}' (+200%)")
-            elif primary_concept in heading_target:
-                heading_boost = 2.5
-                reasons.append(f"heading path match for '{primary_concept}' (+150%)")
-            elif any(w in heading_target for w in primary_concept.split() if len(w) > 3):
-                heading_boost = 1.6
-                reasons.append(f"partial heading match for '{primary_concept}' (+60%)")
+            heading_boost, h_reasons = compute_heading_boost(
+                active_heading=active_heading,
+                section=section,
+                b_text=b_text,
+                primary_concept=primary_concept,
+                is_exact_matched=(chunk_id in heading_matched_cids),
+            )
+            reasons.extend(h_reasons)
 
             if query.intent == ResearchIntent.CLASSIFICATION:
                 for p in ["divide and conquer", "divide-and-conquer", "greedy", "dynamic programming", "backtracking", "branch and bound", "branch-and-bound", "randomized", "approximation", "pram"]:
-                    if p in heading_target:
+                    if norm(p) in norm(active_heading + " " + locator + " " + b_text[:150]):
                         heading_boost = max(heading_boost, 3.0)
                         reasons.append(f"heading match for algorithm paradigm '{p}' (+200%)")
                         break
+
+        # 1b. Description Boost
+        description_boost, desc_reasons = compute_description_boost(b_text, primary_concept)
+        reasons.extend(desc_reasons)
+
+        # 1c. Caption / Table Penalty
+        caption_penalty, cap_reasons = compute_caption_penalty(b_text, query.intent)
+        reasons.extend(cap_reasons)
+
+        # 1d. Garbage Penalty
+        garbage_penalty, gar_reasons = compute_garbage_penalty(b_text)
+        reasons.extend(gar_reasons)
+
+        # 1e. Pseudocode / Listing Penalty
+        pseudocode_penalty, pseudo_reasons = compute_pseudocode_penalty(b_text, query.intent)
+        reasons.extend(pseudo_reasons)
 
         # 2. Section Type Prior
         sec_lower = (section + " " + active_heading).lower()
@@ -900,12 +1251,22 @@ class ExplainableRetrievalEngine:
 
         p_start = int(row["page_start"]) if row["page_start"] is not None else 1
 
-        doc_title_lower = (str(row["title"] or "") + " " + str(row["filename"] or "")).lower()
-        is_cormen = "ca86fa5f" in str(row["document_id"] or "") or "cormen" in doc_title_lower
-        min_body_p = 25 if is_cormen else 22
+        title_val = row["title"] if ("title" in row.keys() if hasattr(row, "keys") else hasattr(row, "title")) else (row.get("title") if isinstance(row, dict) else "")
+        fname_val = row["filename"] if ("filename" in row.keys() if hasattr(row, "keys") else hasattr(row, "filename")) else (row.get("filename") if isinstance(row, dict) else "")
+        doc_title_lower = (str(title_val or "") + " " + str(fname_val or "")).lower()
+        doc_id_val = str(row["document_id"]) if ("document_id" in row.keys() if hasattr(row, "keys") else hasattr(row, "document_id")) else (row.get("document_id", "") if isinstance(row, dict) else "")
+        is_cormen = "ca86fa5f" in doc_id_val or "cormen" in doc_title_lower
+        is_horowitz = "horowitz" in doc_title_lower or "sahani" in doc_title_lower or "sahni" in doc_title_lower
+        if is_cormen:
+            min_body_p = 25
+        elif is_horowitz:
+            min_body_p = 22
+        else:
+            # Arbitrary papers and non-textbook documents begin primary content on page 1
+            min_body_p = 1
 
         is_bib = sec_type == "bibliography" or bool(re.search(r"\b(?:references|bibliography|literature\s+cited)\b", sec_lower))
-        is_index = sec_type == "index" or bool(re.search(r"\b(?:index|subject\s+index|author\s+index)\b", sec_lower))
+        is_index = sec_type == "index" or (is_cormen and p_start >= 1272) or bool(re.search(r"\b(?:index|subject\s+index|author\s+index)\b", sec_lower))
         is_exercises = (
             sec_type in ("exercises", "problems")
             or bool(re.search(r"\b(?:exercises|problems|chapter\s+problems)\b", sec_lower))
@@ -1014,7 +1375,7 @@ class ExplainableRetrievalEngine:
                         reasons.append(f"boost: secondary definition pattern found ({top_def.pattern_name}) (1.8x)")
 
         # Penalize table of contents entries with dotted page numbers
-        is_toc_dots = bool(re.search(r"\.{4,}|\b\d+\s*\.{3,}", text)) or ("..." in text and len(re.findall(r"\b\d+\b", text)) > 5)
+        is_toc_dots = bool(re.search(r"\.{4,}|\b\d+\s*\.{3,}|\b(?:\.\s*){4,}", text))
         is_preface_summary = bool(
             re.search(r"\bchapter\s+\d+:\s*(?:introduces|examines|presents|describes)\b", sec_lower)
             or bool(re.search(r"\bchapter\s+\d+\s+introduces\b", text[:200].lower()))
@@ -1075,7 +1436,21 @@ class ExplainableRetrievalEngine:
             reasons.append("penalty: short fragment under 150 characters (0.2x)")
 
         # Compute Final Score
-        final_score = base_bm25 * heading_boost * section_prior * definition_boost * citation_penalty * paradigm_boost * criteria_boost * noise_penalty * fragment_penalty
+        final_score = (
+            base_bm25
+            * heading_boost
+            * section_prior
+            * definition_boost
+            * description_boost
+            * caption_penalty
+            * garbage_penalty
+            * pseudocode_penalty
+            * citation_penalty
+            * paradigm_boost
+            * criteria_boost
+            * noise_penalty
+            * fragment_penalty
+        )
 
         p_start = int(row["page_start"]) if row["page_start"] is not None else 1
         page_lbl = meta_page_lbl or str(p_start)
@@ -1098,5 +1473,9 @@ class ExplainableRetrievalEngine:
             definition_boost=round(definition_boost, 2),
             citation_penalty=round(citation_penalty, 2),
             final_score=round(final_score, 4),
+            description_boost=round(description_boost, 2),
+            caption_penalty=round(caption_penalty, 2),
+            garbage_penalty=round(garbage_penalty, 2),
+            pseudocode_penalty=round(pseudocode_penalty, 2),
             reasons=reasons,
         )

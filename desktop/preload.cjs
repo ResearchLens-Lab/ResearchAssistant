@@ -10,8 +10,13 @@ contextBridge.exposeInMainWorld("researchLensDesktop", Object.freeze({
   saveSession: (sessionData) => ipcRenderer.invoke("desktop:save-session", sessionData),
   getSession: () => ipcRenderer.invoke("desktop:get-session"),
   clearSession: () => ipcRenderer.invoke("desktop:clear-session"),
+  getProfile: () => ipcRenderer.invoke("desktop:get-profile"),
+  saveProfile: (data) => ipcRenderer.invoke("desktop:save-profile", data),
   getIntelligenceStatus: () => ipcRenderer.invoke("intelligence:status"),
   pullIntelligenceModel: () => ipcRenderer.invoke("intelligence:pull-model"),
+  getExternalLookups: () => ipcRenderer.invoke("desktop:get-external-lookups"),
+  setExternalLookups: (enabled) => ipcRenderer.invoke("desktop:set-external-lookups", enabled),
+  restartApp: () => ipcRenderer.invoke("desktop:restart-app"),
   onIntelligenceProgress: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on("intelligence:progress", handler);

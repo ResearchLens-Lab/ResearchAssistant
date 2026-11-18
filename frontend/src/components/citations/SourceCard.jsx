@@ -6,6 +6,7 @@ import { cn } from "@/utils/cn";
 import { FileText, ExternalLink, BookOpen, Quote, Copy, Check, Sparkles } from "lucide-react";
 import { useCitationStore } from "@/store/citationStore";
 import { getSourceIdentity } from "@/utils/sourceIdentity";
+import { formatPages, plausibleHeading } from "@/utils/citationNumbering.mjs";
 
 function normalizeText(s) {
   return (s || "")
@@ -88,7 +89,14 @@ function findMatchSpan(text, source, highlight) {
   return claimMatch;
 }
 
-export function SourceCard({ source, isActive = false, onSelect, onOpenDocument, claimStatuses = [] }) {
+export function SourceCard({
+  source,
+  isActive = false,
+  onSelect,
+  onOpenDocument,
+  claimStatuses = [],
+  hideDocumentTitle = false,
+}) {
   const { activeHighlight } = useCitationStore();
   const [copied, setCopied] = useState(false);
   const [copiedFocused, setCopiedFocused] = useState(false);
@@ -99,19 +107,11 @@ export function SourceCard({ source, isActive = false, onSelect, onOpenDocument,
   const quoteRef = useRef(null);
 
   const primaryName = source.filename || "Source document";
-  const showFilename = source.filename && source.filename !== primaryName;
   const rawCitationLabel = source.citation_label?.trim();
   const citationName = rawCitationLabel && !/^\[?S\d+\]?$/i.test(rawCitationLabel) && (source.author_metadata?.length || source.publication_year) ? rawCitationLabel : primaryName;
 
-  // Accurately compute page display based on page_start and page_end
-  const pageDisplay =
-    source.page_start != null && source.page_end != null && source.page_start !== source.page_end
-      ? `Pages ${source.page_start}–${source.page_end}`
-      : source.page_start != null
-      ? `Page ${source.page_start}`
-      : source.page != null
-      ? `Page ${source.page}`
-      : source.locator || "Document source";
+  const pageDisplay = formatPages(source) || source.locator || "Document source";
+  const sectionLabel = plausibleHeading(source.section);
 
   const cleanText = (source.text || "").trim().replace(/^["']|["']$/g, "");
 
@@ -228,29 +228,34 @@ export function SourceCard({ source, isActive = false, onSelect, onOpenDocument,
       <div className="flex items-start justify-between gap-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
-            <h4 title={primaryName} className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
-              {primaryName}
+            <h4
+              title={hideDocumentTitle ? pageDisplay : primaryName}
+              className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900"
+            >
+              {hideDocumentTitle ? pageDisplay : primaryName}
             </h4>
-            {showFilename && (
-              <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                {source.filename}
+            {source.author_metadata?.length > 0 && (
+              <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">
+                {source.author_metadata.join(", ")}
+                {source.publication_year ? ` · ${source.publication_year}` : ""}
               </p>
             )}
-            {source.author_metadata?.length > 0 && <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{source.author_metadata.join(", ")}{source.publication_year ? ` · ${source.publication_year}` : ""}</p>}
           </div>
         </div>
 
-        <span className="shrink-0 rounded-full bg-sky-100/70 border border-sky-200/60 px-2 py-0.5 text-[10px] font-semibold text-[#1d6fc4]">
-          {pageDisplay}
-        </span>
+        {!hideDocumentTitle && (
+          <span className="shrink-0 rounded-full bg-sky-100/70 border border-sky-200/60 px-2 py-0.5 text-[11px] font-semibold text-[#1d6fc4]">
+            {pageDisplay}
+          </span>
+        )}
       </div>
 
       {/* Section Subheading if present */}
-      {source.section && source.section !== "Main Content" && (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 border border-slate-200/60 px-2 py-0.5 text-[10px] text-slate-600">
-            <BookOpen className="h-3 w-3 text-[#1d6fc4]" />
-            <span className="truncate">{source.section}</span>
+      {sectionLabel && sectionLabel !== "Main Content" && (
+        <div className="mt-2 min-w-0">
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-md bg-slate-50 border border-slate-200/60 px-2 py-0.5 text-[11px] text-slate-600">
+            <BookOpen className="h-3 w-3 text-[#1d6fc4] shrink-0" />
+            <span className="truncate">{sectionLabel}</span>
           </span>
         </div>
       )}
@@ -258,7 +263,7 @@ export function SourceCard({ source, isActive = false, onSelect, onOpenDocument,
       {/* Excerpt Header with Actions */}
       <div className="mt-3">
         <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
             <Quote className="h-3 w-3 text-[#1d6fc4]" />
             <span>Retrieved passage</span>
           </p>
@@ -266,7 +271,7 @@ export function SourceCard({ source, isActive = false, onSelect, onOpenDocument,
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1d6fc4] hover:text-[#185ea8] bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded-full border border-sky-200/60 transition-all cursor-pointer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1d6fc4] hover:text-[#185ea8] bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded-full border border-sky-200/60 transition-all cursor-pointer"
             title="Copy citation and excerpt"
           >
             {copied ? (
@@ -298,7 +303,7 @@ export function SourceCard({ source, isActive = false, onSelect, onOpenDocument,
             <button
               type="button"
               onClick={handleCopyFocused}
-              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-900 hover:text-amber-950 bg-white hover:bg-amber-100/70 border border-amber-300 px-2 py-0.5 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-900 hover:text-amber-950 bg-white hover:bg-amber-100/70 border border-amber-300 px-2 py-0.5 rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
               title="Copy citation for this specific focused section"
             >
               {copiedFocused ? (

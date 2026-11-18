@@ -48,7 +48,7 @@ export function RecentConversations({ conversations, isLoading }) {
                 >
                   {conv.title || "Untitled Grounded Thread"}
                 </Link>
-                <p className="text-[10px] text-zinc-400 font-mono">
+                <p className="text-[11px] text-zinc-400 font-mono">
                   {conv.paper_ids?.length || 0} scoped paper(s) • Updated {formatDate(conv.updated_at)}
                 </p>
               </div>

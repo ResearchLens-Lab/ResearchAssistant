@@ -68,7 +68,7 @@ export default function PaperDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 sm:p-8 space-y-5 max-w-7xl mx-auto font-serif">
+      <div className="p-6 sm:p-8 space-y-5 max-w-7xl mx-auto">
         <div className="h-6 w-36 rounded-full bg-slate-200/80 animate-pulse" />
         <div className="h-28 rounded-2xl bg-slate-200/70 animate-pulse" />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -81,13 +81,13 @@ export default function PaperDetailsPage() {
 
   if (isError || !paper) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center p-8 text-center space-y-3 font-serif">
+      <div className="flex h-96 flex-col items-center justify-center p-8 text-center space-y-3">
         <AlertCircle className="h-8 w-8 text-rose-500" />
-        <h3 className="text-base font-bold text-slate-900 font-serif">Research project not found</h3>
+        <h3 className="text-base font-bold text-slate-900">Research project not found</h3>
         <p className="text-xs text-slate-500 max-w-sm">
           {error?.message || "You may not have permission to view this project or it may have been removed."}
         </p>
-        <Button variant="outline" size="sm" asChild className="rounded-full font-serif">
+        <Button variant="outline" size="sm" asChild className="rounded-full">
           <Link href="/papers">← Back to Your Project Library</Link>
         </Button>
       </div>
@@ -95,17 +95,15 @@ export default function PaperDetailsPage() {
   }
 
   return (
-    <div className="relative flex h-[calc(100dvh-4rem)] w-full overflow-hidden bg-gradient-to-b from-[#f3f8fd]/70 via-[#f8fafc] to-[#f8fafc] font-serif">
-      {/* Main Workspace Canvas */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7 space-y-5 max-w-7xl mx-auto w-full">
-        {/* Top Navigation & Action Strip */}
+    <div className="page-shell space-y-5">
+      {/* Top Navigation & Action Strip */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/70">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               asChild
-              className="h-8 px-2.5 text-xs gap-1.5 font-serif text-slate-600 hover:text-slate-900 hover:bg-white rounded-full transition-colors"
+              className="h-8 px-2.5 text-xs gap-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-full transition-colors"
             >
               <Link href="/papers">
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -127,7 +125,7 @@ export default function PaperDetailsPage() {
                   : undefined
               }
               onClick={() => router.push(`/chat?paper_id=${paperId}`)}
-              className="h-8 text-xs font-serif rounded-full"
+              className="h-8 text-xs rounded-full"
             >
               <span>Ask in Research Desk</span>
               <ArrowRight className="h-3 w-3 ml-1" />
@@ -137,7 +135,7 @@ export default function PaperDetailsPage() {
               variant="soft"
               size="sm"
               onClick={() => setIsAddSourcesOpen(true)}
-              className="h-8 text-xs font-serif bg-sky-50 text-[#1d6fc4] hover:bg-sky-100 rounded-full"
+              className="h-8 text-xs bg-sky-50 text-[#1d6fc4] hover:bg-sky-100 rounded-full"
             >
               <UploadCloud className="h-3.5 w-3.5 mr-1.5" />
               <span>Add sources</span>
@@ -158,7 +156,7 @@ export default function PaperDetailsPage() {
                 setSources(currentSummary?.sources || []);
                 openDrawer();
               }}
-              className="h-8 text-xs font-serif rounded-full"
+              className="h-8 text-xs rounded-full"
             >
               Evidence & Citations
             </Button>
@@ -178,7 +176,6 @@ export default function PaperDetailsPage() {
               isError={isDocumentsError}
               error={documentsError}
               onRetry={refetchDocuments}
-              onAddSource={() => setIsAddSourcesOpen(true)}
             />
 
             <SourceVerificationCard
@@ -203,7 +200,6 @@ export default function PaperDetailsPage() {
             />
           </div>
         </div>
-      </div>
 
       {/* Right Evidence Inspector Drawer */}
       {isDrawerOpen && (

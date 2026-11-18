@@ -18,6 +18,23 @@ from rag.ingestion.document_normalizer import NormalizedDocument, Section
 logger = logging.getLogger(__name__)
 
 
+KNOWN_ABBREVIATIONS = (
+    "e.g.", "i.e.", "fig.", "figure", "eq.", "equation", "sec.", "section", "thm.", "theorem", "vs.", "et al."
+)
+
+HEADING_LABELS_RE = re.compile(
+    r"^(?:chapter|part|section|appendix|unit|module|problem|exercise|algorithm|figure|table)\b", re.I
+)
+
+
+def norm_header(s: str) -> str:
+    if not s:
+        return ""
+    s = s.lower().replace("-", " ").replace("_", " ")
+    s = re.sub(r"[^\w\s]", "", s)
+    return " ".join(s.split())
+
+
 class StructureAwareChunker(BaseChunkingStrategy):
     """
     Hierarchical, structure-preserving chunking strategy.
@@ -86,6 +103,8 @@ class StructureAwareChunker(BaseChunkingStrategy):
         )
         return chunks
 
+    chunk_document = chunk
+
     def _chunk_single_section(
         self,
         document: NormalizedDocument,
@@ -110,8 +129,18 @@ class StructureAwareChunker(BaseChunkingStrategy):
         # Parent chunk ID for hierarchical linking
         parent_chunk_id = f"{document.paper_id}_sec{start_chunk_idx:04d}_d{document.document_id}"
 
-        # Segment section text into paragraphs
-        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", sec_text) if p.strip()]
+        # Segment section text into paragraphs, merging blocks split across page breaks
+        raw_blocks = [p.strip() for p in re.split(r"\n\s*\n", sec_text) if p.strip()]
+        paragraphs: List[str] = []
+        for b in raw_blocks:
+            if paragraphs:
+                prev = paragraphs[-1]
+                ends_terminal = bool(re.search(r'[.?!:][\'"’”\)]*$', prev))
+                starts_lower = bool(re.match(r'^[a-z]', b))
+                if not ends_terminal and starts_lower:
+                    paragraphs[-1] = prev + " " + b
+                    continue
+            paragraphs.append(b)
         if not paragraphs:
             paragraphs = [sec_text]
 
@@ -144,6 +173,28 @@ class StructureAwareChunker(BaseChunkingStrategy):
         for offset_idx, text_unit in enumerate(chunk_units):
             current_idx = start_chunk_idx + offset_idx
 
+            # Running header removal at chunk time:
+            # If first line of a chunk equals the normalized section label
+            # (ignore case, punctuation, hyphen vs space) or matches ^(chapter|part)\s+\d+,
+            # store it in metadata as running_header and drop it from `text`. (New ingestions only.)
+            lines = text_unit.split("\n", 1)
+            first_l = lines[0].strip()
+            norm_first = norm_header(first_l)
+            norm_sec = norm_header(section.name)
+            running_hdr = None
+            if norm_sec and norm_first == norm_sec:
+                running_hdr = first_l
+            elif (
+                re.match(r"^(?:chapter|part)\s+\d+", norm_first, re.I)
+                and len(first_l) <= 80
+                and len(first_l.split()) <= 8
+                and not re.search(r"[.,;!?]$", first_l)
+            ):
+                running_hdr = first_l
+
+            if running_hdr is not None and len(lines) > 1:
+                text_unit = lines[1].strip()
+
             # Find page range for this specific text unit
             p_start, p_end = self._find_page_range(
                 document_text=source_text,
@@ -174,6 +225,8 @@ class StructureAwareChunker(BaseChunkingStrategy):
                 "page_label_end": page_label_end,
                 "parent_chunk_id": parent_chunk_id if len(chunk_units) > 1 else None,
             }
+            if running_hdr is not None:
+                chunk_extra["running_header"] = running_hdr
 
             token_count = int(len(text_unit.split()) * 1.33)
 
@@ -184,7 +237,7 @@ class StructureAwareChunker(BaseChunkingStrategy):
                 document_id=document.document_id,
                 page_start=p_start,
                 page_end=p_end,
-                section=section.name,
+                section=(section.name[:70] if section.name else ""),
                 chunk_index=current_idx,
                 token_count=token_count,
                 title=document.title,
@@ -195,6 +248,68 @@ class StructureAwareChunker(BaseChunkingStrategy):
 
             result_chunks.append(DocumentChunk(text=text_unit, metadata=meta))
 
+        # Post-process chunks in this section to fix orphan fragment artifacts
+        for i in range(len(result_chunks)):
+            c_text = result_chunks[i].text.strip()
+            if not c_text:
+                continue
+
+            # Never treat as orphan: text starting with a digit, "(", "[", a heading label,
+            # or a known abbreviation before the first terminator
+            if c_text[0].isdigit() or c_text.startswith(("(", "[")):
+                continue
+            if HEADING_LABELS_RE.match(c_text):
+                continue
+            lower_start = c_text.lower()
+            if any(lower_start.startswith(abbr) for abbr in KNOWN_ABBREVIATIONS):
+                continue
+
+            # Restrict orphan handling to chunks whose FIRST CHARACTER IS A LOWERCASE LETTER
+            if not c_text[0].islower():
+                continue
+
+            is_orphan = False
+            orphan_fragment = ""
+            rest_text = ""
+
+            m = re.search(r"^([^.!?]*[.!?])(?:\s+|$)", c_text)
+            if m:
+                frag = m.group(1).strip()
+                rem = c_text[m.end():].strip()
+                frag_words = frag.split()
+                if any(frag_words[0].lower().startswith(abbr) for abbr in KNOWN_ABBREVIATIONS):
+                    continue
+                # The fragment is <= 3 words, starts lowercase or is a lone ligature-broken word like "flavor",
+                # and the remainder starts with an uppercase letter
+                if len(frag_words) <= 3 and (frag[0].islower() or len(frag_words) == 1):
+                    if not rem or rem[0].isupper():
+                        is_orphan = True
+                        orphan_fragment = frag
+                        rest_text = rem
+            else:
+                # No terminator in chunk and starts lowercase -> only merge whole chunk if <= 40 words
+                if len(c_text.split()) <= 40:
+                    is_orphan = True
+                    orphan_fragment = c_text
+                    rest_text = ""
+                else:
+                    is_orphan = False
+
+            if is_orphan and orphan_fragment:
+                if i > 0:
+                    result_chunks[i - 1].text = (result_chunks[i - 1].text.rstrip() + " " + orphan_fragment).strip()
+                    result_chunks[i].text = rest_text
+                    prev_meta = result_chunks[i - 1].metadata
+                    this_meta = result_chunks[i].metadata
+                    if prev_meta and this_meta:
+                        prev_meta.page_end = max(prev_meta.page_end or 0, this_meta.page_end or 0)
+                        if hasattr(prev_meta, "extra") and isinstance(prev_meta.extra, dict):
+                            prev_meta.extra["page_end"] = prev_meta.page_end
+                else:
+                    if rest_text:
+                        result_chunks[i].text = rest_text
+
+        result_chunks = [c for c in result_chunks if c.text.strip()]
         return result_chunks
 
     @staticmethod

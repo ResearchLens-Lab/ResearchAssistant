@@ -47,7 +47,7 @@ export function RecentPapers({ papers, isLoading }) {
                 >
                   {paper.title}
                 </Link>
-                <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
+                <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-mono">
                   <span>{paper.authors?.slice(0, 2).join(", ") || "Author --"}</span>
                   {paper.publication_year && <span>• {paper.publication_year}</span>}
                   {paper.venue && <span>• {paper.venue}</span>}

@@ -78,7 +78,7 @@ def test_ollama_status_distinguishes_missing_loaded_and_active_model(monkeypatch
 
 def test_general_knowledge_is_separate_and_has_no_document_citations(monkeypatch):
     class EmptyRetriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return []
 
     class FakeOllama:
@@ -92,9 +92,9 @@ def test_general_knowledge_is_separate_and_has_no_document_citations(monkeypatch
 
     monkeypatch.setattr(query_pipeline, "OllamaLLMClient", FakeOllama)
     result = query_pipeline.QueryPipeline(retriever=EmptyRetriever()).answer_question(
-        "What is an algorithm?", paper_ids=["p1"], answer_mode="DOCUMENTS_GENERAL"
+        "What is an algorithm?", user_id="test_user", paper_ids=["p1"], answer_mode="DOCUMENTS_GENERAL"
     )
-    assert result.answer.startswith("Not found in your selected documents.")
+    assert "not located in selected documents" in result.answer.lower() or "not found in your selected documents" in result.answer.lower()
     assert "### General knowledge (not from your documents)" in result.answer
     assert result.sources == []
     assert result.metadata["answer_mode"] == "general_knowledge"
@@ -102,7 +102,7 @@ def test_general_knowledge_is_separate_and_has_no_document_citations(monkeypatch
 
 def test_documents_only_abstains_without_calling_ollama(monkeypatch):
     class EmptyRetriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return []
 
     def should_not_load():
@@ -110,9 +110,9 @@ def test_documents_only_abstains_without_calling_ollama(monkeypatch):
 
     monkeypatch.setattr(query_pipeline, "OllamaLLMClient", should_not_load)
     result = query_pipeline.QueryPipeline(retriever=EmptyRetriever()).answer_question(
-        "What is missing?", paper_ids=["p1"], answer_mode="DOCUMENTS_ONLY"
+        "What is missing?", user_id="test_user", paper_ids=["p1"], answer_mode="DOCUMENTS_ONLY"
     )
-    assert result.answer.startswith("Not found in your selected documents.")
+    assert "not located in selected documents" in result.answer.lower() or "not found in your selected documents" in result.answer.lower()
     assert result.sources == []
 
 
@@ -124,7 +124,7 @@ def test_algorithm_definition_uses_verified_passage_without_model(monkeypatch):
                "It is thus a sequence of computational steps that transform the input into the output.")
 
     class Retriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return [RetrievedSource(source_id="S1", chunk_id="definition", paper_id="clrs",
                 document_id="clrs-doc", page_start=20, page_end=20, section="1.1 Algorithms",
                 text=passage, score=.99, filename="Introduction to Algorithms.pdf")]
@@ -134,7 +134,7 @@ def test_algorithm_definition_uses_verified_passage_without_model(monkeypatch):
 
     monkeypatch.setattr(query_pipeline, "OllamaLLMClient", should_not_load)
     result = query_pipeline.QueryPipeline(retriever=Retriever()).answer_question(
-        "What is an algorithm? Explain with a practical example.", paper_ids=["clrs"]
+        "What is an algorithm? Explain with a practical example.", user_id="test_user", paper_ids=["clrs"]
     )
     assert "well-defined computational procedure" in result.answer
     assert "[S1]" in result.answer

@@ -44,7 +44,7 @@ export function MetricsOverview({ paperCount, conversationCount }) {
                 <p className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 font-mono">
                   {metric.value}
                 </p>
-                <p className="text-[10px] text-zinc-400 font-mono">
+                <p className="text-[11px] text-zinc-400 font-mono">
                   {metric.change}
                 </p>
               </div>

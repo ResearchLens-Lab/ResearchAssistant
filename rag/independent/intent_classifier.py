@@ -97,7 +97,6 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
     ), ("definition", "core concept", "meaning")),
     (QuestionIntent.CONCEPT_EXPLANATION, (
         r"\bexplain\s+(?:the\s+)?(?:concept\s+of\s+)?([A-Za-z0-9\s-]{2,60})\b",
-        r"^\s*what\s+is\s+(?:an?|the)\s+([A-Za-z0-9\s-]{2,60})\??$",
     ), ("concept explanation", "principles", "evidence")),
     (QuestionIntent.NUMERICAL_RESULT_LOOKUP, (
         r"\b(?:reported|numerical)\s+results?\b",

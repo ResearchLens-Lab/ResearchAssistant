@@ -76,7 +76,7 @@ export function DocumentProcessingProgress({ document, compact = false }) {
           style={{ width: `${model.isCancelled ? 100 : model.progress}%` }}
         />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-2 text-[10px] text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 text-[11px] text-slate-500">
         <span>
           {model.progressLabel} progress
           {elapsed > 0 && <span className="text-slate-400 ml-1">· elapsed {formatElapsedSeconds(elapsed)}</span>}
@@ -84,7 +84,7 @@ export function DocumentProcessingProgress({ document, compact = false }) {
         {model.workDetail && <span>{model.workDetail}</span>}
       </div>
       {eta?.etaText && !compact && model.isActive && (
-        <div className="text-[10px] text-sky-600 font-medium text-right">
+        <div className="text-[11px] text-sky-600 font-medium text-right">
           {eta.etaText}
         </div>
       )}

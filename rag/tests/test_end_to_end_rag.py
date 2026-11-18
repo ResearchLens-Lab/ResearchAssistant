@@ -62,6 +62,7 @@ def test_backend_rag_client_integration(full_rag_pipeline):
     chat_resp = client.ask_question(
         question="Explain the Scaled Dot-Product Attention equation.",
         paper_ids=["paper_backend_integration"],
+        user_id="test_user_fixture",
     )
 
     assert "answer" in chat_resp

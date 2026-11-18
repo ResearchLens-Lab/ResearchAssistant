@@ -6,6 +6,7 @@ module.exports = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  safelist: ["slide-in-from-top-2", "slide-in-from-bottom-2"],
   theme: {
     container: {
       center: true,
@@ -59,6 +60,41 @@ module.exports = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        zinc: {
+          50: "#f6f9fc",
+          100: "#eef3f8",
+          200: "#dce6ef",
+          300: "#c3d2e0",
+          400: "#6f8398",
+          500: "#62758a",
+          600: "#4a5d72",
+          700: "#384b60",
+          800: "#2a3d52",
+          900: "#203449",
+          950: "#14233a",
+        },
+        slate: {
+          50: "#f6f9fc",
+          100: "#eef3f8",
+          200: "#dce6ef",
+          300: "#c3d2e0",
+          400: "#6f8398",
+          500: "#62758a",
+          600: "#4a5d72",
+          700: "#384b60",
+          800: "#2a3d52",
+          900: "#203449",
+          950: "#14233a",
+        },
+      },
+      boxShadow: {
+        "2xs": "0 1px 1px 0 rgb(0 0 0 / 0.05)",
+      },
+      backdropBlur: {
+        xs: "2px",
+      },
+      spacing: {
+        4.5: "1.125rem",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -66,8 +102,8 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Inter", "sans-serif"],
-        mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
         serif: ["Georgia", "Cambria", "'Times New Roman'", "Times", "serif"],
       },
       keyframes: {
@@ -91,5 +127,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require("@tailwindcss/typography")],
+  plugins: [require("@tailwindcss/typography"), require("tailwindcss-animate")],
 };

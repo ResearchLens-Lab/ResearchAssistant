@@ -22,6 +22,7 @@ from rag.research.orchestrator import QueryPlanner, EvidenceSufficiencyChecker, 
 from rag.research.claim_verifier import ClaimEvidenceVerifier, LLMClaimJudge
 from rag.generation.local_state import SQLiteLLMState, LLMUsageBudgetExceeded
 from rag.generation.provider_errors import LLMProviderError
+from rag.generation.llm_client import OllamaLLMClient
 from rag.generation.budgeted_client import start_call_tracking, stop_call_tracking
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ class QueryPipeline:
                              sources=[], paper_ids=[], metadata={"error": "scope_conflict", "total_retrieved": 0})
         use_independent = (
             settings.rag_engine_mode == "independent"
-            or answer_mode in ("EVIDENCE_FIRST", "DOCUMENTS_ONLY", "INDEPENDENT")
+            or (settings.rag_engine_mode != "legacy" and answer_mode in ("EVIDENCE_FIRST", "DOCUMENTS_ONLY", "INDEPENDENT"))
         ) and answer_mode not in ("OPTIONAL_LOCAL_AI", "LOCAL_QWEN")
 
         if use_independent:

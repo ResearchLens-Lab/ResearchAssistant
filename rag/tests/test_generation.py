@@ -139,7 +139,7 @@ def test_query_pipeline_defers_unsupported_generation_until_answer_is_needed(mon
             return SimpleNamespace(intent="direct", search_queries=["known fact"], max_retrieval_rounds=1)
 
     class Retriever:
-        def retrieve(self, _request):
+        def retrieve(self, _request, *args, **kwargs):
             return [RetrievedSource(source_id="S1", chunk_id="chunk", paper_id="paper",
                                     document_id="doc", page_start=1, page_end=1,
                                     text="The known fact is 42.")]
@@ -150,7 +150,7 @@ def test_query_pipeline_defers_unsupported_generation_until_answer_is_needed(mon
 
     # Initializing the pipeline is safe for local ingestion/retrieval.
     pipeline = QueryPipeline(retriever=Retriever(), planner=Planner(), sufficiency_checker=Sufficient())
-    result = pipeline.answer_question("What is the known fact?")
+    result = pipeline.answer_question("What is the known fact?", user_id="test_user")
     assert result.metadata["answer_mode"] == "evidence_only"
     assert result.metadata["generation_reason"] == "direct_factual_lookup"
     assert result.metadata["model_calls"] == 0

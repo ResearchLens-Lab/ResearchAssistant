@@ -210,6 +210,19 @@ DEFAULT_SECTION_PRIORS: Dict[ResearchIntent, Dict[str, float]] = {
 }
 
 
+def strip_query_prefixes(raw: str) -> str:
+    r"""Strip question / prompt framing prefixes so primary concept does not become empty."""
+    s = raw.strip()
+    s = re.sub(
+        r"^(?:what\s+is\s+(?:an?|the)?|what\s+are\s+(?:the)?|explain\s+(?:the|an?)?|define\s+(?:the|an?)?|describe\s+(?:the|an?)?|tell\s+me\s+about\s+(?:the|an?)?)\s*",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(r"[\?\.\!]+$", "", s).strip()
+    return s
+
+
 class QueryAnalyzer:
     """Classifies user research questions into structured intents and extracts target slots."""
 
@@ -218,6 +231,7 @@ class QueryAnalyzer:
         "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to",
         "was", "what", "when", "where", "which", "who", "why", "will", "with",
         "tell", "me", "show", "give", "explain", "describe", "discuss",
+        "you", "mean", "meant", "please", "us", "your",
     })
 
     CONCEPT_ALIASES = {
@@ -245,8 +259,119 @@ class QueryAnalyzer:
         "greedy algorithms": ["greedy algorithms", "greedy algorithm", "greedy method", "greedy strategy"],
     }
 
-    def analyze(self, query: str) -> QueryUnderstanding:
+    def _resolve_conversational_query(self, query: str, context: Optional[str]) -> str:
+        """Resolves conversational pronouns, ordinals ('the second one'), and suggestion chips using conversation history."""
+        if not context or not context.strip():
+            return query
+
+        clean = query.strip()
+        lower = clean.casefold()
+
+        # Independent conceptual query guard:
+        # Questions asking for fundamental definitions or concepts (e.g. "what do you mean by algorithm",
+        # "what is an algorithm", "define algorithm") are standalone questions and must NEVER be
+        # modified, rewritten, or contaminated by prior turns in the conversation.
+        if re.search(r"^\s*(?:what\s+(?:is|do\s+you\s+mean\s+by)|define|definition\s+of|meaning\s+of|explain\s+(?:an?\s+)?algorithm)\b", lower):
+            return query
+
+        # Parse recent assistant and user turns from context
+        lines = [line.strip() for line in context.splitlines() if line.strip()]
+        last_user_turn = ""
+        last_assistant_turn = ""
+        for line in lines:
+            if line.lower().startswith("user:"):
+                last_user_turn = line[5:].strip()
+            elif line.lower().startswith("assistant:"):
+                last_assistant_turn = line[10:].strip()
+
+        # Extract numbered items / paradigms / concepts from assistant turn
+        extracted_items: List[str] = []
+        for line in lines:
+            m = re.match(r"^(?:assistant:\s*)?(?:###?\s*)?(?:\d+[\.\)]|\-|\*)\s+\*?\*?([A-Za-z0-9\s\-]+?)\*?\*?(?:\:\s*|\s+[-–—]\s+|\s*\(|\n|$)", line)
+            if m:
+                cand = m.group(1).strip()
+                if len(cand) > 2 and cand.lower() not in ("note", "source", "chapter", "part"):
+                    extracted_items.append(cand)
+
+        # Fallback list of canonical algorithmic paradigms if present in context
+        canonical_paradigms = [
+            "Divide-and-Conquer",
+            "Greedy Method",
+            "Dynamic Programming",
+            "Backtracking",
+            "Branch-and-Bound",
+            "Randomized Algorithms",
+            "Approximation Algorithms",
+        ]
+        if not extracted_items:
+            for cp in canonical_paradigms:
+                if cp.lower() in context.lower():
+                    extracted_items.append(cp)
+
+        # Determine prior primary topic
+        prior_topic = ""
+        if last_user_turn:
+            m_topic = re.search(r"\b(?:what\s+is|explain|describe|define)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40})", last_user_turn.lower())
+            if m_topic:
+                prior_topic = m_topic.group(1).strip()
+
+        # 1. Resolve Ordinal Queries: "Explain the second one in detail", "what is the 2nd strategy"
+        ordinals = {
+            "first": 0, "1st": 0,
+            "second": 1, "2nd": 1,
+            "third": 2, "3rd": 2,
+            "fourth": 3, "4th": 3,
+            "fifth": 4, "5th": 4,
+            "sixth": 5, "6th": 5,
+            "seventh": 6, "7th": 6,
+            "last": -1,
+        }
+        ord_pattern = r"\b(?:the\s+)?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|sixth|6th|seventh|7th|last)\s*(?:one|strategy|paradigm|method|approach|technique|algorithm|category)?\b"
+        m_ord = re.search(ord_pattern, lower)
+        if m_ord:
+            ord_word = m_ord.group(1).lower()
+            idx = ordinals.get(ord_word, 0)
+            target_item = None
+            if extracted_items:
+                if idx == -1:
+                    target_item = extracted_items[-1]
+                elif 0 <= idx < len(extracted_items):
+                    target_item = extracted_items[idx]
+            if not target_item and 0 <= idx < len(canonical_paradigms):
+                target_item = canonical_paradigms[idx]
+
+            if target_item:
+                # Rewrite conversational prompt into a clean, standalone, evidence-grounded research query
+                # rather than performing naive token replacement that leaves trailing or malformed fragments.
+                return f"Explain the {target_item} strategy in detail"
+
+        # 2. Resolve Suggestion Chips
+        chips_map = {
+            "explain in more depth": f"Explain {prior_topic or 'the concept'} in more depth and detail",
+            "give a practical example": f"Give a practical textbook example of {prior_topic or 'the concept'}",
+            "explain in simple language": f"Explain {prior_topic or 'the concept'} in simple language",
+            "what are the reported limitations?": f"What are the reported limitations and constraints of {prior_topic or 'the concept'}?",
+            "what are the reported limitations": f"What are the reported limitations and constraints of {prior_topic or 'the concept'}?",
+            "compare with related methods": f"Compare {prior_topic or 'the concept'} with related methods and design strategies",
+        }
+        if lower in chips_map:
+            return chips_map[lower]
+
+        # 3. Resolve Pronoun "it" / "this" with comparison or explanation
+        if re.search(r"\b(?:it|this|that)\b", lower):
+            target_subj = extracted_items[0] if extracted_items else prior_topic
+            if target_subj:
+                resolved = re.sub(r"\b(?:it|this|that)\b", target_subj, clean, flags=re.I)
+                return resolved
+
+        return clean
+
+    def analyze(self, query: str, conversation_context: Optional[str] = None) -> QueryUnderstanding:
         clean = unicodedata.normalize("NFKC", query).strip()
+
+        if conversation_context:
+            clean = self._resolve_conversational_query(clean, conversation_context)
+
         orig_query = clean
 
         # Extract slash command if present at start of query (e.g. /table, /pie, /flowchart, /compare, /summary)
@@ -476,10 +601,12 @@ class QueryAnalyzer:
         # "What is an algorithm?", "Define merge sort", "What is meant by dynamic programming?"
         # SEC-N21: Guard optional article with word boundary \b(?:an?|the)\b to prevent stripping first letter of concepts
         m_def = (
-            re.search(r"^\s*what\s+is\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60}?)(?:\s+in\s+computer\s+science|\s+in\s+algorithms)?\??$", lower)
+            re.search(r"^\s*what\s+do\s+you\s+mean\s+by\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"\bwhat\s+is\s+meant\s+by\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"\bmeaning\s+of\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"^\s*what\s+is\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60}?)(?:\s+in\s+computer\s+science|\s+in\s+algorithms)?\??$", lower)
             or re.search(r"^\s*define\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
             or re.search(r"\bdefinition\s+of\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
-            or re.search(r"\bwhat\s+is\s+meant\s+by\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
         )
         def_exclusions = [
             "complexity", "time complexity", "space complexity", "work", "difference", "compare",
@@ -654,7 +781,10 @@ class QueryAnalyzer:
             )
 
         # 13. EXPLANATION (General)
-        m_exp = re.search(r"\b(?:explain|describe|why\s+is|what\s+does)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
+        m_exp = (
+            re.search(r"\b(?:explain(?:\s+to\s+me|\s+me)?|describe|tell\s+me\s+about|show\s+me|give\s+me|why\s+is|what\s+does)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
+            or re.search(r"\b(?:tell\s+me|explain)\s+(?:the\s+)?([a-z0-9\s-]{2,60})\??$", lower)
+        )
         if m_exp:
             concept = self._clean_concept(m_exp.group(1))
             return self._build_result(
@@ -674,9 +804,16 @@ class QueryAnalyzer:
         if not raw:
             return ""
         s = raw.strip().lower()
+        # Clean leading conversational imperatives, pronouns, and politeness markers
+        s = re.sub(r"^(?:(?:tell|show|explain(?:\s+to)?|give|describe|discuss|detail)\s+)?(?:me|us|please|you)\s+(?:about\s+|the\s+|an?\s+)?", "", s)
+        s = re.sub(r"^(?:to\s+me|me\s+the|me\s+about|me|us|you\s+mean\s+by|mean\s+by)\s+", "", s)
         s = re.sub(r"^(?:an?|the)\s+", "", s)
         s = re.sub(r"\s+(?:in\s+computer\s+science|in\s+algorithms)$", "", s)
+        s = re.sub(r"\s+(?:in\s+(?:detail|more\s+detail|depth|more\s+depth|simple\s+terms|simple\s+language|plain\s+english)|step\s+by\s+step|with\s+(?:an?\s+)?examples?)$", "", s)
+        s = re.sub(r"\s+(?:algorithm(?:ic)?\s+design\s+strategy|design\s+strategy|strategy|paradigm)$", "", s)
+        s = re.sub(r"\s+(?:in\s+(?:detail|more\s+detail|depth|more\s+depth|simple\s+terms|simple\s+language|plain\s+english)|step\s+by\s+step|with\s+(?:an?\s+)?examples?)$", "", s)
         s = re.sub(r"\s+and\s+(?:how\s+(?:does\s+it\s+work|it\s+works|is\s+it\s+used|it\s+is\s+used)|its\s+steps|explain\s+its\s+steps|how\s+to\s+use\s+it|their\s+ratio\s+bounds)$", "", s)
+        s = re.sub(r"[\?\.\!]+$", "", s)
         return s.strip()
 
     @classmethod
@@ -869,6 +1006,16 @@ class QueryAnalyzer:
     ) -> QueryUnderstanding:
         cleaned_concepts = [self._clean_concept(c) for c in concepts if c]
         primary = cleaned_concepts[0] if cleaned_concepts else None
+        current_raw = getattr(self, "_current_raw_query", None) or raw_query
+
+        # Fallback if primary concept is missing or empty
+        if not primary or not primary.strip():
+            fallback_c = strip_query_prefixes(current_raw)
+            if fallback_c:
+                primary = fallback_c
+                if not cleaned_concepts:
+                    cleaned_concepts = [fallback_c]
+
         secondary = cleaned_concepts[1] if len(cleaned_concepts) > 1 else None
         priors = dict(DEFAULT_SECTION_PRIORS.get(intent, DEFAULT_SECTION_PRIORS[ResearchIntent.OTHER]))
 

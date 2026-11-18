@@ -187,22 +187,22 @@ export function AddSourcesModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-lg rounded-2xl border-zinc-200/90 bg-white p-6 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.22)] font-serif dark:border-zinc-800 dark:bg-zinc-900">
+      <DialogContent className="max-w-lg rounded-2xl border-zinc-200/90 bg-white p-6 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.22)] dark:border-zinc-800 dark:bg-zinc-900">
         <DialogHeader className="space-y-1.5 pb-2 text-left">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-[#1d6fc4] shadow-2xs dark:bg-sky-950/50">
               <UploadCloud className="h-4.5 w-4.5" />
             </span>
-            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900 font-serif dark:text-zinc-100">
+            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Add research sources
             </DialogTitle>
           </div>
-          <DialogDescription className="text-xs text-zinc-500 leading-relaxed font-serif dark:text-zinc-400">
-            Select files to upload into your research vectorstore and index for citations.
+          <DialogDescription className="text-xs text-zinc-500 leading-relaxed dark:text-zinc-400">
+            Choose files to add to this project's searchable library.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-1 font-serif">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-1">
           {formError && (
             <div
               role="alert"
@@ -226,7 +226,7 @@ export function AddSourcesModal({
                 if (formError) setFormError("");
               }}
               disabled={isUploading || papers.length === 0}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-2xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 font-serif dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-200"
+              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800 shadow-2xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 dark:border-zinc-800 dark:bg-zinc-850 dark:text-zinc-200"
             >
               {memoizedPapers.length === 0 ? (
                 <option value="">No projects available</option>
@@ -268,7 +268,7 @@ export function AddSourcesModal({
             <p className="text-xs font-semibold text-slate-700">
               Drop documents here, or <span className="text-[#1d6fc4] underline">browse</span>
             </p>
-            <p className="mt-1 text-[10px] text-slate-400">
+            <p className="mt-1 text-[11px] text-slate-400">
               PDF, DOCX, TXT, Markdown, CSV, TeX · up to 100 MB per file
             </p>
           </div>
@@ -290,7 +290,7 @@ export function AddSourcesModal({
                     <span className="truncate text-[11px] font-medium text-slate-700 max-w-[260px]" title={file.name}>
                       {file.name}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono">({formatBytes(file.size)})</span>
+                    <span className="text-[11px] text-slate-400 font-mono">({formatBytes(file.size)})</span>
                   </div>
                   {!isUploading && (
                     <button
@@ -337,7 +337,7 @@ export function AddSourcesModal({
                         {displayFilename}
                       </span>
                     </div>
-                    <span className={`text-[10px] font-medium ${
+                    <span className={`text-[11px] font-medium ${
                       isItemSuccess ? "text-emerald-700" : "text-rose-700"
                     }`}>
                       {isItemSuccess 
@@ -373,7 +373,7 @@ export function AddSourcesModal({
                   style={{ width: `${Math.min(100, uploadProgress?.percent || 10)}%` }}
                 />
               </div>
-              <p className="text-[10px] text-slate-500 italic">
+              <p className="text-[11px] text-slate-500 italic">
                 Your document will continue processing in the background. You can close this dialog at any time.
               </p>
             </div>
@@ -384,14 +384,14 @@ export function AddSourcesModal({
               type="button"
               variant="outline"
               onClick={handleClose}
-              className="h-9 px-4 text-xs font-semibold font-serif"
+              className="h-9 px-4 text-xs font-semibold"
             >
               {isUploading ? "Continue in background" : "Cancel"}
             </Button>
             <Button
               type="submit"
               disabled={isUploading || files.length === 0}
-              className="h-9 gap-1.5 px-5 text-xs font-semibold bg-[#1d6fc4] hover:bg-[#185ea8] text-white shadow-xs font-serif disabled:opacity-50"
+              className="h-9 gap-1.5 px-5 text-xs font-semibold bg-[#1d6fc4] hover:bg-[#185ea8] text-white shadow-xs disabled:opacity-50"
             >
               {isUploading ? (
                 <>

@@ -10,6 +10,7 @@ const SESSION_STORAGE_REFRESH_KEY = "rl_sess_refresh";
 let inMemoryAccessToken = null;
 let inMemoryRefreshToken = null;
 let initialized = false;
+let persistEnabled = true;
 
 function hasDesktopBridge() {
   return typeof window !== "undefined" && Boolean(window["researchLensDesktop"]);
@@ -20,8 +21,18 @@ export const tokenStorage = {
     if (initialized) return;
     initialized = true;
 
+    if (hasDesktopBridge() && window["researchLensDesktop"].getProfile) {
+      try {
+        const profile = await window["researchLensDesktop"].getProfile();
+        persistEnabled = profile?.rememberMe !== false;
+        if (!persistEnabled && window["researchLensDesktop"].clearSession) {
+          await window["researchLensDesktop"].clearSession();
+        }
+      } catch {}
+    }
+
     // 1. Primary path: Electron OS-level encrypted safeStorage via DPAPI
-    if (hasDesktopBridge() && window["researchLensDesktop"].getSession) {
+    if (persistEnabled && hasDesktopBridge() && window["researchLensDesktop"].getSession) {
       try {
         const session = await window["researchLensDesktop"].getSession();
         if (session && session.accessToken) {
@@ -102,6 +113,10 @@ export const tokenStorage = {
     }
   },
 
+  setPersist(value) {
+    persistEnabled = Boolean(value);
+  },
+
   isAuthenticated() {
     return Boolean(this.getAccessToken());
   },
@@ -112,6 +127,10 @@ export const tokenStorage = {
 
   _persistSecureSession() {
     if (hasDesktopBridge() && window["researchLensDesktop"].saveSession) {
+      if (!persistEnabled) {
+        window["researchLensDesktop"].clearSession?.().catch(() => {});
+        return;
+      }
       if (inMemoryAccessToken) {
         window["researchLensDesktop"].saveSession({
           accessToken: inMemoryAccessToken,

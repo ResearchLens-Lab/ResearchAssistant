@@ -60,6 +60,20 @@ class NormalizedDocument(BaseModel):
         return len(self.pages)
 
 
+LIGATURE_MAP = {
+    "\ufb00": "ff",
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+}
+
+
 class DocumentNormalizer:
     """
     Normalizes a sequence of raw pages into a NormalizedDocument with detected sections.
@@ -137,11 +151,20 @@ class DocumentNormalizer:
     def _clean_text(self, text: str) -> str:
         if not text:
             return ""
+        # Normalize ligatures (only ligature code points, preserving mathematical symbols)
+        for lig, rep in LIGATURE_MAP.items():
+            text = text.replace(lig, rep)
         # Remove null bytes, normalize whitespace
         text = text.replace("\x00", " ")
         text = re.sub(r"\r\n|\r", "\n", text)
         # Fix hyphenated line breaks in academic text: e.g. trans-\nformer -> transformer
-        text = re.sub(r"(\w+)-\n(\w+)", r"\1\2", text)
+        # Rejoin line-break hyphenation only if suffix starts lowercase and is not in stop words
+        def _rejoin_hyphen(m: re.Match) -> str:
+            p, s = m.group(1), m.group(2)
+            if s and s[0].islower() and s.lower() not in {"and", "or", "of", "to", "the", "in", "for", "with", "by", "on", "a", "an"}:
+                return f"{p}{s}"
+            return f"{p}-{s}"
+        text = re.sub(r"(\b[A-Za-z]+)-\s*\r?\n\s*([A-Za-z]+)\b", _rejoin_hyphen, text)
         # Collapse excessive blank lines
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()

@@ -21,18 +21,24 @@ export async function refreshAccessToken() {
   const desktop = await resolveDesktopConfig();
   const headers = new Headers({ "Content-Type": "application/json" });
   if (desktop?.requestKey) headers.set("X-ResearchLens-Desktop-Key", desktop.requestKey);
-  const response = await fetch(`${desktop?.apiBaseUrl || BASE_URL}/auth/refresh`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!response.ok) {
-    tokenStorage.clear();
+  try {
+    const response = await fetch(`${desktop?.apiBaseUrl || BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        tokenStorage.clear();
+      }
+      return null;
+    }
+    const values = await response.json();
+    tokenStorage.setTokens(values.access_token, values.refresh_token);
+    return values.access_token;
+  } catch {
     return null;
   }
-  const values = await response.json();
-  tokenStorage.setTokens(values.access_token, values.refresh_token);
-  return values.access_token;
 }
 
 export class AppApiError extends Error {
@@ -134,16 +140,22 @@ export async function apiClient(endpoint, options = {}) {
           headers.set("Authorization", `Bearer ${tokenData.access_token}`);
           const retryResp = await fetch(url, { ...options, headers });
           return handleResponse(retryResp);
-        } else {
+        } else if (refreshResp.status === 400 || refreshResp.status === 401 || refreshResp.status === 403) {
           tokenStorage.clear();
-          processQueue(new Error("Refresh failed"), null);
+          const authError = new AppApiError("Session expired. Please sign in again.", "AUTH_EXPIRED", refreshResp.status);
+          processQueue(authError, null);
           if (typeof window !== "undefined") {
             window.location.href = "/login";
           }
+          throw authError;
+        } else {
+          const unavailableError = new AppApiError("Service temporarily unavailable.", "REFRESH_UNAVAILABLE", refreshResp.status);
+          processQueue(unavailableError, null);
+          throw unavailableError;
         }
       } catch (err) {
-        tokenStorage.clear();
         processQueue(err, null);
+        throw err;
       } finally {
         isRefreshing = false;
       }

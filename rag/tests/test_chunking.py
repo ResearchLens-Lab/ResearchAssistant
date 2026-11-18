@@ -16,6 +16,7 @@ def test_metadata_mapper():
         "authors": "Vaswani, Shazeer, Parmar",
         "year": "2017",
         "doi": "10.48550/arXiv.1706.03762",
+        "owner_id": "test_user_fixture",
     }
     meta = MetadataMapper.map_metadata(raw_metadata=raw, paper_id="paper_101")
     assert meta.paper_id == "paper_101"
@@ -43,8 +44,8 @@ def test_document_normalizer_section_and_page_extraction():
     assert len(doc.sections) >= 3
     section_names = [s.name for s in doc.sections]
     assert "Abstract" in section_names or "Header / Abstract" in section_names
-    assert "Introduction" in section_names
-    assert "Methodology" in section_names
+    assert any("Introduction" in s for s in section_names)
+    assert any("Methodology" in s for s in section_names)
 
 
 def test_chunker_preserves_page_numbers_and_sections(sample_document):

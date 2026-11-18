@@ -31,6 +31,56 @@ class SectionType(str, enum.Enum):
     TABLE_FIGURE = "table_figure"
 
 
+FUNCTION_WORDS = {
+    "a", "an", "and", "or", "of", "the", "in", "to", "for", "with", "that", "are", "is"
+}
+
+
+def is_valid_title_continuation(line: str) -> bool:
+    line = (line or "").strip()
+    if not line:
+        return False
+    if len(line) > 60:
+        return False
+    words = line.split()
+    if len(words) > 8:
+        return False
+    if not (line[0].isupper() or line[0].isdigit()):
+        return False
+    if line[-1] in ".,;:!?":
+        return False
+    if words[-1].lower() in FUNCTION_WORDS:
+        return False
+    return True
+
+
+def normalize_section_label(label: str) -> str:
+    if not label:
+        return ""
+    norm = re.sub(r"\.\s*:", ":", label)
+    alpha_chars = [c for c in norm if c.isalpha()]
+    if alpha_chars and all(c.isupper() for c in alpha_chars):
+        def _title_word(w: str) -> str:
+            parts = w.split("-")
+            titled_parts = []
+            for i, p in enumerate(parts):
+                p_lower = p.lower()
+                if i > 0 and p_lower in ("and", "or", "of", "the", "in", "to", "for", "with", "a", "an"):
+                    titled_parts.append(p_lower)
+                else:
+                    titled_parts.append(p.capitalize())
+            return "-".join(titled_parts)
+        words = norm.split(" ")
+        norm = " ".join(_title_word(w) for w in words)
+    norm = norm.strip()
+    if len(norm) > 70:
+        if " " in norm[:70]:
+            norm = norm[:70].rsplit(" ", 1)[0].strip()
+        else:
+            norm = norm[:70].strip()
+    return norm
+
+
 @dataclass
 class DocumentSectionNode:
     title: str
@@ -42,6 +92,12 @@ class DocumentSectionNode:
     heading_path: List[str] = field(default_factory=list)
     section_type: SectionType = SectionType.BODY
     raw_text: str = ""
+
+    def __post_init__(self):
+        if self.title:
+            self.title = normalize_section_label(self.title)
+        if self.heading_path:
+            self.heading_path = [normalize_section_label(h) for h in self.heading_path]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -157,7 +213,7 @@ class StructureExtractor:
                         m_num = self.SUBSECTION_NUM_ONLY_RE.match(line)
                         if m_num and idx + 1 < len(lines):
                             next_l = lines[idx + 1]
-                            if len(next_l) <= 60 and not re.search(r"[.!?]$", next_l):
+                            if is_valid_title_continuation(next_l):
                                 sub_headings.append((p_num, f"{m_num.group(1)} {next_l}"))
 
                 if sub_headings and len(sub_headings) >= 1:
@@ -301,7 +357,7 @@ class StructureExtractor:
                     m_num = self.SUBSECTION_NUM_ONLY_RE.match(s)
                     if m_num and idx + 1 < len(lines):
                         next_l = lines[idx + 1].strip()
-                        if len(next_l) <= 60 and not re.search(r"[.!?]$", next_l):
+                        if is_valid_title_continuation(next_l):
                             s = f"{m_num.group(1)} {next_l}"
                             m_sub = self.SUBSECTION_HEADING_RE.match(s)
                             advance = 2
@@ -315,7 +371,7 @@ class StructureExtractor:
                             next_idx += 1
                         if next_idx < len(lines):
                             next_l = lines[next_idx].strip()
-                            if len(next_l) <= 80 and not re.search(r"[.!?]$", next_l) and not self.CHAPTER_HEADING_RE.match(next_l):
+                            if is_valid_title_continuation(next_l) and not self.CHAPTER_HEADING_RE.match(next_l):
                                 s = f"{s.rstrip(': ')}: {next_l}"
                                 advance = (next_idx - idx) + 1
 
