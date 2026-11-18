@@ -33,14 +33,9 @@ class PaperCreate(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
     @model_validator(mode="after")
-    def ensure_description_present(self) -> "PaperCreate":
-        # New project creation strictly requires a description.
-        # Fall back to abstract for legacy tests that populate abstract.
-        if not self.description:
-            if self.abstract and self.abstract.strip():
-                self.description = self.abstract.strip()
-            else:
-                raise ValueError("Project description is required and cannot be empty.")
+    def sync_description(self) -> "PaperCreate":
+        if not self.description and self.abstract:
+            self.description = self.abstract.strip()
         return self
 
 
@@ -61,6 +56,7 @@ class PaperResponse(BaseModel):
     id: str
     title: str
     description: Optional[str] = None
+    folder_name: Optional[str] = None
     abstract: Optional[str] = None
     authors: Optional[list[str]] = None
     publication_year: Optional[int] = None

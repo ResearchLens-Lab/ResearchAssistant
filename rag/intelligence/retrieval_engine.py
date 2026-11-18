@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from rag.config.settings import settings
-from rag.intelligence.query_analyzer import QueryUnderstanding, ResearchIntent
+from rag.intelligence.query_analyzer import QueryAnalyzer, QueryUnderstanding, ResearchIntent
 from rag.intelligence.sentence_analyzer import SentenceAnalyzer
 from rag.retrieval.query import RetrievedSource
 
@@ -54,6 +54,42 @@ DESCRIPTION_CUES = [
     "involves", "consists of", "steps", "is a ", "is an ", "refers to",
     "general method", "design technique"
 ]
+
+ABBREVIATION_SYNONYM_MAP: Dict[str, List[str]] = {
+    "dp": ["dynamic programming", "optimal substructure", "memoization"],
+    "bfs": ["breadth-first", "breadth first", "queue"],
+    "dfs": ["depth-first", "depth first", "stack"],
+    "mst": ["minimum spanning tree", "kruskal", "prim"],
+    "scc": ["strongly connected", "strongly connected components"],
+    "lcs": ["longest common subsequence"],
+    "dag": ["directed acyclic graph", "topological sort"],
+    "np": ["nondeterministic polynomial", "polynomial time"],
+    "np-complete": ["np-complete", "np complete", "polynomial reduction"],
+    "b-tree": ["b-tree", "b tree"],
+    "avl": ["avl tree", "avl", "balanced binary tree"],
+    "quicksort": ["quick sort", "quicksort", "partition"],
+    "heapsort": ["heap sort", "heapsort", "max-heap", "build-max-heap"],
+    "mergesort": ["merge sort", "mergesort", "divide-and-conquer"],
+    "dijkstra": ["dijkstra", "shortest path", "relaxation"],
+    "kruskal": ["kruskal", "minimum spanning tree", "disjoint set"],
+    "prim": ["prim", "minimum spanning tree", "priority queue"],
+    "bellman-ford": ["bellman-ford", "bellman ford", "negative weight"],
+    "floyd-warshall": ["floyd-warshall", "floyd warshall", "all-pairs shortest paths"],
+    "strassen": ["strassen", "matrix multiplication", "subcubic"],
+}
+
+
+def deterministic_stem(w: str) -> str:
+    w = w.lower().strip()
+    if len(w) >= 7 and w.endswith("ical"):
+        return w[:-4]
+    if len(w) >= 6 and (w.endswith("ing") or w.endswith("ion")):
+        return w[:-3]
+    if len(w) >= 5 and (w.endswith("ed") or w.endswith("es") or w.endswith("ic")):
+        return w[:-2]
+    if len(w) >= 4 and w.endswith("s") and not w.endswith("ss"):
+        return w[:-1]
+    return w
 
 
 def norm(s: str) -> str:
@@ -287,6 +323,43 @@ class ExplainableRetrievalEngine:
             pass
         return settings.chroma_collection_name
 
+    def find_related_sections(self, concept: str, limit: int = 3) -> List[str]:
+        if not self.db_path or not self.db_path.is_file():
+            return []
+        words = [w for w in concept.strip().split() if len(w) > 2]
+        results = []
+        try:
+            uri = self.db_path.resolve().as_uri() + "?mode=ro"
+            conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+            try:
+                for word in reversed(words):
+                    clean_w = "".join(c for c in word if c.isalnum())
+                    if not clean_w:
+                        continue
+                    cur = conn.execute(
+                        "SELECT DISTINCT section FROM lexical_chunks WHERE lexical_chunks MATCH ? AND section IS NOT NULL AND length(section) > 3 LIMIT 10",
+                        (f'"{clean_w}"*',)
+                    )
+                    for row in cur:
+                        st = row[0].strip()
+                        if st and st not in results and not any(ign in st.lower() for ign in ["contents", "index", "preface", "exercises"]):
+                            results.append(st)
+                    if len(results) >= limit:
+                        break
+                if not results:
+                    cur = conn.execute(
+                        "SELECT DISTINCT section FROM lexical_chunks WHERE section IS NOT NULL AND length(section) > 5 AND section NOT LIKE '%Contents%' AND section NOT LIKE '%Index%' LIMIT 5"
+                    )
+                    for row in cur:
+                        st = row[0].strip()
+                        if st and st not in results:
+                            results.append(st)
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.debug("Failed to find related sections: %s", exc)
+        return results[:limit]
+
     def retrieve(
         self,
         query: QueryUnderstanding,
@@ -318,41 +391,113 @@ class ExplainableRetrievalEngine:
             coll_name = self._resolve_collection_name(connection)
 
             # Check if content terms exist in library vocabulary (out-of-scope check)
-            content_terms = []
-            for t in query.target_concepts:
-                if len(t) > 2:
-                    content_terms.append(t)
-                    if " of " in t:
-                        content_terms.extend([p.strip() for p in t.split(" of ") if len(p.strip()) > 2])
-            if not content_terms:
-                content_terms = [w for w in query.expanded_search_terms if len(w) > 3][:3]
-
-            if content_terms:
+            content_stopwords = QueryAnalyzer.STOPWORDS.union({
+                "what", "when", "where", "which", "who", "why", "how", "explain", "describe",
+                "compare", "difference", "list", "show", "give", "does", "from", "procedure",
+                "steps", "properties", "example", "definition", "overview", "detail", "tell",
+                "about", "into", "their", "they", "them", "some", "such", "than", "that",
+            })
+            check_words = []
+            for t in (query.target_concepts or []) + [query.primary_concept or ""]:
+                for w in re.findall(r"\b[A-Za-z0-9_-]{3,}\b", t):
+                    w_low = w.lower()
+                    if w_low not in content_stopwords and len(w_low) > 3:
+                        check_words.append(w_low)
+            check_words = list(dict.fromkeys(check_words))
+            if check_words:
                 total_hits = 0
-                for term in content_terms:
-                    clean_term = term.replace('"', '""').strip()
+                for cw in check_words[:5]:
+                    c_clean = cw.replace('"', '""').strip()
                     try:
                         c_row = connection.execute(
                             "SELECT count(*) FROM lexical_chunks WHERE collection_name = ? AND lexical_chunks MATCH ?",
-                            (coll_name, f'"{clean_term}"'),
+                            (coll_name, f'"{c_clean}"'),
                         ).fetchone()
                         if c_row and c_row[0] > 0:
                             total_hits += c_row[0]
                     except Exception:
                         pass
                 if total_hits == 0:
-                    # Concept does not exist anywhere in the library!
+                    # Target concepts do not exist anywhere in the library!
                     return [], {}
 
             primary_concept = query.primary_concept or ""
-            search_terms = list(query.expanded_search_terms)
-            if " of " in primary_concept:
-                for p in primary_concept.split(" of "):
-                    p_clean = p.strip()
-                    if p_clean and p_clean not in search_terms:
-                        search_terms.append(p_clean)
-            if not search_terms:
-                search_terms = [primary_concept] if primary_concept else ["algorithm", "method", "procedure"]
+            head_concept = primary_concept or "algorithm"
+            sec_terms = [t for t in query.expanded_search_terms if t != head_concept]
+
+            # Progressive FTS5 relaxation: 4 levels
+            concept_clean = head_concept.strip().lower()
+            variants = [concept_clean]
+            if "-" in concept_clean:
+                variants.append(concept_clean.replace("-", " "))
+            if " " in concept_clean:
+                variants.append(concept_clean.replace(" ", "-"))
+            variants = list(dict.fromkeys(variants))
+
+            stopwords = {"a", "an", "the", "in", "of", "to", "for", "with", "on", "at", "by", "from", "is", "are", "was", "were"}
+            c_words = [w for w in re.findall(r"\b[a-z0-9-]+\b", concept_clean) if w not in stopwords and len(w) > 1]
+            if not c_words:
+                c_words = [concept_clean]
+
+            # Level 1: exact phrase match on head concept (with hyphen/space variants)
+            l1_expr = " OR ".join(f'"{v}"' for v in variants)
+
+            # Level 2: AND of all words in head concept
+            l2_parts = []
+            for w in c_words:
+                if "-" in w:
+                    l2_parts.append(f'("{w}" OR "{w.replace("-", " ")}")')
+                else:
+                    l2_parts.append(f'"{w}"')
+            l2_expr = " AND ".join(l2_parts) if l2_parts else l1_expr
+
+            # Level 3: AND of 2 most specific words + OR of rest
+            sorted_words = sorted(c_words, key=len, reverse=True)
+            top2 = sorted_words[:2]
+            rest = sorted_words[2:]
+            top2_parts = [f'"{w}"' for w in top2]
+            rest_parts = [f'"{w}"' for w in rest]
+            if rest_parts:
+                l3_expr = f'({" AND ".join(top2_parts)}) OR ({" OR ".join(rest_parts)})'
+            else:
+                l3_expr = " AND ".join(top2_parts) if top2_parts else l2_expr
+
+            # Level 4: OR of word stems (suffix stripper)
+            stems = []
+            for w in c_words + [s for s in sec_terms if s not in c_words][:5]:
+                if "-" in w:
+                    for subw in w.split("-"):
+                        st = deterministic_stem(subw)
+                        if len(st) >= 5:
+                            stems.append(f"{st}*")
+                        elif len(subw) > 2:
+                            stems.append(f'"{subw}"')
+                else:
+                    st = deterministic_stem(w)
+                    if len(st) >= 5:
+                        stems.append(f"{st}*")
+                    elif len(w) > 2:
+                        stems.append(f'"{w}"')
+            l4_expr = " OR ".join(list(dict.fromkeys(stems))) if stems else l3_expr
+
+            relaxation_levels = [(1, l1_expr), (2, l2_expr), (3, l3_expr), (4, l4_expr)]
+
+            chosen_level = 1
+            chosen_fts_expr = l1_expr
+            for lvl, expr in relaxation_levels:
+                try:
+                    c_cnt = connection.execute(
+                        "SELECT count(*) FROM lexical_chunks WHERE collection_name = ? AND lexical_chunks MATCH ?",
+                        (coll_name, expr)
+                    ).fetchone()[0]
+                    chosen_level = lvl
+                    chosen_fts_expr = expr
+                    if c_cnt >= 3:
+                        break
+                except Exception:
+                    continue
+
+            fts_match_expr = chosen_fts_expr
 
             # Exact phrase query for primary concept should be prioritized
             escaped_terms = []
@@ -380,25 +525,40 @@ class ExplainableRetrievalEngine:
                     '"types of algorithms"',
                     '"categories of algorithms"',
                 ])
-            elif query.intent == ResearchIntent.LIST_PROPERTIES and primary_concept in ("algorithm", "algorithms"):
+            elif query.intent == ResearchIntent.LIST_PROPERTIES:
                 escaped_terms.extend([
-                    '"following criteria"',
-                    '"must satisfy"',
-                    '"definiteness"',
-                    '"finiteness"',
-                    '"effectiveness"',
+                    f'"{primary_concept} property"',
+                    f'"{primary_concept} properties"',
+                    f'"{primary_concept} must satisfy"',
                 ])
-            for t in search_terms[:12]:
-                clean_t = t.replace('"', '""').strip()
-                if clean_t and f'"{clean_t}"' not in escaped_terms:
-                    escaped_terms.append(f'"{clean_t}"')
+                if primary_concept in ("algorithm", "algorithms", "algorithm criteria"):
+                    escaped_terms.extend([
+                        '"following criteria"',
+                        '"must satisfy"',
+                        '"definiteness"',
+                        '"finiteness"',
+                        '"effectiveness"',
+                    ])
 
-            fts_match_expr = " OR ".join(escaped_terms) if escaped_terms else '""'
+            if escaped_terms:
+                fts_match_expr = f"({fts_match_expr}) OR ({' OR '.join(escaped_terms)})"
 
             # Determine all active documents in scope
             active_doc_ids: List[str] = []
             if document_ids:
                 active_doc_ids = list(dict.fromkeys(document_ids))
+            elif getattr(query, "target_documents", None) and len(query.target_documents) == 1:
+                target_author = query.target_documents[0].lower()
+                try:
+                    d_rows = connection.execute(
+                        "SELECT DISTINCT document_id FROM lexical_chunks WHERE collection_name = ? AND lower(filename) LIKE ?",
+                        (coll_name, f"%{target_author}%")
+                    ).fetchall()
+                    target_doc_matches = [r[0] for r in d_rows if r[0]]
+                    if target_doc_matches:
+                        active_doc_ids = target_doc_matches
+                except Exception:
+                    pass
             elif paper_ids:
                 d_placeholders = ",".join("?" for _ in paper_ids)
                 d_params: List[Any] = [coll_name]
@@ -746,8 +906,9 @@ class ExplainableRetrievalEngine:
             selected_sources.append(source)
             traces[source_id] = trace
 
-        # Multi-document guarantee for DEFINITION and COMPARISON queries
-        if query.intent in (ResearchIntent.DEFINITION, ResearchIntent.COMPARISON):
+        # Multi-document diversity guarantee: when query.target_documents is empty/any and collection has >= 2 documents,
+        # top 5 MUST contain at least 1 candidate from each document that has a match containing the head concept.
+        if not (getattr(query, "target_documents", None) and len(query.target_documents) == 1):
             concepts_to_check = [query.primary_concept] if query.primary_concept else query.target_concepts
             target_doc_ids = active_doc_ids if active_doc_ids else list(dict.fromkeys(str(c[1]["document_id"]) for c in scored_candidates if str(c[1]["document_id"])))
             if len(target_doc_ids) > 1 and concepts_to_check:
@@ -848,6 +1009,18 @@ class ExplainableRetrievalEngine:
             active_doc_ids: List[str] = []
             if document_ids:
                 active_doc_ids = list(dict.fromkeys(document_ids))
+            elif getattr(query, "target_documents", None) and len(query.target_documents) == 1:
+                target_author = query.target_documents[0].lower()
+                try:
+                    d_rows = connection.execute(
+                        "SELECT DISTINCT document_id FROM lexical_chunks WHERE collection_name = ? AND lower(filename) LIKE ?",
+                        (coll_name, f"%{target_author}%")
+                    ).fetchall()
+                    target_doc_matches = [r[0] for r in d_rows if r[0]]
+                    if target_doc_matches:
+                        active_doc_ids = target_doc_matches
+                except Exception:
+                    pass
             elif paper_ids:
                 d_placeholders = ",".join("?" for _ in paper_ids)
                 d_params: List[Any] = [coll_name]
@@ -1411,7 +1584,7 @@ class ExplainableRetrievalEngine:
                 paradigm_boost = 2.0
                 reasons.append(f"boost: paradigm concept found ({paradigms_matched[0]}) (2.0x)")
 
-        # 6. Formal Criteria Boost for LIST_PROPERTIES
+        # 6. Formal Criteria / Property Boost for LIST_PROPERTIES
         criteria_boost = 1.0
         if query.intent == ResearchIntent.LIST_PROPERTIES:
             text_lower = text.lower()
@@ -1422,9 +1595,27 @@ class ExplainableRetrievalEngine:
                 or bool(re.search(r"\bsatisfy\s+(?:the\s+)?following\s+(?:five\s+)?criteria\b", text_lower))
                 or ("criteria 1 and 2" in text_lower and criteria_keywords >= 2)
             )
+            norm_pc = norm(primary_concept)
+            has_generic_properties = bool(
+                norm_pc and (
+                    f"{norm_pc} properties" in text_lower
+                    or f"{norm_pc} property" in text_lower
+                    or f"properties of {norm_pc}" in text_lower
+                    or f"property of {norm_pc}" in text_lower
+                    or ("satisfy the following" in text_lower and any(w in text_lower for w in norm_pc.split() if len(w) > 3))
+                    or ("red black properties" in norm(text_lower) and "red" in norm_pc and "black" in norm_pc)
+                    or ("min heap property" in norm(text_lower) and "min" in norm_pc and "heap" in norm_pc)
+                    or ("max heap property" in norm(text_lower) and "max" in norm_pc and "heap" in norm_pc)
+                    or ("optimal substructure" in text_lower and "substructure" in norm_pc)
+                    or ("flow network" in text_lower and ("capacity constraint" in text_lower or "skew symmetry" in text_lower or "flow conservation" in text_lower))
+                )
+            )
             if has_formal_criteria:
                 criteria_boost = 5.0
                 reasons.append(f"boost: formal algorithm criteria definition found ({criteria_keywords} criteria keywords) (5.0x)")
+            elif has_generic_properties:
+                criteria_boost = 4.0
+                reasons.append(f"boost: formal properties found for concept '{primary_concept}' (4.0x)")
             elif is_exercises:
                 criteria_boost = 0.1
                 reasons.append("penalty: exercise problem downweighted for criteria (0.1x)")

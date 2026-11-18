@@ -1,6 +1,8 @@
 import asyncio
 
 import pytest
+
+pytestmark = pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
 import pymupdf
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

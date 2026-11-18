@@ -18,6 +18,7 @@ class Paper(Base, TimestampMixin):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    folder_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     abstract: Mapped[Optional[str]] = mapped_column(Text)
     authors: Mapped[Optional[list]] = mapped_column(JSONVariant)
     publication_year: Mapped[Optional[int]] = mapped_column(Integer, index=True)

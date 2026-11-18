@@ -121,7 +121,7 @@ export function GroundedAnswer({
 
   return (
     <div
-      className={`prose prose-zinc prose-sm max-w-none text-zinc-900 leading-relaxed dark:prose-invert dark:text-zinc-100 font-sans ${
+      className={`prose prose-zinc prose-sm max-w-none text-zinc-900 leading-relaxed dark:prose-invert dark:text-zinc-100 font-sans prose-blockquote:border-l-2 prose-blockquote:border-primary/40 prose-blockquote:pl-3 prose-blockquote:italic prose-blockquote:before:content-none prose-blockquote:after:content-none ${
         compact
           ? "prose-h1:mb-4 prose-h1:mt-0 prose-h1:text-2xl prose-h1:leading-tight prose-h2:mb-2 prose-h2:mt-5 prose-h2:text-lg prose-h2:leading-snug prose-h3:mb-2 prose-h3:mt-4 prose-h3:text-base prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:border prose-pre:border-slate-200 prose-pre:bg-slate-50 prose-pre:text-slate-800 prose-code:text-inherit"
           : ""
@@ -184,7 +184,11 @@ export function GroundedAnswer({
           },
           blockquote: ({ children }) => {
             const heading = currentHeading;
-            return <blockquote>{mapWithCitations(children, heading)}</blockquote>;
+            return (
+              <blockquote className="border-l-2 border-primary/40 pl-3 italic my-2 before:content-none after:content-none">
+                {mapWithCitations(children, heading)}
+              </blockquote>
+            );
           },
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto rounded-lg border border-zinc-200 bg-white shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">

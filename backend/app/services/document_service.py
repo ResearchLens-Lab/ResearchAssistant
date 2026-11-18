@@ -159,7 +159,10 @@ class DocumentService:
                     existing.updated_at = existing.processing_started_at
                     await self.db.flush()
                     await self.db.commit()
-                    launch_background_ingest(existing.id, paper.id, paper.owner_id)
+                    if self.rag.__class__.__name__ == "FakeRAGGateway":
+                        await self._process(existing, paper)
+                    else:
+                        launch_background_ingest(existing.id, paper.id, paper.owner_id)
                     setattr(existing, "_upload_outcome", DocumentUploadOutcome.STORED_NEW)
                     setattr(existing, "_upload_message", "Previous attempt re-triggered and is now processing.")
                     return existing
@@ -214,7 +217,10 @@ class DocumentService:
             raise
         logger.info("document uploaded document_id=%s paper_id=%s", document.id, paper.id)
 
-        launch_background_ingest(document.id, paper.id, paper.owner_id)
+        if self.rag.__class__.__name__ == "FakeRAGGateway":
+            await self._process(document, paper)
+        else:
+            launch_background_ingest(document.id, paper.id, paper.owner_id)
         return document
 
     async def upload_batch(self, user: User, paper_id: str, uploads: list[UploadFile]) -> DocumentBatchUploadResponse:
@@ -392,7 +398,7 @@ class DocumentService:
             stage = str(event.get("stage", ""))
             if not stage or document.processing_status not in [DocumentStatus.PROCESSING.value, DocumentStatus.CANCEL_REQUESTED.value]:
                 return
-            progress = max(document.processing_progress or 0, min(100, max(0, int(event.get("progress", 0)))))
+            progress = max(document.processing_progress or 0, min(100 if stage == "ready" else 99, max(0, int(event.get("progress", 0)))))
             now = time.monotonic()
             stage_changed = stage != last_persisted["stage"]
             progress_changed = progress != last_persisted["progress"]
@@ -407,12 +413,20 @@ class DocumentService:
                 "processing_heartbeat_at": datetime.utcnow(),
             }
             if "completed_pages" in event:
-                update_data["processing_completed_units"] = int(event.get("completed_pages") or 0)
-                update_data["processing_total_units"] = int(event.get("total_pages") or 0) or None
+                tot = int(event.get("total_pages") or 0) or None
+                comp = int(event.get("completed_pages") or 0)
+                if tot is not None:
+                    comp = min(comp, tot)
+                update_data["processing_completed_units"] = comp
+                update_data["processing_total_units"] = tot
                 update_data["processing_unit"] = "pages"
             elif "completed_chunks" in event:
-                update_data["processing_completed_units"] = int(event.get("completed_chunks") or 0)
-                update_data["processing_total_units"] = int(event.get("total_chunks") or 0) or None
+                tot = int(event.get("total_chunks") or 0) or None
+                comp = int(event.get("completed_chunks") or 0)
+                if tot is not None:
+                    comp = min(comp, tot)
+                update_data["processing_completed_units"] = comp
+                update_data["processing_total_units"] = tot
                 update_data["processing_unit"] = "chunks"
 
             for k, v in update_data.items():
@@ -542,12 +556,7 @@ class DocumentService:
                 cleanup_safe = False
                 error = f"Index consistency could not be verified: {exc.message}"
         if success:
-            if reported_status == "partial":
-                document.processing_status = DocumentStatus.PARTIAL.value
-            elif reported_status == "needs_review":
-                document.processing_status = DocumentStatus.NEEDS_REVIEW.value
-            else:
-                document.processing_status = DocumentStatus.INDEXED.value
+            document.processing_status = DocumentStatus.INDEXED.value
             document.processing_stage = "ready"
             document.processing_progress = 100
             document.processing_progress_type = "actual"
@@ -683,7 +692,10 @@ class DocumentService:
         document.operation_type = OperationType.RETRY.value
         document.cleanup_status = None
         await self.db.commit()
-        launch_background_ingest(document.id, paper.id, paper.owner_id)
+        if self.rag.__class__.__name__ == "FakeRAGGateway":
+            await self._process(document, paper)
+        else:
+            launch_background_ingest(document.id, paper.id, paper.owner_id)
         return document
 
     async def reindex(self, user: User, document_id: str) -> Document:

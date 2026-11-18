@@ -207,14 +207,6 @@ function AppShellContent({ children }) {
             <span>{externalLookups ? "Online verification on" : "Offline"}</span>
           </div>
 
-          {engineType && (
-            <div className="hidden sm:block text-slate-600">
-              {engineType === "synthesized_local_llm"
-                ? "Answers: local AI summaries"
-                : "Answers: quoted from sources"}
-            </div>
-          )}
-
           <div className="font-mono text-[10px] text-slate-400">
             {appVersion}
           </div>

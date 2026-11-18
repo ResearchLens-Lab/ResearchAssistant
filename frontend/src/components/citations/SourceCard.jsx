@@ -8,6 +8,26 @@ import { useCitationStore } from "@/store/citationStore";
 import { getSourceIdentity } from "@/utils/sourceIdentity";
 import { formatPages, plausibleHeading } from "@/utils/citationNumbering.mjs";
 
+export function reflowText(text) {
+  if (!text) return "";
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/([^\n])\n([^\n])/g, "$1 $2")
+    .replace(/[ \t]+/g, " ")
+    .trim()
+    .replace(/^[“”"'`]+|[“”"'`]+$/g, "");
+}
+
+export function truncateSentenceBoundary(text, maxLength = 500) {
+  if (!text || text.length <= maxLength) return text;
+  const sub = text.slice(0, maxLength);
+  const lastPeriod = Math.max(sub.lastIndexOf(". "), sub.lastIndexOf("! "), sub.lastIndexOf("? "));
+  if (lastPeriod > maxLength * 0.4) {
+    return sub.slice(0, lastPeriod + 1);
+  }
+  return sub.trim();
+}
+
 function normalizeText(s) {
   return (s || "")
     .normalize("NFKC")
@@ -113,7 +133,7 @@ export function SourceCard({
   const pageDisplay = formatPages(source) || source.locator || "Document source";
   const sectionLabel = plausibleHeading(source.section);
 
-  const cleanText = (source.text || "").trim().replace(/^["']|["']$/g, "");
+  const cleanText = useMemo(() => reflowText(source.text), [source.text]);
 
   const passageIsLong = cleanText.length > 700;
 
@@ -178,9 +198,10 @@ export function SourceCard({
   };
 
   const displayStart = match && matches.length === 1 && !passageExpanded ? Math.max(0, match.start - 140) : 0;
+  const truncatedSentenceLen = useMemo(() => truncateSentenceBoundary(cleanText, 500).length, [cleanText]);
   const displayEnd = match && matches.length === 1 && !passageExpanded
     ? Math.min(cleanText.length, match.end + 160)
-    : !match && passageIsLong && !passageExpanded ? Math.min(cleanText.length, 500) : cleanText.length;
+    : !match && passageIsLong && !passageExpanded ? truncatedSentenceLen : cleanText.length;
   const visibleText = cleanText.slice(displayStart, displayEnd);
   const visibleMatches = matches
     .map((span) => ({ ...span, start: span.start - displayStart, end: span.end - displayStart }))

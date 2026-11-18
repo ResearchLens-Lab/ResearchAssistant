@@ -51,10 +51,10 @@ class ResearchQuestionAnalyzer:
             ("PAPER_COMPARISON", r"\b(compare|comparison|difference|differences|better|versus|vs)\b", "comparison_terms"),
             ("CONTRADICTION_ANALYSIS", r"\b(contradict|conflict|disagree|inconsistent)\w*\b", "conflict_terms"),
             ("SOURCE_VERIFICATION", r"\b(doi|genuine|authentic|retraction|retracted|verify (this )?paper)\b", "bibliographic_verification_terms"),
-            ("RESEARCH_GAP_ANALYSIS", r"\b(gap|limitations?|future work|unresolved)\b", "gap_terms"),
+            ("RESEARCH_GAP_ANALYSIS", r"\b(gaps?|limitations?|future work|unresolved)\b", "gap_terms"),
             ("CLAIM_ASSESSMENT", r"\b(claim|evidence|support|prove|verified|verify)\b", "claim_evidence_terms"),
             ("CROSS_PAPER_SYNTHESIS", r"\b(across|between|multiple|several|papers|studies|literature)\b", "cross_paper_terms"),
-            ("PAPER_OVERVIEW", r"\b(about|objective|problem|method|dataset|results|summary)\b", "paper_content_terms"),
+            ("PAPER_OVERVIEW", r"\b(about|objective|problem|method|dataset|results|summar(y|ize|ise))\b", "paper_content_terms"),
         ]
         task, signal = "EVIDENCE_QUESTION", "default_evidence_question"
         for candidate, pattern, cue in patterns:

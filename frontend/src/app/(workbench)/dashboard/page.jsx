@@ -68,7 +68,7 @@ export default function DashboardPage() {
             </Badge>
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Independent, locally-grounded research intelligence engine operating without external paid LLM APIs.
+            Independent, locally-grounded research intelligence engine operating without external paid APIs.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -215,10 +215,10 @@ export default function DashboardPage() {
               <div className="rounded-lg border border-zinc-200/60 bg-zinc-50/50 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/50 space-y-1">
                 <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase">Generation Mode</span>
                 <p className="text-sm font-semibold font-mono text-zinc-800 dark:text-zinc-200">
-                  {rag.llm_enabled ? "Optional Generative LLM" : "Extractive Grounded Answers"}
+                  {rag.llm_enabled ? "Local Synthesis Engine" : "Extractive Grounded Answers"}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  {rag.llm_enabled ? "LLM synthesis enabled with local fallback" : "Zero hallucination · 100% extractive with page citations"}
+                  {rag.llm_enabled ? "Local synthesis enabled with extractive fallback" : "Zero hallucination · 100% extractive with page citations"}
                 </p>
               </div>
 

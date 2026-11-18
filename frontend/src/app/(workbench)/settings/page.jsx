@@ -282,42 +282,13 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Section (c): Local AI */}
-        <Card className="border-slate-200 shadow-2xs">
-          <CardHeader className="p-4 pb-2 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-slate-700" />
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                (c) Local AI
-              </CardTitle>
-            </div>
-            <CardDescription className="text-xs">
-              Optional on-device synthesis engine
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 space-y-2 text-xs">
-            {localAiStatus?.ready || localAiStatus?.state === "ready_loaded" ? (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Status</span>
-                <Badge variant="grounded">
-                  Installed locally ({localAiStatus.model || "Qwen"})
-                </Badge>
-              </div>
-            ) : (
-              <p className="text-slate-600 leading-relaxed">
-                Not installed: answers are quoted directly from your sources.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Section (d): Library Storage & Backup */}
+        {/* Section (c): Library Storage & Backup */}
         <Card className="border-slate-200 shadow-2xs">
           <CardHeader className="p-4 pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <FolderArchive className="h-4 w-4 text-slate-700" />
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                (d) Library Storage & Backup
+                (c) Library Storage & Backup
               </CardTitle>
             </div>
             <CardDescription className="text-xs">

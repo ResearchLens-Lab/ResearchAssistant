@@ -175,14 +175,43 @@ async function handleResponse(response) {
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const errorDetail = data?.error;
+    let message = "";
+    let details = null;
+    let code = "API_ERROR";
+    let requestId = null;
+
+    if (data && typeof data === "object") {
+      if (data.error) {
+        message = data.error.message;
+        code = data.error.code || "API_ERROR";
+        requestId = data.error.request_id;
+        details = data.error.details;
+      } else if (Array.isArray(data.detail)) {
+        // FastAPI 422 validation errors: [{ loc, msg, type }]
+        message = data.detail
+          .map((err) => {
+            const field = Array.isArray(err.loc) ? err.loc.filter((part) => part !== "body").join(".") : "field";
+            return `${field}: ${err.msg}`;
+          })
+          .join("; ");
+        code = "VALIDATION_ERROR";
+        details = data.detail;
+      } else if (typeof data.detail === "string") {
+        message = data.detail;
+        code = "API_ERROR";
+      }
+    }
+
+    if (!message) {
+      message = typeof data === "string" ? data : response.statusText || "Request failed";
+    }
 
     throw new AppApiError(
-      errorDetail?.message || (typeof data === "string" ? data : response.statusText || "Request failed"),
-      errorDetail?.code || "API_ERROR",
+      message,
+      code,
       response.status,
-      errorDetail?.request_id,
-      errorDetail?.details
+      requestId,
+      details
     );
   }
 

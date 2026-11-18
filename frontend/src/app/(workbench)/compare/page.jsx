@@ -48,17 +48,18 @@ export default function ComparePapersPage() {
   const documentsById = useMemo(() => new Map(allDocuments.map((document) => [document.id, document])), [allDocuments]);
   const selectedDocuments = useMemo(() => selectedDocumentIds.map((id) => documentsById.get(id)).filter(Boolean), [selectedDocumentIds, documentsById]);
   const selectedPapers = useMemo(() => [...new Set(selectedDocuments.map((document) => document.paper_id))].map((id) => papers.find((paper) => paper.id === id)).filter(Boolean), [selectedDocuments, papers]);
-  const readyDocumentIds = useMemo(() => allDocuments.filter((document) => document.processing_status === "indexed").map((document) => document.id), [allDocuments]);
-  const canCompare = selectedDocuments.length >= 2 && selectedDocuments.length === selectedDocumentIds.length && selectedDocuments.every((document) => document.processing_status === "indexed");
+  const isDocReady = (doc) => doc?.processing_status === "indexed" || ((doc?.processing_status === "needs_review" || doc?.processing_status === "partial") && (doc?.chunk_count || 0) > 0);
+  const readyDocumentIds = useMemo(() => allDocuments.filter(isDocReady).map((document) => document.id), [allDocuments]);
+  const canCompare = selectedDocuments.length >= 2 && selectedDocuments.length === selectedDocumentIds.length && selectedDocuments.every(isDocReady);
   const minimumMessage = selectedDocumentIds.length < 2 ? "Select at least two distinct indexed documents. You can select multiple documents from the same project." : !canCompare ? "Only indexed documents can be compared. Documents that are still processing or failed indexing are excluded." : "";
 
   useEffect(() => {
     if (!documentsQuery.isSuccess || preselectionApplied.current) return;
     preselectionApplied.current = true;
     if (initialDocumentIds.length) {
-      setSelectedDocumentIds(initialDocumentIds.filter((id) => documentsById.has(id) && documentsById.get(id)?.processing_status === "indexed"));
+      setSelectedDocumentIds(initialDocumentIds.filter((id) => documentsById.has(id) && isDocReady(documentsById.get(id))));
     } else if (projectContext.length) {
-      const ready = projectContext.flatMap((paperId) => (documentsByPaper[paperId] || []).filter((document) => document.processing_status === "indexed").map((document) => document.id));
+      const ready = projectContext.flatMap((paperId) => (documentsByPaper[paperId] || []).filter(isDocReady).map((document) => document.id));
       setSelectedDocumentIds(ready);
     }
   }, [documentsQuery.isSuccess, initialDocumentIds, projectContext, documentsById, documentsByPaper]);

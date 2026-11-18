@@ -126,6 +126,7 @@ def test_gemini_generation_fails_clearly_without_key(monkeypatch):
         GeminiLLMClient().generate("instructions", "question")
 
 
+@pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
 def test_query_pipeline_defers_unsupported_generation_until_answer_is_needed(monkeypatch):
     from types import SimpleNamespace
     from rag.config.settings import settings

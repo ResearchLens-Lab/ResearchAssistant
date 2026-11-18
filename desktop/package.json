@@ -5,6 +5,7 @@
   "description": "Private local ResearchLens Windows desktop app",
   "main": "main.cjs",
   "scripts": {
+    "start": "electron .",
     "build": "node scripts/build.mjs",
     "build:web": "node scripts/build.mjs --web-only",
     "package:win": "electron-builder --win nsis --x64"
@@ -55,7 +56,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowElevation": true,
+      "allowElevation": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

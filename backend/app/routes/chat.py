@@ -120,3 +120,49 @@ async def delete_conversation(
     conversation_id: str, current_user: CurrentUser, db: DBSession
 ):
     await ConversationService(db).delete(current_user, conversation_id)
+
+
+@router.post("/chat/completions", summary="OpenAI-compatible chat completions endpoint")
+async def chat_completions(
+    payload: dict,
+    current_user: CurrentUser,
+    db: DBSession,
+    rag: RAGGatewayDep,
+):
+    import time
+    messages = payload.get("messages", [])
+    user_msg = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            user_msg = m.get("content", "")
+            break
+    if not user_msg and payload.get("prompt"):
+        user_msg = payload.get("prompt")
+
+    paper_ids = payload.get("paper_ids") or []
+    chat_req = ChatRequest(question=user_msg, paper_ids=paper_ids)
+    res = await ChatService(db, rag).send_message(current_user, chat_req)
+
+    return {
+        "id": f"chatcmpl-{res.get('message_id', 'extractive')}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": payload.get("model", "researchlens-extractive"),
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": res.get("answer", ""),
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "sources": res.get("sources", []),
+        "usage": {
+            "prompt_tokens": len(user_msg.split()),
+            "completion_tokens": len(res.get("answer", "").split()),
+            "total_tokens": len(user_msg.split()) + len(res.get("answer", "").split()),
+        },
+    }
+

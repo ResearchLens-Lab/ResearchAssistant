@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, computed_field
 
 
 class DocumentResponse(BaseModel):
@@ -31,6 +31,11 @@ class DocumentResponse(BaseModel):
     reindex_required: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        return self.processing_status
 
     @field_serializer(
         "processing_started_at",
@@ -73,6 +78,16 @@ class DocumentBatchUploadResponse(BaseModel):
     results: list[DocumentUploadResult]
     success_count: int
     failure_count: int
+
+    @computed_field
+    @property
+    def documents(self) -> list[DocumentResponse]:
+        return [r.document for r in self.results if r.document is not None]
+
+    @computed_field
+    @property
+    def failures(self) -> list[DocumentUploadResult]:
+        return [r for r in self.results if not r.success]
 
 
 class PaperDocumentsRequest(BaseModel):

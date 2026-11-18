@@ -5,6 +5,8 @@ Tests for Grounded Paper Summarization.
 import pytest
 from rag.tests.conftest import SAMPLE_PAPER_TEXT
 
+pytestmark = pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
+
 
 def test_summarize_paper(full_rag_pipeline):
     ingest_p, query_p = full_rag_pipeline

@@ -100,7 +100,7 @@ export function DocumentAttachmentsList({
           {retryMutation.isError && <p role="alert" className="text-xs text-rose-700">{retryMutation.error?.message || "Could not retry the source."}</p>}
           {deleteMutation.isError && <p role="alert" className="text-xs text-rose-700">{deleteMutation.error?.message || "Could not remove the source."}</p>}
           {documents.map((doc) => {
-            const isIndexed = doc.processing_status === "indexed";
+            const isIndexed = doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0);
             const isFailed = doc.processing_status === "failed";
             const isCancelled = doc.processing_status === "cancelled";
             const isProcessing = doc.processing_status === "processing" || doc.processing_status === "uploaded";
@@ -129,7 +129,7 @@ export function DocumentAttachmentsList({
                     {doc.reindex_required && <Badge variant="outline" className="text-[11px] border-amber-300 bg-amber-50 text-amber-800">Update available</Badge>}
                     {isCleanupPending && <Badge variant="outline" className="text-[11px] border-orange-300 bg-orange-50 text-orange-800">Cleanup pending</Badge>}
                     {isCleanupFailed && <Badge variant="destructive" className="text-[11px]">Cleanup failed</Badge>}
-                    <Badge variant={isIndexed ? "grounded" : isFailed ? "destructive" : "secondary"} className="text-[11px] capitalize">{isIndexed ? "Ready" : isProcessing ? "Processing" : doc.processing_status}</Badge>
+                    <Badge variant={isIndexed ? "grounded" : isFailed ? "destructive" : "secondary"} className="text-[11px] capitalize">{isIndexed ? "Ready" : isProcessing ? "Processing" : (doc.processing_status || "").replace(/_/g, " ")}</Badge>
                     {isProcessing && (
                       <Button
                         size="sm"

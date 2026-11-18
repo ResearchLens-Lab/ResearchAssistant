@@ -131,7 +131,11 @@ class PaperService:
             document_rows = list(rows.all())
             if {document.id for document, _paper in document_rows} != set(document_ids):
                 raise DocumentNotFoundError()
-            if any(document.processing_status != DocumentStatus.INDEXED.value for document, _paper in document_rows):
+            if any(
+                document.processing_status != DocumentStatus.INDEXED.value
+                and not (document.processing_status in (DocumentStatus.NEEDS_REVIEW.value, DocumentStatus.PARTIAL.value) and (document.chunk_count or 0) > 0)
+                for document, _paper in document_rows
+            ):
                 raise RequestValidationAppError("Every selected source must be indexed before it can be compared.")
             paper_ids = list(dict.fromkeys(paper.id for _document, paper in document_rows))
             documents_by_id = {document.id: (document, paper) for document, paper in document_rows}

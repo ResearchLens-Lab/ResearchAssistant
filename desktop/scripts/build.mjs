@@ -160,20 +160,8 @@ try {
     }
   }
 
-  // Stage application-managed Local Intelligence runtime (Ollama CPU)
-  const ollamaTarget = join(runtime, 'ollama');
-  const ollamaHome = process.env.OLLAMA_HOME || join(process.env.LOCALAPPDATA, 'Programs', 'Ollama');
-  if (existsSync(join(ollamaHome, 'ollama.exe'))) {
-    console.log(`      Staging CPU Local Intelligence (Ollama) runtime...`);
-    mkdirSync(ollamaTarget, { recursive: true });
-    safeCopy(join(ollamaHome, 'ollama.exe'), join(ollamaTarget, 'ollama.exe'));
-    const libTarget = join(ollamaTarget, 'lib', 'ollama');
-    mkdirSync(libTarget, { recursive: true });
-    runRobocopy(join(ollamaHome, 'lib', 'ollama'), libTarget, ['/XD', 'cuda*', 'rocm*']);
-    console.log(`      Staged CPU Local Intelligence runtime (~80 MB) successfully.`);
-  } else {
-    console.log(`      Notice: Local Intelligence source not found at ${ollamaHome}; building in extractive fallback mode.`);
-  }
+  // Ollama CPU bundling disabled for packaging slimming
+  console.log(`      Notice: Local Intelligence (Ollama) bundling disabled for packaging slimming; pure extractive engine.`);
 
   // Stage Third-Party Licenses
   const licensesTarget = join(runtime, 'licenses');
@@ -214,7 +202,7 @@ try {
     'desktop/preload.cjs': computeFileHash(join(desktop, 'preload.cjs')),
     'runtime/node.exe': computeFileHash(join(runtime, 'node.exe')),
     'runtime/python/python.exe': computeFileHash(join(runtime, 'python', 'python.exe')),
-    'runtime/ollama/ollama.exe': computeFileHash(join(runtime, 'ollama', 'ollama.exe')),
+    ...(existsSync(join(runtime, 'ollama', 'ollama.exe')) ? { 'runtime/ollama/ollama.exe': computeFileHash(join(runtime, 'ollama', 'ollama.exe')) } : {}),
   };
 
   const ragModuleHashes = {
@@ -261,9 +249,9 @@ try {
     pythonExecutable: existsSync(join(runtime, 'python', 'python.exe')),
     nextStandalone: existsSync(join(runtime, 'frontend', 'server.js')),
     localIntelligence: {
-      provider: 'application_managed_ollama',
-      model: 'qwen3.5:0.8b',
-      bundledOllama: existsSync(join(runtime, 'ollama', 'ollama.exe')),
+      provider: 'deterministic_extractive_engine',
+      model: 'none',
+      bundledOllama: false,
       licenses: 'licenses/THIRD_PARTY_LICENSES.md',
     },
     ragModuleHashes,

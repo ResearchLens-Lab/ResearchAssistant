@@ -14,7 +14,7 @@ os.environ["EMBEDDING_MODEL"] = "mock-dense-384"
 os.environ["EMBEDDING_DIMENSION"] = "384"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["APP_ENV"] = "testing"
-os.environ["RAG_ENGINE_MODE"] = "legacy"
+os.environ["RAG_ENGINE_MODE"] = "independent"
 
 from rag.ingestion.document_normalizer import Page, Section, DocumentMetadata, NormalizedDocument, DocumentNormalizer
 from rag.chunking.chunker import DocumentChunker

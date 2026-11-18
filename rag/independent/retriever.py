@@ -69,12 +69,17 @@ class IndependentRetriever:
         self.max_candidates = max(20, min(max_candidates, 3000))
         self.collection_name = collection_name or configured_lexical_collection_name()
 
-    def retrieve(self, analysis: QueryAnalysis, paper_ids: list[str] | None = None,
+    def retrieve(self, analysis: Any = None, paper_ids: list[str] | None = None,
                  document_ids: list[str] | None = None, section_names: list[str] | None = None,
-                 top_k: int = 8, owner_id: str | None = None) -> tuple[list[RetrievedSource], dict[str, list[str]]]:
+                 top_k: int = 8, owner_id: str | None = None, query: Any = None, **kwargs) -> tuple[list[RetrievedSource], dict[str, list[str]]]:
+        if analysis is None and query is not None:
+            analysis = query
         if not self.db_path.is_file():
             raise IndependentIndexUnavailable("The local SQLite FTS5 index is not present. Index a document through the current ingestion path first.")
-        terms = list(dict.fromkeys(analysis.expanded_terms))[:32]
+        raw_terms = getattr(analysis, "expanded_terms", None) or getattr(analysis, "expansion_terms", None)
+        if not raw_terms and hasattr(analysis, "primary_concept") and analysis.primary_concept:
+            raw_terms = [analysis.primary_concept]
+        terms = list(dict.fromkeys(raw_terms or []))[:32]
         if not terms:
             terms = ["finding", "method", "result", "conclusion", "table", "summary", "paper"]
         match_query = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
@@ -214,6 +219,17 @@ class IndependentRetriever:
                     score += 0.04
                     reasons.append("passage contains explicit research methodology / review design")
 
+            # Boost direct definition copula sentences for definition queries
+            if analysis.intent in {QuestionIntent.DEFINITION, QuestionIntent.DIRECT_DEFINITION}:
+                for q_term in analysis.important_terms[:2]:
+                    if re.search(rf"\b(?:an?|the)?\s*{re.escape(q_term)}\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way)\b", str(row[9]), re.I):
+                        score += 0.04
+                        reasons.append("passage contains explicit definition copula for target concept")
+                        break
+                    elif len(_tokens(q_term)) >= 2 and re.search(rf"\b{re.escape(q_term)}\b", str(row[9]), re.I):
+                        score += 0.015
+                        reasons.append(f"passage contains exact phrase '{q_term}'")
+
             # Boost results and findings for summary or table synthesis
             if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS}:
                 if re.search(r"\b(?:results and discussion|findings|key results|threat detection)\b", str(row[9]), re.I):
@@ -298,6 +314,8 @@ class IndependentRetriever:
             QuestionIntent.DATASET_EXTRACTION: ("data", "corpus", "experiment", "evaluation"),
             QuestionIntent.METRIC_EXTRACTION: ("result", "evaluation", "experiment"),
             QuestionIntent.AUTHOR_LOOKUP: ("title", "front matter", "publication", "metadata"),
+            QuestionIntent.DEFINITION: ("introduction", "definition", "overview", "basics", "background", "concept"),
+            QuestionIntent.DIRECT_DEFINITION: ("introduction", "definition", "overview", "basics", "background", "concept"),
         }.get(intent, ())
         return any(signal in value for signal in signals)
 

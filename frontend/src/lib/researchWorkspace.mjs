@@ -21,7 +21,9 @@ export function indexedPaperIds(entries = []) {
 }
 
 export function hasIndexedSources(documents = []) {
-  return documents.some((doc) => doc.processing_status === "indexed");
+  return documents.some(
+    (doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)
+  );
 }
 
 export function togglePaperSelection(current = [], paperId) {
@@ -100,11 +102,12 @@ export function documentType(filename = "") {
 
 export function batchIngestStatus(documents = [], failures = []) {
   if (failures.length && !documents.length) return "failed";
-  const allIndexed = documents.length > 0 && documents.every((d) => d.processing_status === "indexed") && !failures.length;
+  const isDocReady = (d) => d.processing_status === "indexed" || ((d.processing_status === "needs_review" || d.processing_status === "partial") && (d.chunk_count || 0) > 0);
+  const allIndexed = documents.length > 0 && documents.every(isDocReady) && !failures.length;
   if (allIndexed) return "indexed";
   const anyProcessing = documents.some((d) => d.processing_status === "processing" || d.processing_status === "uploaded");
   if (anyProcessing) return "processing";
-  if (documents.some((d) => d.processing_status === "indexed")) return "partial";
+  if (documents.some(isDocReady)) return "partial";
   if (documents.some((d) => d.processing_status === "cancelled")) return "cancelled";
   return "failed";
 }

@@ -24,7 +24,9 @@ async def readiness(current_user: CurrentUser, db: DBSession):
     from backend.app.models.document import Document
     from backend.app.models.paper import Paper
     count = await db.scalar(select(func.count(Document.id)).join(Paper, Paper.id == Document.paper_id).where(
-        Paper.owner_id == current_user.id, Document.processing_status == "indexed"))
+        Paper.owner_id == current_user.id,
+        (Document.processing_status == "indexed") | (Document.processing_status.in_(["needs_review", "partial"]) & (Document.chunk_count > 0))
+    ))
     return {"indexed_documents": count or 0, "external_lookup": "explicit_action_only",
         "phase1_local_retrieval": "available_when_local_index_exists", "llm_required": False}
 

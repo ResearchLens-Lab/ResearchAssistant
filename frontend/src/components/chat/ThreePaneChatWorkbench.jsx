@@ -335,7 +335,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     for (const paperId of selectedPaperIds) {
       const docs = documentsByPaper[paperId] || [];
       for (const d of docs) {
-        if (d.processing_status === "indexed") {
+        if (d.processing_status === "indexed" || ((d.processing_status === "needs_review" || d.processing_status === "partial") && (d.chunk_count || 0) > 0)) {
           count += d.chunk_count || 0;
         }
       }
@@ -350,7 +350,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
     if (selectedPaperIds.length === 0) return "0 projects selected (select below)";
     if (selectedPaperIds.length === 1 && selectedPapersList[0]) {
       const p = selectedPapersList[0];
-      const sourceCount = (documentsByPaper[p.id] || []).filter((doc) => doc.processing_status === "indexed").length;
+      const sourceCount = (documentsByPaper[p.id] || []).filter((doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)).length;
       return `${p.title} · ${sourceCount} source${sourceCount === 1 ? "" : "s"} · ${totalIndexedChunksInScope.toLocaleString()} ${totalIndexedChunksInScope === 1 ? "chunk" : "chunks"}`;
     }
     return `${selectedPaperIds.length} projects in scope (${totalIndexedChunksInScope.toLocaleString()} chunks)`;
@@ -370,7 +370,7 @@ export function ThreePaneChatWorkbench({ conversationId = null }) {
       ? `${selectedPapersList[0].title} + ${selectedPapersList.length - 1} more`
       : "your research library";
   const indexedSourceCount = useMemo(
-    () => selectedPaperIds.reduce((count, id) => count + (documentsByPaper[id] || []).filter((doc) => doc.processing_status === "indexed").length, 0),
+    () => selectedPaperIds.reduce((count, id) => count + (documentsByPaper[id] || []).filter((doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)).length, 0),
     [selectedPaperIds, documentsByPaper]
   );
 

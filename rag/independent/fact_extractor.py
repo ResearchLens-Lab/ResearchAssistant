@@ -49,7 +49,7 @@ class FactExtractor:
                 if self._matches(sentence, important_terms or []):
                     self._add(facts, seen, source, "evidence_sentence", sentence, sentence,
                               "question_term_sentence_overlap", "exact_source_sentence")
-                if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)\s+[\w-]+\s+is\s+(?:an?|the|any))\b", sentence, re.I):
+                if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
                     self._add(facts, seen, source, "definition", sentence, sentence,
                               "definition_copula_pattern", "exact_source_sentence")
                 if re.search(r"\b(?:method(?:ology)?|approach|algorithm|procedure|technique|architecture|design)\b", sentence, re.I):

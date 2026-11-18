@@ -165,22 +165,6 @@ class PDFDocumentLoader(BaseDocumentLoader):
                 except Exception as exc:
                     logger.warning("Could not read hash OCR checkpoint for %s: %s", file_hash, exc)
 
-            # 3. Scan directory for existing OCR cache matching total pages
-            if not saved_ocr_pages and path.parent.is_dir() and ocr_needed_pages:
-                target_count = len(ocr_needed_pages)
-                for candidate in path.parent.glob(".ocr-*.json"):
-                    if candidate.name == checkpoint_file.name or (hash_checkpoint_file and candidate.name == hash_checkpoint_file.name):
-                        continue
-                    try:
-                        data = json.loads(candidate.read_text(encoding="utf-8"))
-                        if isinstance(data, dict) and len(data) >= target_count:
-                            if any(str(p) in data for p in ocr_needed_pages):
-                                saved_ocr_pages = data
-                                logger.info("Discovered and reused %d cached OCR pages from %s", len(data), candidate.name)
-                                break
-                    except Exception:
-                        continue
-
             def _save_checkpoint_atomic(data: dict) -> None:
                 tmp_file = checkpoint_file.parent / f"{checkpoint_file.name}.tmp"
                 try:
@@ -226,8 +210,8 @@ class PDFDocumentLoader(BaseDocumentLoader):
                                     saved_ocr_pages[str(p_num)] = {"text": p_text, "confidence": p_conf}
                                 _save_checkpoint_atomic(saved_ocr_pages)
                                 if progress_callback:
-                                    completed_count = len(saved_ocr_pages)
-                                    progress_val = round(10 + 40 * completed_count / max(page_count, 1))
+                                    completed_count = min(len(saved_ocr_pages), page_count)
+                                    progress_val = min(50, max(10, round(10 + 40 * completed_count / max(page_count, 1))))
                                     progress_callback({
                                         "stage": "ocr_processing",
                                         "progress": progress_val,
@@ -276,12 +260,12 @@ class PDFDocumentLoader(BaseDocumentLoader):
                                 _save_checkpoint_atomic(saved_ocr_pages)
 
                         if progress_callback and (idx == 1 or idx % 2 == 0 or idx == page_count):
-                            progress_val = round(10 + 40 * idx / max(page_count, 1))
+                            progress_val = min(50, max(10, round(10 + 40 * min(idx, page_count) / max(page_count, 1))))
                             progress_callback({
                                 "stage": "ocr_processing",
                                 "progress": progress_val,
                                 "progress_type": "actual",
-                                "completed_pages": idx,
+                                "completed_pages": min(idx, page_count),
                                 "total_pages": page_count,
                             })
                     else:
@@ -289,11 +273,12 @@ class PDFDocumentLoader(BaseDocumentLoader):
                         pages.append(Page(page_number=idx, text=page_text, is_ocr=False))
 
                         if progress_callback and (idx == 1 or idx % 10 == 0 or idx == page_count):
+                            progress_val = min(30, max(5, round(5 + 25 * min(idx, page_count) / max(page_count, 1))))
                             progress_callback({
                                 "stage": "extracting_text",
-                                "progress": round(5 + 15 * idx / max(page_count, 1)),
+                                "progress": progress_val,
                                 "progress_type": "estimated",
-                                "completed_pages": idx,
+                                "completed_pages": min(idx, page_count),
                                 "total_pages": page_count,
                             })
 

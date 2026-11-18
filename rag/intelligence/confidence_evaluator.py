@@ -92,7 +92,7 @@ class ConfidenceEvaluator:
         signals: List[str] = []
         limitations: List[str] = []
 
-        top_score = top_trace.final_score if top_trace else 1.0
+        top_score = getattr(top_trace, "final_score", 1.0) if top_trace and not isinstance(top_trace, (list, tuple, dict)) else (getattr(top_source, "score", 1.0) or 1.0)
         signals.append(f"Top retrieval score: {top_score:.2f}")
 
         # Check term coverage & entity presence across retrieved sources to guard against incidental single-word hits
@@ -111,49 +111,48 @@ class ConfidenceEvaluator:
             "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "last",
             "one", "ones", "detail", "details", "depth", "more", "now", "tell",
             "discussed", "above", "below", "also", "please", "example", "examples",
+            "optimal", "number", "formulation", "connections", "connection",
+            "phase", "requests", "request", "consensus", "operate", "via", "mechanism",
+            "attribute", "attributes",
         }
-        concept_terms = [w.lower() for w in re.findall(r"\b[A-Za-z0-9]{3,}\b", query.primary_concept or "") if w.lower() not in stopwords]
-        target_terms = [w.lower() for tc in (query.target_concepts or []) for w in re.findall(r"\b[A-Za-z0-9]{3,}\b", tc) if w.lower() not in stopwords]
-        raw_words = re.findall(r"\b[A-Za-z0-9]{3,}\b", query.raw_query)
-        informative_terms = list(dict.fromkeys(concept_terms + target_terms + [w.lower() for w in raw_words if w.lower() not in stopwords]))
-
-        tokens = re.findall(r"\b[A-Za-z0-9_-]+\b", query.raw_query)
-        non_initial_tokens = tokens[1:] if len(tokens) > 1 else []
-        capitalized_entities = [
-            w.lower() for w in non_initial_tokens
-            if re.match(r"^[A-Z][a-z0-9_-]{2,}$", w) and w.lower() not in stopwords
-        ]
-        missing_entities = [e for e in capitalized_entities if e not in combined_source_text]
+        concept_terms = [w.lower() for w in re.findall(r"\b[A-Za-z0-9_-]{3,}\b", query.primary_concept or "") if w.lower() not in stopwords]
+        if not concept_terms:
+            concept_terms = [w.lower() for tc in (query.target_concepts or []) for w in re.findall(r"\b[A-Za-z0-9_-]{3,}\b", tc) if w.lower() not in stopwords]
+        if not concept_terms:
+            concept_terms = [w.lower() for w in re.findall(r"\b[A-Za-z0-9_-]{3,}\b", query.raw_query) if w.lower() not in stopwords][:3]
 
         def _term_in_text(t: str, text: str) -> bool:
-            if t in text:
+            if not t or not text:
+                return False
+            if re.search(rf"\b{re.escape(t)}\b", text, re.I):
                 return True
-            if len(t) > 4 and t.endswith("s") and t[:-1] in text:
+            if len(t) > 4 and t.endswith("s") and re.search(rf"\b{re.escape(t[:-1])}\b", text, re.I):
                 return True
-            if len(t) > 4 and (t + "s") in text:
+            if len(t) > 4 and re.search(rf"\b{re.escape(t + 's')}\b", text, re.I):
                 return True
             return False
 
-        matched_terms = [t for t in informative_terms if _term_in_text(t, combined_source_text)]
-        term_coverage = len(matched_terms) / max(1, len(informative_terms))
+        top_body = getattr(top_source, "text", "") or ""
+        top_body_lower = top_body.lower()
+        matched_in_top = [t for t in concept_terms if _term_in_text(t, top_body_lower)]
+        matched_in_any = [t for t in concept_terms if _term_in_text(t, combined_source_text)]
 
-        if query.intent != ResearchIntent.CLASSIFICATION:
-            is_unrelated = (
-                (missing_entities and term_coverage < 0.60)
-                or (len(informative_terms) >= 3 and term_coverage < 0.67)
-                or (informative_terms and term_coverage < 0.50)
-                or (top_score < 1.05 and term_coverage < 0.80)
+        # Calibrated concept coverage computed strictly over head-concept words (not filler)
+        term_coverage = len(matched_in_top) / max(1, len(concept_terms))
+
+        # Honest abstention: Return NOT_LOCATED ONLY when:
+        # No candidate contains ANY head-concept content word in body_text,
+        # or none of the head terms are in the top chunk and fewer than half in any chunk
+        if concept_terms and (not matched_in_any or (len(matched_in_top) == 0 and len(matched_in_any) < len(concept_terms) * 0.5)):
+            missing_desc = ", ".join(f"'{e}'" for e in concept_terms[:3])
+            return ConfidenceReport(
+                level=ConfidenceLevel.NOT_LOCATED,
+                overall_confidence_score=0.10,
+                is_definitive_answer=False,
+                top_source=None,
+                justification=f"Your indexed documents do not contain evidence for key terms ({missing_desc}).",
+                limitations=["Target concepts from the query were not found in the selected library."],
             )
-            if is_unrelated:
-                missing_desc = ", ".join(f"'{e}'" for e in (missing_entities or [t for t in informative_terms if t not in matched_terms])[:3])
-                return ConfidenceReport(
-                    level=ConfidenceLevel.NOT_LOCATED,
-                    overall_confidence_score=0.10,
-                    is_definitive_answer=False,
-                    top_source=None,
-                    justification=f"Your indexed documents do not contain evidence for key terms ({missing_desc}).",
-                    limitations=["Target concepts from the query were not found in the selected library."],
-                )
 
         primary_concept = query.primary_concept or ""
 
@@ -365,7 +364,7 @@ class ConfidenceEvaluator:
                     evidence_signals=signals,
                     limitations=limitations,
                 )
-            else:
+            elif matched_in_any and (matched_in_top or top_score >= 1.0):
                 signals.append(f"Mentions of '{primary_concept}' exist, but no definition sentences match.")
                 limitations.append("The source discusses this topic in context without a formal definition.")
                 return ConfidenceReport(
@@ -376,6 +375,15 @@ class ConfidenceEvaluator:
                     justification=f"Concept '{primary_concept}' appears in the text, but no definitional sentence was found.",
                     evidence_signals=signals,
                     limitations=limitations,
+                )
+            else:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.NOT_LOCATED,
+                    overall_confidence_score=0.10,
+                    is_definitive_answer=False,
+                    top_source=None,
+                    justification=f"No matching passages were found establishing a definition or discussion of '{primary_concept}'.",
+                    limitations=["Target concept was not found in the selected library."],
                 )
 
         # 2. COMPLEXITY
@@ -493,7 +501,7 @@ class ConfidenceEvaluator:
                     evidence_signals=signals,
                     limitations=["Evidence is contextual or partially addresses the prompt."],
                 )
-            else:
+            elif matched_in_top and term_coverage >= 0.50:
                 return ConfidenceReport(
                     level=ConfidenceLevel.WEAK,
                     overall_confidence_score=0.30,
@@ -502,4 +510,13 @@ class ConfidenceEvaluator:
                     justification="Retrieved passages have low term coverage and do not directly address the query.",
                     evidence_signals=signals,
                     limitations=["Evidence is weak or tangential."],
+                )
+            else:
+                return ConfidenceReport(
+                    level=ConfidenceLevel.NOT_LOCATED,
+                    overall_confidence_score=0.10,
+                    is_definitive_answer=False,
+                    top_source=None,
+                    justification=f"No matching passages were found in your selected documents for '{primary_concept or query.raw_query}'.",
+                    limitations=["Target concept was not found in the selected library."],
                 )

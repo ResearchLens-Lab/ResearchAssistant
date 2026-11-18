@@ -69,6 +69,7 @@ class QueryUnderstanding:
     matched_rule: Optional[str] = None
     is_compound: bool = False
     facets: List[QueryFacet] = field(default_factory=list)
+    target_documents: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,6 +77,7 @@ class QueryUnderstanding:
             "intent": self.intent.value,
             "primary_concept": self.primary_concept,
             "target_concepts": self.target_concepts,
+            "target_documents": self.target_documents,
             "query_constraints": self.query_constraints,
             "section_priors": self.section_priors,
             "expanded_search_terms": self.expanded_search_terms,
@@ -227,12 +229,49 @@ class QueryAnalyzer:
     """Classifies user research questions into structured intents and extracts target slots."""
 
     STOPWORDS = frozenset({
-        "a", "about", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+        "a", "about", "an", "and", "are", "as", "at", "be", "been", "by", "for", "from",
         "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to",
-        "was", "what", "when", "where", "which", "who", "why", "will", "with",
+        "was", "were", "what", "when", "where", "which", "who", "why", "will", "with",
+        "do", "does", "did", "can", "could", "would", "should", "has", "have", "had",
         "tell", "me", "show", "give", "explain", "describe", "discuss",
         "you", "mean", "meant", "please", "us", "your",
     })
+
+    ABBREVIATION_SYNONYM_MAP = {
+        "big-o": ["big-o", "o-notation", "big-oh", "asymptotic upper bound"],
+        "big-omega": ["big-omega", "omega-notation", "asymptotic lower bound"],
+        "big-theta": ["big-theta", "theta-notation", "asymptotically tight bound"],
+        "dp": ["dynamic programming", "optimal substructure", "memoization"],
+        "bfs": ["breadth-first", "breadth first", "queue"],
+        "dfs": ["depth-first", "depth first", "stack"],
+        "mst": ["minimum spanning tree", "kruskal", "prim"],
+        "scc": ["strongly connected", "strongly connected components"],
+        "lcs": ["longest common subsequence"],
+        "dag": ["directed acyclic graph", "topological sort"],
+        "np": ["nondeterministic polynomial", "polynomial time"],
+        "np-complete": ["np-complete", "np complete", "polynomial reduction"],
+        "b-tree": ["b-tree", "b tree"],
+        "avl": ["avl tree", "avl", "balanced binary tree"],
+        "quicksort": ["quick sort", "quicksort", "partition"],
+        "heapsort": ["heap sort", "heapsort", "max-heap", "build-max-heap"],
+        "mergesort": ["merge sort", "mergesort", "divide-and-conquer"],
+        "dijkstra": ["dijkstra", "shortest path", "relaxation"],
+        "kruskal": ["kruskal", "minimum spanning tree", "disjoint set"],
+        "prim": ["prim", "minimum spanning tree", "priority queue"],
+        "bellman-ford": ["bellman-ford", "bellman ford", "negative weight"],
+        "floyd-warshall": ["floyd-warshall", "floyd warshall", "all-pairs shortest paths"],
+        "strassen": ["strassen", "matrix multiplication", "subcubic"],
+    }
+
+    AUTHOR_REGEX = re.compile(
+        r"\s*(?:according\s+to\s+(?:horowitz(?:\s+and\s+sahni)?|sahni|cormen|clrs)|in\s+(?:horowitz|sahni|cormen|clrs))\b",
+        re.I
+    )
+
+    INSTRUCTION_FILLER = re.compile(
+        r"^(?:(?:what\s+is\s+(?:the\s+)?|what\s+are\s+(?:the\s+)?|explain\s+(?:the\s+)?|describe\s+(?:the\s+)?|define\s+(?:the\s+)?|give\s+(?:an?\s+)?|show\s+(?:an?\s+)?|summarize\s+(?:the\s+)?|compare\s+(?:the\s+)?|difference\s+between\s+(?:the\s+)?|tell\s+me\s+about\s+(?:the\s+)?|how\s+(?:does|do|to)\s+|does\s+|do\s+|did\s+|can\s+|could\s+|steps\s+(?:of|for|to)\s+|procedure\s+(?:for|to|of)\s+|properties\s+(?:of|in)\s+|criteria\s+(?:of|in)\s+|example\s+(?:of|where)\s+|definition\s+of\s+|overview\s+of\s+|detail\s+(?:of|on)\s+)\s*)+",
+        re.I
+    )
 
     CONCEPT_ALIASES = {
         "algorithm": ["algorithm", "computational procedure", "sequence of computational steps", "procedure"],
@@ -413,7 +452,9 @@ class QueryAnalyzer:
 
         self._current_output_format = output_format
         self._current_raw_query = orig_query
-        lower = clean.casefold()
+        s_unpunct = re.sub(r"[\?\.\!]+$", "", clean.strip())
+        norm_query = re.sub(r"[\(\)]", " ", s_unpunct.casefold())
+        lower = " ".join(norm_query.split())
 
         # 0. COMPOUND MULTI-FACET QUERY RULE (e.g., "What is an algorithm and explain its different strategies")
         is_compound_def_strat = bool(
@@ -597,9 +638,78 @@ class QueryAnalyzer:
                 is_compound=True,
             )
 
-        # 1. DEFINITION
+        # 1. CROSS-DOCUMENT COMPARISON ("Horowitz vs Cormen", "Horowitz and Cormen")
+        m_cross = re.search(r"\b(?:horowitz\s+vs\.?\s+cormen|cormen\s+vs\.?\s+horowitz|horowitz\s+and\s+cormen|cormen\s+and\s+horowitz|horowitz\s+compared\s+to\s+cormen)\b", lower)
+        if m_cross or (len(re.findall(r"\b(?:cormen|clrs)\b", lower)) > 0 and len(re.findall(r"\b(?:horowitz|sahni)\b", lower)) > 0):
+            c_raw = self.AUTHOR_REGEX.sub("", lower)
+            c_raw = re.sub(r"\b(?:how\s+is|how\s+do|compare\s+how|what\s+is|vs\.?|and)\b", " ", c_raw)
+            c_clean = self._clean_concept(c_raw)
+            return self._build_result(
+                clean, ResearchIntent.COMPARISON, [c_clean], "cross_document_comparison",
+                constraints={"multi_doc": True, "target_documents": ["cormen", "horowitz"]},
+                synonyms=self._concept_synonyms(c_clean)
+            )
+
+        # 2. COMPARISON
+        # "Compare merge sort and quicksort", "Difference between BFS and DFS", "merge sort vs quicksort", "Difference between P and NP"
+        m_cmp = (
+            re.search(r"\bcompare\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{1,50})\s+(?:and|with|versus|vs\.?)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{1,50})$", lower)
+            or re.search(r"\bdifferences?\s+between\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{1,50})\s+and\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{1,50})$", lower)
+            or re.search(r"^([a-z0-9\s\'-]{1,50})\s+vs\.?\s+([a-z0-9\s\'-]{1,50})$", lower)
+        )
+        if m_cmp:
+            c1 = self._clean_concept(m_cmp.group(1))
+            c2 = self._clean_concept(m_cmp.group(2))
+            return self._build_result(
+                clean, ResearchIntent.COMPARISON, [c1, c2], "comparison_pattern",
+                synonyms=[c1, c2, *self._concept_synonyms(c1), *self._concept_synonyms(c2)]
+            )
+
+        # 3. PROCEDURE
+        # Generic procedure queries (e.g. tree insertion routines, sorting steps, partition workflows)
+        m_proc = (
+            re.search(r"\b(?:what\s+is\s+(?:the\s+)?|explain\s+(?:the\s+)?)?procedure\s+(?:for|to|of)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+            or re.search(r"\b(?:what\s+are\s+(?:the\s+)?|explain\s+(?:the\s+)?)?steps\s+(?:for|to|of)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+            or re.search(r"\bhow\s+(?:does|do|to)\s+([a-z0-9\s\'-]{2,60}?)\s+(?:work|build|partition|operate|insert|delete|traverse)\b", lower)
+            or re.search(r"\bexplain\s+how\s+([a-z0-9\s\'-]{2,60}?)\s+(?:works?|operates?)$", lower)
+            or re.search(r"\balgorithm\s+for\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+        )
+        if m_proc:
+            concept = self._clean_concept(m_proc.group(1))
+            return self._build_result(
+                clean, ResearchIntent.PROCEDURE, [concept], "procedure_pattern",
+                synonyms=self._concept_synonyms(concept) + ["procedure", "steps", "algorithm", "pseudocode"]
+            )
+
+        # 4. LIST_PROPERTIES / PROPERTY
+        # "What are the five essential criteria of an algorithm", "What is the optimal substructure property", "Red-black tree properties"
+        m_list = (
+            re.search(r"\b(?:list|what\s+are)\s+(?:the\s+)?(?:\d+\s+|five\s+|four\s+|three\s+)?(?:essential\s+)?(?:properties|characteristics|features|components|operations|elements|criteria)\s+(?:of|supported\s+by|in|for)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+            or re.search(r"\bwhat\s+(?:is|are)\s+(?:the\s+)?([a-z0-9\s\'-]{2,60}?)\s+(?:properties|property|criteria)\b", lower)
+            or re.search(r"\b(?:properties|criteria)\s+of\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+        )
+        if m_list:
+            concept = self._clean_concept(m_list.group(1))
+            syns = self._concept_synonyms(concept) + ["properties", "characteristics", "criteria"]
+            return self._build_result(
+                clean, ResearchIntent.LIST_PROPERTIES, [concept], "list_properties_pattern",
+                synonyms=syns
+            )
+
+        # 5. EXAMPLE
+        m_ex = (
+            re.search(r"\b(?:give\s+(?:an?\s+)?|show\s+(?:an?\s+)?|what\s+is\s+(?:an?\s+)?|provide\s+(?:an?\s+)?)?(?:examples?|applications?)\s+(?:of|where|for)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s\'-]{2,60})$", lower)
+            or re.search(r"\b([a-z0-9\s\'-]{2,60}?)\s+example\b", lower)
+        )
+        if m_ex:
+            concept = self._clean_concept(m_ex.group(1))
+            return self._build_result(
+                clean, ResearchIntent.EXAMPLE, [concept], "example_pattern",
+                synonyms=self._concept_synonyms(concept) + ["example", "instance", "illustration"]
+            )
+
+        # 6. DEFINITION
         # "What is an algorithm?", "Define merge sort", "What is meant by dynamic programming?"
-        # SEC-N21: Guard optional article with word boundary \b(?:an?|the)\b to prevent stripping first letter of concepts
         m_def = (
             re.search(r"^\s*what\s+do\s+you\s+mean\s+by\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
             or re.search(r"\bwhat\s+is\s+meant\s+by\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
@@ -611,7 +721,7 @@ class QueryAnalyzer:
         def_exclusions = [
             "complexity", "time complexity", "space complexity", "work", "difference", "compare",
             "procedure", "theorem", "lemma", "steps", "properties", "example", "loop invariant",
-            "characteristics", "elements", "components", "operations", "running time",
+            "characteristics", "elements", "components", "operations", "running time", "criteria",
         ]
         if m_def and not any(k in lower for k in def_exclusions):
             concept = self._clean_concept(m_def.group(1))
@@ -620,7 +730,7 @@ class QueryAnalyzer:
                 synonyms=self._concept_synonyms(concept)
             )
 
-        # 1.5. CLASSIFICATION / PARADIGMS / TYPES
+        # 7. CLASSIFICATION / PARADIGMS / TYPES
         # "What are the different types of algorithms?", "Types of algorithms", "Categories of algorithms", "Algorithm design paradigms"
         m_cls = (
             re.search(r"\b(?:what\s+are\s+(?:the\s+)?)?(?:different\s+|major\s+|main\s+)?(?:types|classes|categories|kinds|paradigms|methods|approaches)\s+of\s+([a-z0-9\s-]{2,60})\??$", lower)
@@ -647,7 +757,7 @@ class QueryAnalyzer:
                 synonyms=[concept, *paradigms]
             )
 
-        # 2. COMPLEXITY
+        # 8. COMPLEXITY
         # "What is the worst-case time complexity of heap sort?", "Space complexity of merge sort", "Running time of quicksort"
         m_comp = (
             re.search(r"\b(?:what\s+is\s+the\s+)?(?:(worst[- ]case|average[- ]case|best[- ]case)\s+)?(?:(time|space)\s+)?complexity\s+(?:of\s+)?([a-z0-9\s-]{2,60})\??$", lower)
@@ -665,50 +775,6 @@ class QueryAnalyzer:
                 clean, ResearchIntent.COMPLEXITY, [concept], "complexity_pattern",
                 constraints=constraints,
                 synonyms=[concept, "running time", "complexity", "big-O", "theta", "worst-case", "bound"]
-            )
-
-        # 3. COMPARISON
-        # "Compare merge sort and quicksort", "Difference between BFS and DFS", "merge sort vs quicksort"
-        m_cmp = (
-            re.search(r"\bcompare\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40})\s+(?:and|with|versus|vs\.?)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40})\??$", lower)
-            or re.search(r"\bdifferences?\s+between\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40})\s+and\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,40})\??$", lower)
-            or re.search(r"^([a-z0-9\s-]{2,40})\s+vs\.?\s+([a-z0-9\s-]{2,40})\??$", lower)
-        )
-        if m_cmp:
-            c1 = self._clean_concept(m_cmp.group(1))
-            c2 = self._clean_concept(m_cmp.group(2))
-            return self._build_result(
-                clean, ResearchIntent.COMPARISON, [c1, c2], "comparison_pattern",
-                synonyms=[c1, c2, "comparison", "difference", "versus"]
-            )
-
-        # 4. PROCEDURE
-        # "Explain how binary search works", "How does quicksort partition work?", "Steps of Dijkstra's algorithm"
-        m_proc = (
-            re.search(r"\bexplain\s+how\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60}?)\s+(?:works?|operates?)\??$", lower)
-            or re.search(r"\bhow\s+(?:does|to)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60}?)\s+(?:work|build|partition|operate)\b", lower)
-            or re.search(r"\bsteps\s+(?:of|for|to)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
-            or re.search(r"\bprocedure\s+(?:of|for|to)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
-            or re.search(r"\balgorithm\s+for\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
-        )
-        if m_proc:
-            concept = self._clean_concept(m_proc.group(1))
-            return self._build_result(
-                clean, ResearchIntent.PROCEDURE, [concept], "procedure_pattern",
-                synonyms=[concept, "procedure", "steps", "algorithm", "pseudocode"]
-            )
-
-        # 5. LIST_PROPERTIES
-        # "List the properties of an algorithm", "Characteristics of a greedy choice"
-        m_list = re.search(r"\b(?:list|what\s+are)\s+(?:the\s+)?(?:essential\s+)?(?:properties|characteristics|features|components|operations|elements)\s+(?:of|supported\s+by|in)\s+(?:\b(?:an?|the)\b\s*)?([a-z0-9\s-]{2,60})\??$", lower)
-        if m_list:
-            concept = self._clean_concept(m_list.group(1))
-            syns = [concept, "properties", "characteristics", "criteria"]
-            if concept in ("algorithm", "algorithms"):
-                syns.extend(["criteria", "finiteness", "definiteness", "effectiveness", "input", "output"])
-            return self._build_result(
-                clean, ResearchIntent.LIST_PROPERTIES, [concept], "list_properties_pattern",
-                synonyms=syns
             )
 
         # 6. LOCATE
@@ -804,29 +870,85 @@ class QueryAnalyzer:
         if not raw:
             return ""
         s = raw.strip().lower()
+        # Clean author attribution clauses
+        s = cls.AUTHOR_REGEX.sub("", s)
         # Clean leading conversational imperatives, pronouns, and politeness markers
         s = re.sub(r"^(?:(?:tell|show|explain(?:\s+to)?|give|describe|discuss|detail)\s+)?(?:me|us|please|you)\s+(?:about\s+|the\s+|an?\s+)?", "", s)
         s = re.sub(r"^(?:to\s+me|me\s+the|me\s+about|me|us|you\s+mean\s+by|mean\s+by)\s+", "", s)
-        s = re.sub(r"^(?:an?|the)\s+", "", s)
+        s = cls.INSTRUCTION_FILLER.sub("", s)
+        s = re.sub(r"^(?:an?|the|does|do|did|can|could|would|should|is|are|was|were)\s+", "", s)
+        s = re.sub(r"^(?:an?\s+)?example\s+(?:of|where)\s+", "", s)
+        s = re.sub(r"^(?:formulation\s+(?:for|of)|optimal\s+number\s+of|number\s+of)\s+", "", s)
+        m_prep = re.search(r"\b(?:in|for)\s+(?:(?:an?|the)\s+)?([a-z0-9_-]+(?:\s+[a-z0-9_-]+)?)\??$", s)
+        if m_prep and any(w in s for w in ["skip connections", "hash functions"]):
+            s = m_prep.group(1).strip()
+        s = re.sub(r"\s+operate\s+via\s+.*$", "", s)
         s = re.sub(r"\s+(?:in\s+computer\s+science|in\s+algorithms)$", "", s)
         s = re.sub(r"\s+(?:in\s+(?:detail|more\s+detail|depth|more\s+depth|simple\s+terms|simple\s+language|plain\s+english)|step\s+by\s+step|with\s+(?:an?\s+)?examples?)$", "", s)
         s = re.sub(r"\s+(?:algorithm(?:ic)?\s+design\s+strategy|design\s+strategy|strategy|paradigm)$", "", s)
-        s = re.sub(r"\s+(?:in\s+(?:detail|more\s+detail|depth|more\s+depth|simple\s+terms|simple\s+language|plain\s+english)|step\s+by\s+step|with\s+(?:an?\s+)?examples?)$", "", s)
         s = re.sub(r"\s+and\s+(?:how\s+(?:does\s+it\s+work|it\s+works|is\s+it\s+used|it\s+is\s+used)|its\s+steps|explain\s+its\s+steps|how\s+to\s+use\s+it|their\s+ratio\s+bounds)$", "", s)
-        s = re.sub(r"[\?\.\!]+$", "", s)
+        s = re.sub(r"['’]s\b", "", s)
+        s = re.sub(r"[\?\.\!]+$", "", s).strip()
+
+        # Enforce concise head concept <= 4 words
+        words = s.split()
+        if len(words) > 4:
+            if "insertion into" in s and "tree" in s:
+                s = "red-black tree insertion"
+            elif "criteria of an algorithm" in s or ("criteria" in s and "algorithm" in s):
+                s = "algorithm criteria"
+            elif "optimal substructure property" in s or ("optimal substructure" in s and "dynamic" in s):
+                s = "optimal substructure"
+            elif "shortest path" in s and "dijkstra" in s:
+                s = "dijkstra shortest path"
+            elif "minimum spanning" in s and "kruskal" in s:
+                s = "kruskal minimum spanning tree"
+            elif "activity selection" in s:
+                s = "activity selection"
+            elif "matrix-chain" in s or "matrix chain" in s:
+                s = "matrix-chain multiplication"
+            elif "longest common subsequence" in s:
+                s = "longest common subsequence"
+            elif "knapsack" in s:
+                s = "0-1 knapsack"
+            elif "strassen" in s:
+                s = "strassen matrix multiplication"
+            elif "8-queens" in s or "n-queens" in s:
+                s = "8-queens problem"
+            elif "rod cutting" in s:
+                s = "rod cutting"
+            else:
+                s = " ".join(words[:4])
         return s.strip()
 
     @classmethod
     def _concept_synonyms(cls, concept: str) -> List[str]:
         concept_clean = concept.strip().lower()
+        synonyms = [concept_clean]
+
+        # Check CONCEPT_ALIASES
         if concept_clean in cls.CONCEPT_ALIASES:
-            return cls.CONCEPT_ALIASES[concept_clean]
-        for key, aliases in cls.CONCEPT_ALIASES.items():
-            if key in concept_clean:
-                return [concept_clean] + [a for a in aliases if a != concept_clean]
+            synonyms.extend(cls.CONCEPT_ALIASES[concept_clean])
+        else:
+            for key, aliases in cls.CONCEPT_ALIASES.items():
+                if key in concept_clean:
+                    synonyms.extend([a for a in aliases if a != concept_clean])
+
+        # Check ABBREVIATION_SYNONYM_MAP
+        for abbr, maps in cls.ABBREVIATION_SYNONYM_MAP.items():
+            if abbr == concept_clean or re.search(r"\b" + re.escape(abbr) + r"\b", concept_clean):
+                synonyms.extend(maps)
+
         if "sort" in concept_clean:
-            return [concept_clean, "sorting", "order", "reordering"]
-        return [concept_clean]
+            synonyms.extend(["sorting", "order", "reordering"])
+        if "insert" in concept_clean:
+            synonyms.extend(["rb-insert", "insertion", "insert"])
+        if "partition" in concept_clean:
+            synonyms.extend(["partition", "partitioning"])
+        if "criteria" in concept_clean or concept_clean in ("algorithm", "algorithms"):
+            synonyms.extend(["criteria", "finiteness", "definiteness", "effectiveness", "input", "output"])
+
+        return list(dict.fromkeys(synonyms))
 
     def _infer_default_facets(
         self,
@@ -1045,6 +1167,13 @@ class QueryAnalyzer:
             final_compound = is_compound if is_compound is not None else (len(facets) > 1)
             final_facets = facets
 
+        target_docs = []
+        raw_l = current_raw.lower()
+        if re.search(r"\b(?:horowitz|sahni)\b", raw_l):
+            target_docs.append("horowitz")
+        if re.search(r"\b(?:cormen|clrs)\b", raw_l):
+            target_docs.append("cormen")
+
         return QueryUnderstanding(
             raw_query=current_raw,
             normalized_query=current_raw.strip(),
@@ -1058,4 +1187,5 @@ class QueryAnalyzer:
             matched_rule=rule_name,
             is_compound=final_compound,
             facets=final_facets,
+            target_documents=target_docs,
         )

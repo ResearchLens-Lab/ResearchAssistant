@@ -1,4 +1,4 @@
-"""Authoritative deterministic document question answering, isolated from all model providers."""
+"""End-to-end deterministic document question answering, isolated from all model providers."""
 
 import logging
 import re
@@ -8,23 +8,30 @@ from typing import Callable, Any
 from rag.citations.citation_formatter import RAGResult
 from rag.citations.citation_mapper import CitationMapper
 from rag.citations.source_tracker import SourceTracker
+from rag.independent.answer_composer import StructuredAnswerComposer
+from rag.independent.evidence_validator import EvidenceValidator
+from rag.independent.fact_extractor import FactExtractor
+from rag.independent.intent_classifier import QuestionIntentClassifier
 from rag.independent.models import EvidenceDecision, IndependentAnswer, QuestionIntent
 from rag.independent.retriever import IndependentIndexUnavailable, IndependentRetriever
-from rag.intelligence.engine import ResearchIntelligenceEngine
 
 logger = logging.getLogger(__name__)
 
 
 class IndependentResearchEngine:
-    """Authoritative production research-intelligence engine consolidating retrieval, reasoning, and composition."""
+    """BM25 + TF-IDF retrieval, rule extraction and structured evidence-only answers."""
 
-    def __init__(self, intelligence_engine: ResearchIntelligenceEngine | None = None, **kwargs):
-        self.intelligence_engine = intelligence_engine or ResearchIntelligenceEngine()
-        # Backwards compatibility attributes
-        self.retriever = getattr(self.intelligence_engine, "retrieval_engine", None)
-        self.classifier = getattr(self.intelligence_engine, "query_analyzer", None)
-        self.composer = getattr(self.intelligence_engine, "answer_composer", None)
-        self.validator = getattr(self.intelligence_engine, "confidence_evaluator", None)
+    def __init__(self, retriever: IndependentRetriever | None = None,
+                 classifier: QuestionIntentClassifier | None = None,
+                 fact_extractor: FactExtractor | None = None,
+                 composer: StructuredAnswerComposer | None = None,
+                 validator: EvidenceValidator | None = None,
+                 **kwargs):
+        self.retriever = retriever or IndependentRetriever()
+        self.classifier = classifier or QuestionIntentClassifier()
+        self.fact_extractor = fact_extractor or FactExtractor()
+        self.composer = composer or StructuredAnswerComposer()
+        self.validator = validator or EvidenceValidator()
 
     def answer(self, question: str, paper_ids: list[str] | None = None,
                document_ids: list[str] | None = None, top_k: int = 8,
@@ -36,48 +43,129 @@ class IndependentResearchEngine:
                user_id: str | None = None,
                owner_id: str | None = None,
                paper_metadata: dict[str, Any] | None = None) -> RAGResult:
-        """
-        Authoritative endpoint for production research desk chat and queries.
-        Uses structure-aware FTS5 retrieval, calibrated confidence evaluation,
-        and deterministic template composition with verified citations.
-        """
-        return self.intelligence_engine.answer(
-            question=question,
-            paper_ids=paper_ids,
-            document_ids=document_ids,
-            top_k=top_k,
-            output_format=output_format,
-            document_labels=document_labels,
-            section_names=section_names,
-            conversation_context=conversation_context,
-            progress_callback=progress_callback,
-            user_id=user_id,
-            owner_id=owner_id,
-            paper_metadata=paper_metadata,
-        )
+        started = time.perf_counter()
+        emit = progress_callback or (lambda _event: None)
+        selected_papers = list(dict.fromkeys(paper_ids or []))
+        selected_documents = list(dict.fromkeys(document_ids or []))
+        effective_owner = user_id or owner_id
+        analysis = self.classifier.classify(question, selected_papers, selected_documents, conversation_context)
+        if output_format:
+            analysis.document_filters["output_format"] = output_format
+        if document_labels:
+            analysis.document_filters["document_labels"] = document_labels
+        emit({"type": "planning_completed", "intent": analysis.intent.value, "engine": "independent"})
+        emit({"type": "retrieval_started", "strategy": "fts5_bm25_tfidf"})
+        try:
+            if analysis.intent == QuestionIntent.COMPARISON and selected_documents:
+                # Give each explicitly selected document its own bounded retrieval
+                # pass so a larger file cannot consume the entire comparison budget.
+                sources = []
+                explanations = {}
+                per_document_k = max(1, min(top_k, 4))
+                for document_id in selected_documents:
+                    document_sources, document_explanations = self.retriever.retrieve(
+                        analysis, paper_ids=selected_papers or None,
+                        document_ids=[document_id], section_names=section_names,
+                        top_k=per_document_k, owner_id=effective_owner,
+                    )
+                    for source in document_sources:
+                        source_id = f"S{len(sources) + 1}"
+                        sources.append(source.model_copy(update={"source_id": source_id}))
+                        explanations[source_id] = document_explanations.get(source.source_id, [])
+            else:
+                sources, explanations = self.retriever.retrieve(
+                    analysis, paper_ids=selected_papers or None,
+                    document_ids=selected_documents or None, section_names=section_names,
+                    top_k=max(top_k, len(selected_papers)) if analysis.intent == QuestionIntent.COMPARISON else top_k,
+                    owner_id=effective_owner,
+                )
+        except IndependentIndexUnavailable as exc:
+            answer = "Not found in your selected documents. The independent local text index is unavailable; no model or embedding fallback was attempted."
+            decision = EvidenceDecision(status="NOT FOUND", reasons=[str(exc)])
+            emit({"type": "generation_skipped", "reason": "independent_index_unavailable"})
+            return self._result(answer, analysis, [], sources=[], explanations={}, decision=decision, selected_papers=selected_papers, started=started, paper_metadata=paper_metadata)
+
+        emit({"type": "sources_found", "count": len(sources), "engine": "independent"})
+        facts = self.fact_extractor.extract(sources, analysis.important_terms)
+        answer = self.composer.compose(analysis, sources, facts)
+        decision = self.validator.validate(answer, sources, facts, analysis.important_terms, intent=analysis.intent)
+        if answer.startswith("### Direct answer\nNot found in your selected documents.") and sources:
+            decision = EvidenceDecision(status="NOT FOUND", reasons=["A target fact or explicitly labeled evidence was not present in the retrieved passages."])
+        if decision.status == "CONFLICTING EVIDENCE" and decision.conflicts:
+            answer += "\n\n### Conflicting reported values\n" + "\n".join(
+                f"- {item['claim_key']}: {', '.join(item.get('values', []))} "
+                f"[{', '.join('[' + sid + ']' for sid in item['source_ids'])}]. "
+                f"{item['note']}"
+                for item in decision.conflicts
+            )
+        reasons = "; ".join(decision.reasons)
+        answer += f"\n\nEvidence state: **{decision.status}** — {reasons}"
+        emit({"type": "evidence_ready", "count": len(sources), "engine": "independent"})
+        emit({"type": "generation_skipped", "reason": "deterministic_structured_composition"})
+        return self._result(answer, analysis, facts, sources, explanations, decision, selected_papers, started, paper_metadata)
 
     @staticmethod
     def _result(
-        answer_text: str,
-        query_analysis: Any,
+        answer: str,
+        analysis: Any,
+        facts: list,
         sources: list,
-        paper_ids: list,
-        document_labels: dict,
-        evidence_decision: Any,
-        traces: list,
-        started_at: float,
+        explanations: dict,
+        decision: Any,
+        selected_papers: list,
+        started: float,
+        paper_metadata: dict | None = None,
     ) -> RAGResult:
-        filters = getattr(query_analysis, "document_filters", {}) or {}
-        doc_ids = filters.get("document_ids") or getattr(query_analysis, "selected_document_ids", None) or getattr(query_analysis, "target_concepts", []) or []
-        fmt = filters.get("output_format") or getattr(query_analysis, "output_format", None) or getattr(query_analysis, "requested_format", None) or "narrative"
-        return RAGResult(
-            answer=answer_text,
+        document_filters = getattr(analysis, "document_filters", {}) or {}
+        cited_ids = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", answer, re.I)))
+        mapper = CitationMapper(SourceTracker(sources), paper_metadata=paper_metadata)
+        citations = mapper.map_citations(cited_ids, fallback_all_retrieved=False)
+        structured = IndependentAnswer(
+            answer=answer,
+            intent=getattr(analysis, "intent", QuestionIntent.UNKNOWN),
+            analysis=analysis,
+            facts=facts,
+            evidence_decision=decision,
             sources=sources,
-            paper_ids=paper_ids,
+            retrieval_explanations=explanations,
             metadata={
-                "output_format": fmt,
-                "selected_document_ids": doc_ids,
-                "confidence_tier": getattr(evidence_decision, "status", "SUPPORTED"),
-                "duration_seconds": round(time.perf_counter() - started_at, 3),
+                "engine": "independent",
+                "pretrained_embeddings_used": False,
+                "generative_llm_used": False,
+                "external_inference_used": False,
             },
         )
+        follow_ups = [
+            "Present the relevant findings in a concise table with citations",
+            "Explain in more depth",
+            "What are the reported limitations?",
+            "Extract key algorithms and methods",
+            "Explain in simple language",
+            "Give a practical example",
+        ]
+        return RAGResult(
+            answer=structured.answer,
+            sources=citations,
+            paper_ids=selected_papers or list(dict.fromkeys(source.paper_id for source in sources)),
+            metadata={
+                "answer_mode": "independent_documents_only",
+                "generation_provider": "none",
+                "llm_provider": "none",
+                "llm_enabled": False,
+                "embedding_provider": "none",
+                "model_calls": 0,
+                "pretrained_embeddings_used": False,
+                "external_inference_used": False,
+                "output_format": document_filters.get("output_format", "table"),
+                "selected_document_ids": document_filters.get("document_ids", []),
+                "execution_time_seconds": round(time.perf_counter() - started, 4),
+                "follow_up_suggestions": follow_ups,
+                "independent_research": {
+                    "intent": analysis.model_dump(mode="json") if hasattr(analysis, "model_dump") else {},
+                    "facts": [fact.model_dump(mode="json") if hasattr(fact, "model_dump") else fact for fact in facts],
+                    "evidence_decision": decision.model_dump(mode="json") if hasattr(decision, "model_dump") else {},
+                    "retrieval_explanations": explanations,
+                },
+            },
+        )
+

@@ -148,7 +148,11 @@ class StructuredAnswerComposer:
             text = unicodedata.normalize("NFKC", fact.supporting_passage).casefold().strip(" \t\r\n\"'“”")
             for subject in subjects:
                 phrase = re.escape(subject.casefold())
-                if re.search(rf"\b(?:an?|the)?\s*{phrase}\s+is\s+(?:an?|the|any|defined|a\s+sequence)\b", text):
+                if re.search(rf"\b(?:an?|the)?\s*{phrase}\s+(?:is|are|refers\s+to|means?|can\s+be\s+defined\s+as|is\s+defined\s+as|defined\s+to\s+be)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+format|a\s+specialized|particular\s+way)?\b", text):
+                    return 2
+                if re.search(rf"\b(?:define|defining|definition\s+of)\s+(?:an?|the\s+)?{phrase}\b", text):
+                    return 2
+                if re.search(rf"\b{phrase}\s*[-:—]\s*", text):
                     return 1
             return 0
 
@@ -159,16 +163,27 @@ class StructuredAnswerComposer:
         has_direct = bool(chosen and direct_subject(chosen[0]) > 0)
         if not has_direct:
             subject_phrase = primary_subject or (" ".join(subjects) if subjects else "the requested concept")
-            passages = StructuredAnswerComposer._best_sentences(analysis, sources, 3)
+            passages = StructuredAnswerComposer._best_sentences(analysis, sources, 4)
             if not passages:
                 return StructuredAnswerComposer._not_found(analysis, f"No defining passage for '{subject_phrase}' was retrieved.")
-            related_bullets = "\n".join(f"- {sentence} [{source.source_id}]" for source, sentence, _ in passages)
-            return (
-                f"### Direct answer\n"
-                f"The selected document does not contain an explicit formal definition of '{subject_phrase}'. "
-                f"Instead, the text focuses on practical applications, advancements, and methodologies related to this area.\n\n"
-                f"### Relevant Context from the Documents\n{related_bullets}"
-            )
+            best_lead = passages[0]
+            answer = f"### Direct answer from the selected documents\n> {best_lead[1]} [{best_lead[0].source_id}]"
+            lead_norm = " ".join(best_lead[1].casefold().split())
+            supporting = []
+            seen_sents = {lead_norm}
+            for source, sentence, _ in passages[1:]:
+                snorm = " ".join(sentence.casefold().split())
+                if snorm in seen_sents:
+                    continue
+                seen_sents.add(snorm)
+                supporting.append((source, sentence))
+                if len(supporting) >= 3:
+                    break
+            if supporting:
+                answer += "\n\n### Supporting evidence\n" + "\n".join(
+                    f"- {sentence} [{source.source_id}]" for source, sentence in supporting
+                )
+            return answer
         direct = chosen[0]
         display_definition = unicodedata.normalize("NFKC", direct.supporting_passage)
         for subject in analysis.important_terms[:3]:
@@ -1105,10 +1120,20 @@ class StructuredAnswerComposer:
             return StructuredAnswerComposer._not_found(analysis, "The retrieved passages do not contain an identifiable answer.")
         first = passages[0]
         answer = "### Direct answer from the selected documents\n> " + first[1] + f" [{first[0].source_id}]"
-        supporting = passages[1:5]
+        first_norm = " ".join(first[1].casefold().split())
+        supporting = []
+        seen_sents = {first_norm}
+        for source, sentence, _ in passages[1:]:
+            snorm = " ".join(sentence.casefold().split())
+            if snorm in seen_sents:
+                continue
+            seen_sents.add(snorm)
+            supporting.append((source, sentence))
+            if len(supporting) >= 4:
+                break
         if supporting:
             answer += "\n\n### Supporting evidence\n" + "\n".join(
-                f"- {sentence} [{source.source_id}]" for source, sentence, _ in supporting
+                f"- {sentence} [{source.source_id}]" for source, sentence in supporting
             )
         return answer
 
@@ -1124,12 +1149,48 @@ class StructuredAnswerComposer:
     def _best_sentences(analysis, sources, limit, required_terms=None):
         scored = []
         terms = list(OrderedDict.fromkeys([*analysis.important_terms, *analysis.expanded_terms]))
+        primary_concept = analysis.important_terms[0] if analysis.important_terms else ""
+        seen_texts = set()
+
         for source in sources:
             for sentence in _sentences(source.text):
-                if required_terms and _overlap_score(sentence, required_terms) <= 0:
+                clean_s = sentence.strip()
+                if not clean_s or len(clean_s) < 20:
                     continue
-                score = _overlap_score(sentence, terms)
-                if score or not terms:
-                    scored.append((source, sentence, score))
-        scored.sort(key=lambda item: (-item[2], item[0].source_id, len(item[1])))
+                norm_s = " ".join(clean_s.casefold().split())
+                if norm_s in seen_texts:
+                    continue
+                if required_terms and _overlap_score(clean_s, required_terms) <= 0:
+                    continue
+                score = _overlap_score(clean_s, terms)
+                if not score and terms:
+                    continue
+
+                s_lower = clean_s.casefold()
+                if primary_concept and primary_concept.casefold() in s_lower:
+                    score += 3.0
+                    # Major bonus if the sentence starts with the primary concept (subject/definition)
+                    if re.match(rf"^\s*(?:an?|the)?\s*{re.escape(primary_concept.casefold())}\b", s_lower):
+                        score += 5.0
+                    # Bonus for defining copulas
+                    if re.search(r"\b(?:is defined as|are defined as|means|refers to|is an?|are an?|is a\s+|are a\s+|is basically|used to|a\s+way|a\s+format|a\s+collection)\b", s_lower):
+                        score += 3.0
+
+                # Penalty for incidental mentions where query concept is merely an example of another topic
+                # e.g. "Tree is an example of a non-linear data structure"
+                if primary_concept and re.search(rf"\bis\s+(?:an?\s+)?example\s+of\b.{{0,40}}{re.escape(primary_concept.casefold())}", s_lower):
+                    if not re.match(rf"^\s*(?:an?|the)?\s*{re.escape(primary_concept.casefold())}\b", s_lower):
+                        score -= 4.0
+
+                # Preference for well-formed informative sentences (50 to 280 chars)
+                length = len(clean_s)
+                if 50 <= length <= 280:
+                    score += 1.0
+                elif length < 35:
+                    score -= 2.0
+
+                seen_texts.add(norm_s)
+                scored.append((source, clean_s, score))
+
+        scored.sort(key=lambda item: (-item[2], item[0].source_id, -len(item[1])))
         return scored[:limit]

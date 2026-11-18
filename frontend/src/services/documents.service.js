@@ -4,19 +4,23 @@ import { tokenStorage } from "@/utils/tokenStorage";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export async function openAuthenticatedPdfSource(source, highlightedText = "") {
-  if (!source?.document_id || !/\.pdf$/i.test(source.filename || "")) return false;
+  const docId = source?.document_id || source?.source_id;
+  if (!docId || !/\.pdf$/i.test(source.filename || "")) return false;
   const params = new URLSearchParams({
-    document_id: source.document_id,
+    document_id: docId,
+    source_id: docId,
     filename: source.filename || "Research source.pdf",
     page: String(source.page_start || source.page || 1),
     end_page: String(source.page_end || source.page_start || source.page || 1),
   });
   const text = (highlightedText || source.evidence_excerpt || "").replace(/\s+/g, " ").trim();
   if (text) params.set("highlight", text);
-  const tab = window.open(`/pdf-viewer?${params.toString()}`, "_blank");
-  if (!tab) return false;
-  tab.opener = null;
-  return true;
+  const targetUrl = `/pdf-viewer?${params.toString()}`;
+  if (typeof window !== "undefined") {
+    window.location.assign(targetUrl);
+    return true;
+  }
+  return false;
 }
 
 export const documentsService = {

@@ -9,6 +9,14 @@ async def test_create_paper(client, auth_headers):
     assert paper["publication_year"] == 2017
 
 
+async def test_create_paper_title_only(client, auth_headers):
+    resp = await client.post("/api/v1/papers", json={"title": "Only Title"}, headers=auth_headers)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["title"] == "Only Title"
+    assert data["description"] in ("", None)
+
+
 async def test_create_paper_requires_auth(client):
     resp = await client.post("/api/v1/papers", json={"title": "No Auth"})
     assert resp.status_code == 401

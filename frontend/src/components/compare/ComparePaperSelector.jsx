@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronDown, ChevronRight, FileText, GitCompare, Search } from "lucide-react";
 
-const isReady = (document) => document.processing_status === "indexed";
+const isReady = (document) => document?.processing_status === "indexed" || ((document?.processing_status === "needs_review" || document?.processing_status === "partial") && (document?.chunk_count || 0) > 0);
 
 export function ComparePaperSelector({
   papers = [], documentsByPaper = {}, selectedDocumentIds = [], onToggleDocument,

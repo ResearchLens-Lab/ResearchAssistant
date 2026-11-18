@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from backend.app.core.config import get_settings
 from backend.app.middleware.error_handler import register_error_handlers
 from backend.app.middleware.request_id import RequestIDMiddleware
-from backend.app.routes import api_router, health_router
+from backend.app.routes import api_router, health_router, library_router
 
 
 def _configure_logging() -> None:
@@ -69,6 +69,20 @@ async def lifespan(app: FastAPI):
                         doc.processing_status = DocumentStatus.FAILED.value
                         doc.processing_error = "Source file missing after application restart."
                         await db.commit()
+
+                # Reconcile existing documents that were left in needs_review or partial with indexed chunks
+                result_reconcile = await db.execute(
+                    select(Document)
+                    .where(
+                        Document.processing_status.in_([DocumentStatus.NEEDS_REVIEW.value, DocumentStatus.PARTIAL.value]),
+                        Document.chunk_count > 0,
+                    )
+                )
+                for review_doc in result_reconcile.scalars().all():
+                    review_doc.processing_status = DocumentStatus.INDEXED.value
+                    review_doc.processing_stage = "ready"
+                    review_doc.processing_progress = 100
+                await db.commit()
         except Exception as exc:
             logging.getLogger("backend").warning("Pending ingestion resumption notice: %s", exc)
 
@@ -155,6 +169,7 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     app.include_router(health_router)
+    app.include_router(library_router)
     app.include_router(api_router)
     return app
 

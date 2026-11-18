@@ -94,6 +94,7 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"^\s*define\s+[A-Za-z0-9\s-]{2,60}\??$",
         r"\bdefinition\s+of\s+[A-Za-z0-9\s-]{2,60}\??$",
         r"\bwhat\s+is\s+meant\s+by\s+[A-Za-z0-9\s-]{2,60}\??$",
+        r"^\s*what\s+(?:is|are)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s-]{2,60})\??$",
     ), ("definition", "core concept", "meaning")),
     (QuestionIntent.CONCEPT_EXPLANATION, (
         r"\bexplain\s+(?:the\s+)?(?:concept\s+of\s+)?([A-Za-z0-9\s-]{2,60})\b",
@@ -235,8 +236,8 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bdefine\b",
         r"\bdefinition\s+of\b",
         r"\bwhat\s+is\s+meant\s+by\b",
-        r"^\s*what\s+is\s+(?:an?|the)\s+[\w\s-]{1,50}\??$",
-        r"\bwhat\s+(?:is|are)\s+(?:an?|the)\s+[\w-]+\s*\??$",
+        r"^\s*what\s+(?:is|are)\s+(?:(?:an?|the)\s+)?[\w\s-]{1,50}\??$",
+        r"\bwhat\s+(?:is|are)\s+(?:(?:an?|the)\s+)?[\w-]+\s*\??$",
     ), ("definition", "explanation", "key points", "sources")),
     (QuestionIntent.EXPLANATION, (
         r"\bexplain\b",
@@ -349,10 +350,20 @@ class QuestionIntentClassifier:
                 answer_shape = list(shape)
                 break
 
+        concept_match = re.search(
+            r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s-]{2,50}?)(?:\s+(?:mean|is|are|defined)|\?|$)",
+            search_question, re.I
+        )
+        concept_phrase = concept_match.group(1).strip() if concept_match else None
+
         tokens = _tokens(search_question)
         important = list(OrderedDict.fromkeys(
             token for token in tokens if token not in STOPWORDS and len(token) > 1
         ))[:30]
+        if concept_phrase and len(_tokens(concept_phrase)) >= 2:
+            clean_phrase = " ".join(_tokens(concept_phrase))
+            if clean_phrase and clean_phrase not in important:
+                important.insert(0, clean_phrase)
 
         # For generic research queries without topic keywords (e.g. "Use a table"),
         # provide core academic anchor terms so retrieval finds substantive passages.

@@ -169,7 +169,7 @@ export function PaperCard({
             ) : (
               <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
                 {(sourceCount.documents || []).slice(0, 2).map((doc) => {
-                  const isReady = doc.processing_status === "indexed";
+                  const isReady = doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0);
                   const isProcessing =
                     doc.processing_status === "processing" || doc.processing_status === "uploaded";
                   const isFailed = doc.processing_status === "failed";

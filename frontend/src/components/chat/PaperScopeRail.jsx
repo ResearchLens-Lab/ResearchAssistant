@@ -20,6 +20,18 @@ const statusStyles = {
   cancelled: "bg-slate-100 text-slate-600 border border-slate-200/60",
 };
 
+function formatDocumentDisplayName(filename, paperTitle) {
+  if (!filename) return "Document";
+  const ext = filename.lastIndexOf(".") > 0 ? filename.slice(filename.lastIndexOf(".")) : "";
+  const base = filename.slice(0, filename.length - ext.length);
+  const isHashOrUuid = /^[0-9a-f]{16,}$/i.test(base) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(base);
+  const isRawTimestamp = /^\d{10,13}(_|\-)?([0-9a-f]+)?$/i.test(base);
+  if ((isHashOrUuid || isRawTimestamp) && paperTitle) {
+    return `${paperTitle}${ext}`;
+  }
+  return filename;
+}
+
 export function PaperScopeRail({ className = "", onClose }) {
   const { papers, isLoading, isError, error } = usePapers(1, 50);
   const {
@@ -56,7 +68,9 @@ export function PaperScopeRail({ className = "", onClose }) {
     const ids = [];
     for (const e of entries) {
       for (const doc of e.documents) {
-        if (doc.processing_status === "indexed") ids.push(doc.id);
+        if (doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)) {
+          ids.push(doc.id);
+        }
       }
     }
     return ids;
@@ -190,7 +204,7 @@ export function PaperScopeRail({ className = "", onClose }) {
           <div className="space-y-3 min-w-0">
             {filteredEntries.map(({ paper, documents, loading, error: docsError }) => {
               const isPaperSelected = selectedPaperIds.includes(paper.id);
-              const indexedDocs = documents.filter((doc) => doc.processing_status === "indexed");
+              const indexedDocs = documents.filter((doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0));
               const indexedCount = indexedDocs.length;
               const totalChunks = indexedDocs.reduce((sum, doc) => sum + (doc.chunk_count || 0), 0);
 
@@ -250,7 +264,7 @@ export function PaperScopeRail({ className = "", onClose }) {
                     ) : documents.length ? (
                       <ul className="space-y-1.5 min-w-0">
                         {documents.map((doc) => {
-                          const isIndexed = doc.processing_status === "indexed";
+                          const isIndexed = doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0);
                           const isDocSelected = selectedDocumentIds.includes(doc.id);
 
                           return (
@@ -273,15 +287,21 @@ export function PaperScopeRail({ className = "", onClose }) {
                                   className="shrink-0"
                                 />
                                 <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                <label
-                                  htmlFor={`doc-select-${doc.id}`}
-                                  className={`min-w-0 flex-1 truncate text-xs font-medium cursor-pointer ${
-                                    isIndexed ? "text-slate-800" : "text-slate-400 cursor-not-allowed"
-                                  }`}
-                                  title={doc.filename}
-                                >
-                                  {doc.filename}
-                                </label>
+                                {(() => {
+                                  const displayName = formatDocumentDisplayName(doc.filename, paper.title);
+                                  const truncatedDisplay = displayName.length > 28 ? displayName.slice(0, 25) + "..." : displayName;
+                                  return (
+                                    <label
+                                      htmlFor={`doc-select-${doc.id}`}
+                                      className={`min-w-0 flex-1 truncate text-xs font-medium cursor-pointer ${
+                                        isIndexed ? "text-slate-800" : "text-slate-400 cursor-not-allowed"
+                                      }`}
+                                      title={doc.filename}
+                                    >
+                                      {truncatedDisplay}
+                                    </label>
+                                  );
+                                })()}
                               </div>
 
                               {/* Row 2: Format Badge, Chunk Count, Status Badge, Quick Focus Button */}

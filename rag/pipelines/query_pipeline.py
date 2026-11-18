@@ -767,14 +767,34 @@ class QueryPipeline:
         """
         if not user_id:
             raise ValueError("user_id is required (SEC-001 compliance)")
-            
-        result = self.answer_question(
-            question="Summarize the main topics, sections, core concepts, and findings.",
-            user_id=user_id,  # SEC-001: Pass user_id
-            paper_ids=[paper_id], top_k=top_k,
+
+        from rag.intelligence.summarizer import build_paper_summary
+        summary_dict = build_paper_summary(paper_id=paper_id, user_id=user_id)
+
+        sources = []
+        for s in summary_dict.get("sources", []):
+            sources.append(RetrievedSource(
+                chunk_id=s.get("chunk_id", ""),
+                text="",
+                page_start=s.get("page", 1),
+                page_end=s.get("page", 1),
+                locator=s.get("locator", ""),
+                source_id=s.get("source_id", ""),
+                title=s.get("title", ""),
+                filename=s.get("filename", ""),
+                section=s.get("section", ""),
+            ))
+
+        return RAGResult(
+            answer=summary_dict.get("answer", ""),
+            sources=sources,
+            metadata={
+                "task": "summarize",
+                "paper_id": paper_id,
+                "chapters_count": summary_dict.get("chapters_count", 0),
+                "citations_count": summary_dict.get("citations_count", 0),
+            },
         )
-        result.metadata.update({"task": "summarize", "paper_id": paper_id})
-        return result
 
     def compare_papers(
         self,

@@ -9,6 +9,7 @@ citation verification, structured answer composition, and explainable tracing.
 
 from __future__ import annotations
 
+import copy
 import logging
 import re
 import time
@@ -93,6 +94,47 @@ class ResearchIntelligenceEngine:
             traces=traces,
         )
 
+        # G4: Concept-aware retrieval: when confidence is < 0.6, expand query with 1-hop KG neighbors
+        if (
+            confidence.overall_confidence_score < 0.6
+            or confidence.level in (ConfidenceLevel.NOT_LOCATED, ConfidenceLevel.WEAK)
+        ):
+            try:
+                from rag.intelligence.concept_graph_extractor import ConceptGraphExtractor
+                kg_path = Path("library.sqlite3")
+                if hasattr(self.retrieval_engine, "db_path") and self.retrieval_engine.db_path:
+                    possible_kg = Path(self.retrieval_engine.db_path).parent / "library.sqlite3"
+                    if possible_kg.exists():
+                        kg_path = possible_kg
+                extractor = ConceptGraphExtractor(db_path=kg_path)
+                concept_to_expand = getattr(understanding, "primary_concept", None) or understanding.raw_query
+                neighbors = extractor.get_1hop_neighbors(concept_to_expand, owner_id=owner_id)
+                if neighbors:
+                    logger.info("Low confidence (%.2f): expanding query with KG neighbors: %s", confidence.overall_confidence_score, neighbors[:3])
+                    expanded_query = copy.copy(understanding)
+                    expanded_query.raw_query = f"{understanding.raw_query} {' '.join(neighbors[:2])}"
+                    expanded_sources, expanded_traces = self.retrieval_engine.retrieve(
+                        query=expanded_query,
+                        paper_ids=paper_ids,
+                        document_ids=document_ids,
+                        top_k=top_k,
+                        owner_id=owner_id,
+                    )
+                    expanded_confidence = self.confidence_evaluator.evaluate(
+                        query=expanded_query,
+                        sources=expanded_sources,
+                        traces=expanded_traces,
+                    )
+                    if (
+                        expanded_confidence.overall_confidence_score > confidence.overall_confidence_score
+                        or (not sources and expanded_sources)
+                    ):
+                        sources = expanded_sources
+                        traces = expanded_traces
+                        confidence = expanded_confidence
+            except Exception as kg_exc:
+                logger.debug("KG expansion skipped: %s", kg_exc)
+
         # Step 5: Grounded Synthesis with Local Model & Extractive Fallback
         can_use_local = (
             self.local_intelligence.is_available()
@@ -130,10 +172,15 @@ class ResearchIntelligenceEngine:
             except Exception as exc:
                 logger.warning("Local intelligence synthesis in answer_query failed: %s; falling back", exc)
 
+        related = None
+        if confidence.level == ConfidenceLevel.NOT_LOCATED or not sources:
+            related = self.retrieval_engine.find_related_sections(understanding.primary_concept or question)
+
         answer = self.answer_composer.compose(
             query=understanding,
             sources=sources,
             confidence=confidence,
+            related_concepts=related,
         )
 
         answer.execution_time_seconds = time.perf_counter() - start_time
@@ -360,7 +407,7 @@ class ResearchIntelligenceEngine:
             "Compare with related methods",
         ]
 
-        trace_dicts = {sid: tr.__dict__ for sid, tr in traces.items()}
+        trace_dicts = {sid: (tr.__dict__ if hasattr(tr, "__dict__") else {"trace": tr}) for sid, tr in traces.items()}
 
         meta_retrieval_summary = {
             "evidence_documents_count": len(set(s.document_id for s in sources if s.document_id)),
@@ -389,7 +436,7 @@ class ResearchIntelligenceEngine:
             paper_ids=selected_papers or list(dict.fromkeys(source.paper_id for source in sources)),
             metadata={
                 "answer_mode": "independent_documents_only",
-                "generation_provider": generation_provider,
+                "generation_provider": "none" if generation_provider == "extractive" else generation_provider,
                 "confidence_tier": confidence.level.value,
                 "confidence_score": round(confidence.overall_confidence_score, 3),
                 "weak_matches": weak_matches,
@@ -416,7 +463,7 @@ class ResearchIntelligenceEngine:
                         "status": confidence.level.value,
                         "reasons": confidence.evidence_signals,
                     },
-                    "retrieval_explanations": {sid: tr.reasons for sid, tr in traces.items()},
+                    "retrieval_explanations": {sid: getattr(tr, "reasons", tr) for sid, tr in traces.items()},
                 },
             },
         )

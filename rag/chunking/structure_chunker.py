@@ -6,6 +6,7 @@ heading hierarchy breadcrumbs, section types, and parent-child chunk relations.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from bisect import bisect_right
@@ -94,6 +95,121 @@ class StructureAwareChunker(BaseChunkingStrategy):
             )
             chunks.extend(sec_chunks)
             chunk_idx += len(sec_chunks)
+
+        # Q3 Deduplication: drop verbatim identical chunks (hash(norm(text))) keeping earlier page
+        def _norm_t(t: str) -> str:
+            return re.sub(r"\s+", " ", t).strip().lower()
+
+        seen_hashes: Dict[str, DocumentChunk] = {}
+        deduped: List[DocumentChunk] = []
+        for chk in chunks:
+            h = hashlib.sha256(_norm_t(chk.text).encode("utf-8")).hexdigest()
+            if h in seen_hashes:
+                existing = seen_hashes[h]
+                if (chk.metadata.page_start or 999999) < (existing.metadata.page_start or 999999):
+                    seen_hashes[h] = chk
+            else:
+                seen_hashes[h] = chk
+                deduped.append(chk)
+        chunks = [chk for chk in deduped if chk in seen_hashes.values()]
+
+        # Q1 Chunk size bounding:
+        # - Split chunks > 800 words on paragraph/sentence boundaries
+        def _split_oversized_text(text: str, max_words: int = 600) -> List[str]:
+            paras = text.split("\n\n")
+            if len(paras) > 1:
+                res = []
+                curr = []
+                curr_w = 0
+                for p in paras:
+                    pw = len(p.split())
+                    if pw > max_words:
+                        if curr:
+                            res.append("\n\n".join(curr))
+                            curr = []
+                            curr_w = 0
+                        res.extend(_split_oversized_text(p, max_words=max_words))
+                    elif curr_w + pw > max_words and curr:
+                        res.append("\n\n".join(curr))
+                        curr = [p]
+                        curr_w = pw
+                    else:
+                        curr.append(p)
+                        curr_w += pw
+                if curr:
+                    res.append("\n\n".join(curr))
+                return res
+
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+            if len(sentences) > 1:
+                res = []
+                curr = []
+                curr_w = 0
+                for s in sentences:
+                    sw = len(s.split())
+                    if sw > max_words:
+                        if curr:
+                            res.append(" ".join(curr))
+                            curr = []
+                            curr_w = 0
+                        words = s.split()
+                        for i in range(0, len(words), max_words):
+                            res.append(" ".join(words[i : i + max_words]))
+                    elif curr_w + sw > max_words and curr:
+                        res.append(" ".join(curr))
+                        curr = [s]
+                        curr_w = sw
+                    else:
+                        curr.append(s)
+                        curr_w += sw
+                if curr:
+                    res.append(" ".join(curr))
+                return res
+
+            words = text.split()
+            return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
+
+        bounded_chunks: List[DocumentChunk] = []
+        for chk in chunks:
+            words = chk.text.split()
+            if len(words) > 800:
+                splits = _split_oversized_text(chk.text, max_words=600)
+                for s in splits:
+                    if s.strip():
+                        sub_meta = chk.metadata.model_copy()
+                        bounded_chunks.append(DocumentChunk(text=s.strip(), metadata=sub_meta))
+            else:
+                bounded_chunks.append(chk)
+
+        # - Merge chunks < min(60, target_words) into previous chunk if same section
+        min_merge_words = min(60, self.target_words)
+        merged_chunks: List[DocumentChunk] = []
+        for chk in bounded_chunks:
+            if not merged_chunks:
+                merged_chunks.append(chk)
+                continue
+            prev = merged_chunks[-1]
+            chk_words = len(chk.text.split())
+            same_sec = (prev.metadata.section or "").strip() == (chk.metadata.section or "").strip()
+            if chk_words < min_merge_words and same_sec and (len(prev.text.split()) + chk_words <= 800):
+                prev.text = prev.text.rstrip() + "\n\n" + chk.text.lstrip()
+                if chk.metadata.page_end:
+                    prev.metadata.page_end = max(prev.metadata.page_end or 0, chk.metadata.page_end)
+            else:
+                merged_chunks.append(chk)
+
+        # Re-index chunk_index sequentially
+        for idx, chk in enumerate(merged_chunks):
+            chk.metadata.chunk_index = idx
+            chk.metadata.chunk_id = make_chunk_id(
+                document.paper_id,
+                document.document_id,
+                idx,
+                page_start=chk.metadata.page_start,
+                page_end=chk.metadata.page_end,
+            )
+
+        chunks = merged_chunks
 
         logger.info(
             "Document [%s] produced %d structure-aware chunks across %d sections",

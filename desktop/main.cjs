@@ -9,8 +9,13 @@ const { spawn } = require("node:child_process");
 const { fileURLToPath } = require("node:url");
 
 const LOCAL_APP_DATA = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-const RUNTIME_HOME = process.env.RESEARCHLENS_RUNTIME_HOME || path.join(LOCAL_APP_DATA, "ResearchLens");
+const isPackaged = app.isPackaged;
+const defaultRuntimeHome = isPackaged
+  ? path.join(LOCAL_APP_DATA, "ResearchLens")
+  : path.join(LOCAL_APP_DATA, "ResearchLens-Dev");
+const RUNTIME_HOME = process.env.RESEARCHLENS_RUNTIME_HOME || defaultRuntimeHome;
 app.setPath("userData", RUNTIME_HOME);
+const isDevMode = !isPackaged || RUNTIME_HOME.toLowerCase().includes("researchlens-dev");
 
 const settingsFile = path.join(RUNTIME_HOME, "desktop-settings.json");
 const jwtKeyFile = path.join(RUNTIME_HOME, "secrets", "jwt-signing.key");
@@ -32,7 +37,6 @@ let uiOrigin = "";
 let shuttingDown = false;
 let currentJobs = 0;
 
-const isPackaged = app.isPackaged;
 const runtimeRoot = isPackaged
   ? path.join(process.resourcesPath, "app-runtime")
   : path.join(__dirname, "build", "app-runtime");
@@ -154,11 +158,11 @@ function appendPrivateLog(message) {
     const target = path.join(logDir, "desktop.log");
     if (fs.existsSync(target) && fs.statSync(target).size > 1024 * 1024) {
       const rotated = path.join(logDir, "desktop.previous.log");
-      try { fs.rmSync(rotated, { force: true }); } catch {}
+      try { fs.rmSync(rotated, { force: true }); } catch { }
       fs.renameSync(target, rotated);
     }
     fs.appendFileSync(target, `${new Date().toISOString()} ${message.replace(/[\r\n\t]/g, " ").slice(0, 500)}\n`, { mode: 0o600 });
-  } catch {}
+  } catch { }
 }
 
 function listenForPort(preferred = 0) {
@@ -263,7 +267,7 @@ function spawnTracked(role, executable, args, options = {}) {
     tracker.exitCode = code;
     tracker.exitSignal = signal;
     const runtimeMs = tracker.endTime - tracker.startTime;
-    
+
     if (code !== 0 && !shuttingDown) {
       const errDetails = tracker.getTracebackOrError();
       appendPrivateLog(`[PROCESS-EXIT] Role: ${role} | PID: ${proc.pid} | ExitCode: ${code ?? "none"} | Signal: ${signal || "none"} | Duration: ${runtimeMs}ms`);
@@ -328,48 +332,9 @@ function checkModelAvailable(url = "http://127.0.0.1:11434", targetModel = "qwen
 }
 
 async function ensureLocalIntelligence() {
-  try {
-    const alreadyActive = await checkOllamaAlive(localIntelligenceUrl);
-    if (alreadyActive) {
-      appendPrivateLog("Local Intelligence service is already active on port 11434 (reusing active instance).");
-      localIntelligenceActive = true;
-      localModelInstalled = await checkModelAvailable(localIntelligenceUrl, "qwen3.5:0.8b");
-      appendPrivateLog(`Local Intelligence model qwen3.5:0.8b status: ${localModelInstalled ? "READY" : "NOT_DOWNLOADED"}`);
-      return;
-    }
-
-    const ollamaExe = resolveOllamaExecutable();
-    if (!ollamaExe) {
-      appendPrivateLog("Local Intelligence runtime binary not found; continuing in deterministic extractive mode.");
-      localIntelligenceActive = false;
-      localModelInstalled = false;
-      return;
-    }
-
-    appendPrivateLog(`Spawning application-managed Local Intelligence engine: ${ollamaExe}`);
-    const modelsDir = process.env.OLLAMA_MODELS || path.join(os.homedir(), ".ollama", "models");
-    try { fs.mkdirSync(modelsDir, { recursive: true }); } catch {}
-
-    ollamaProcess = spawnTracked("local-intelligence", ollamaExe, ["serve"], {
-      cwd: path.dirname(ollamaExe),
-      env: {
-        OLLAMA_HOST: "127.0.0.1:11434",
-        OLLAMA_MODELS: modelsDir,
-        OLLAMA_ORIGINS: "http://127.0.0.1",
-        OLLAMA_KEEP_ALIVE: "15m",
-      },
-    });
-
-    await waitForHttp(`${localIntelligenceUrl}/api/tags`, {}, 12000, ollamaProcess);
-    localIntelligenceActive = true;
-    appendPrivateLog("Application-managed Local Intelligence service started successfully.");
-    localModelInstalled = await checkModelAvailable(localIntelligenceUrl, "qwen3.5:0.8b");
-    appendPrivateLog(`Local Intelligence model qwen3.5:0.8b status: ${localModelInstalled ? "READY" : "NOT_DOWNLOADED"}`);
-  } catch (err) {
-    appendPrivateLog(`Local Intelligence startup encountered issue: ${err.message}; gracefully falling back to extractive engine.`);
-    localIntelligenceActive = false;
-    localModelInstalled = false;
-  }
+  localIntelligenceActive = false;
+  localModelInstalled = false;
+  appendPrivateLog("Local Intelligence engine disabled; running in pure deterministic extractive mode.");
 }
 
 function appApiEnvironment() {
@@ -408,6 +373,8 @@ function appApiEnvironment() {
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || localIntelligenceUrl,
     OLLAMA_MODEL: process.env.OLLAMA_MODEL || "qwen3.5:0.8b",
     EXTERNAL_LOOKUPS_ENABLED: (readJsonSafe(profileFile, {}).allowExternalLookups === true) ? "true" : "false",
+    PYTHONDONTWRITEBYTECODE: "1",
+    PYTHONPYCACHEPREFIX: path.join(library, "cache", "pycache"),
     NODE_OPTIONS: "",
   };
 }
@@ -415,6 +382,49 @@ function appApiEnvironment() {
 async function runMigrations() {
   const python = path.join(pythonRoot, "python.exe");
   const env = { ...appApiEnvironment(), DESKTOP_RUNTIME: "false" };
+  const databasePath = path.join(appSettings?.libraryPath || "", "library.sqlite3");
+  const migrationsDir = path.join(sourceRoot, "backend", "migrations", "versions");
+
+  // Check alembic_version in SQLite before spawning alembic subprocess; skip if already at head
+  const isAtHead = await new Promise((resolve) => {
+    if (!fs.existsSync(databasePath)) return resolve(false);
+    const checkScript = `
+import sqlite3, os, re, sys
+try:
+    db = sys.argv[1]
+    mig_dir = sys.argv[2]
+    conn = sqlite3.connect(db)
+    cur = conn.cursor()
+    cur.execute("SELECT version_num FROM alembic_version LIMIT 1")
+    row = cur.fetchone()
+    if not row: sys.exit(1)
+    cur_rev = row[0]
+    re_rev = re.compile(r"^revision\\s*(?::\\s*str)?\\s*=\\s*['\\\"]([^'\\\"]+)['\\\"]", re.M)
+    re_down = re.compile(r"^down_revision\\s*(?::\\s*[^=]+)?\\s*=\\s*['\\\"]([^'\\\"]+)['\\\"]", re.M)
+    all_revs, down_revs = set(), set()
+    for f in os.listdir(mig_dir):
+        if f.endswith('.py') and not f.startswith('__'):
+            c = open(os.path.join(mig_dir, f), encoding='utf-8', errors='ignore').read()
+            m1, m2 = re_rev.search(c), re_down.search(c)
+            if m1: all_revs.add(m1.group(1))
+            if m2 and m2.group(1): down_revs.add(m2.group(1))
+    heads = all_revs - down_revs
+    if cur_rev in heads:
+        sys.exit(0)
+    sys.exit(1)
+except Exception:
+    sys.exit(1)
+`;
+    const proc = spawn(python, ["-c", checkScript, databasePath, migrationsDir], { stdio: "ignore" });
+    proc.once("error", () => resolve(false));
+    proc.once("exit", (code) => resolve(code === 0));
+  });
+
+  if (isAtHead) {
+    appendPrivateLog("Database schema is already at Alembic head revision; skipping migration subprocess.");
+    return;
+  }
+
   return new Promise((resolve, reject) => {
     const proc = spawnTracked("db-migration", python, ["-m", "alembic", "-c", "backend/alembic.ini", "upgrade", "head"], {
       cwd: sourceRoot,
@@ -436,7 +446,7 @@ function emitStartupProgress(payload) {
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
       mainWindow.webContents.send("startup:progress", payload);
     }
-  } catch {}
+  } catch { }
 }
 
 async function startLocalServices() {
@@ -445,11 +455,16 @@ async function startLocalServices() {
   requestKey = crypto.randomBytes(32).toString("base64url");
   let activeStageId = "runtime";
 
+  // Startup stages copy:
+  // 1: Getting ready / Checking your library folder
+  // 2: Opening your library / Making sure your projects are up to date
+  // 3: Starting search / Preparing your search tools
+  // 4: Opening your workspace / Almost ready
   const stagesState = [
-    { id: "runtime", title: "Runtime", status: "pending", label: "Waiting" },
-    { id: "database", title: "Database", status: "pending", label: "Waiting" },
-    { id: "engine", title: "Research Engine", status: "pending", label: "Waiting" },
-    { id: "workbench", title: "Workbench", status: "pending", label: "Waiting" },
+    { id: "runtime", title: "Getting ready", status: "pending", label: "Checking your library folder" },
+    { id: "database", title: "Opening your library", status: "pending", label: "Making sure your projects are up to date" },
+    { id: "engine", title: "Starting search", status: "pending", label: "Preparing your search tools" },
+    { id: "workbench", title: "Opening your workspace", status: "pending", label: "Almost ready" },
   ];
 
   const emitStage = (stageId, status, label, percent, detail = "") => {
@@ -496,18 +511,18 @@ async function startLocalServices() {
     const runtimeMs = Date.now() - t0;
     emitStage("runtime", "completed", `Verified (${runtimeMs}ms)`, 25, "Application runtime and local ports ready.");
 
-    // STAGE 2: Database
+    // STAGE 2: Database / Library Check
     const t1 = Date.now();
-    emitStage("database", "in-progress", "Verifying database integrity & migrations…", 35, "Checking SQLite database and applying migrations…");
+    emitStage("database", "in-progress", "Checking library…", 35, "Checking SQLite database and migrations…");
     await runMigrations();
     const dbMs = Date.now() - t1;
-    emitStage("database", "completed", `Up to date (${dbMs}ms)`, 50, "SQLite database and migrations verified.");
+    emitStage("database", "completed", `Checking library (${dbMs}ms)`, 50, "SQLite database and migrations verified.");
 
     // STAGE 3: Research Engine & Local Intelligence
     const t2 = Date.now();
-    emitStage("engine", "in-progress", "Initializing research intelligence & local runtime…", 60, "Verifying local intelligence engine…");
+    emitStage("engine", "in-progress", "Starting local services…", 60, "Verifying local intelligence engine…");
     await ensureLocalIntelligence();
-    emitStage("engine", "in-progress", "Starting Python research intelligence engine…", 70, "Spawning FastAPI sidecar…");
+    emitStage("engine", "in-progress", "Starting local services…", 70, "Spawning FastAPI sidecar…");
     const apiEnv = appApiEnvironment();
     backendProcess = spawnTracked("fastapi-backend", pythonExe, [
       "-m", "uvicorn", "backend.app.main:app",
@@ -522,7 +537,7 @@ async function startLocalServices() {
       "X-ResearchLens-Desktop-Key": requestKey,
     }, 45000, backendProcess);
     const engineMs = Date.now() - t2;
-    emitStage("engine", "completed", `Active (${engineMs}ms)`, 80, "Research intelligence engine healthy and ready.");
+    emitStage("engine", "completed", `Starting local services (${engineMs}ms)`, 80, "Research intelligence engine healthy and ready.");
 
     // STAGE 4: Workbench
     const t3 = Date.now();
@@ -534,7 +549,7 @@ async function startLocalServices() {
 
     await waitForHttp(uiOrigin, {}, 45000, frontendProcess);
     const workbenchMs = Date.now() - t3;
-    emitStage("workbench", "completed", `Ready (${workbenchMs}ms)`, 100, "Workbench application server ready.");
+    emitStage("workbench", "completed", "Ready", 100, "Ready");
 
     const totalDuration = Date.now() - overallStart;
     appendPrivateLog(`Local services started successfully in ${totalDuration}ms (runtime=${runtimeMs}ms, db=${dbMs}ms, engine=${engineMs}ms, workbench=${workbenchMs}ms, apiPort=${apiPort}, uiPort=${uiPort}).`);
@@ -725,7 +740,7 @@ function registerIpc() {
 
   guarded("desktop:clear-session", async () => {
     const sessionFile = path.join(RUNTIME_HOME, "session.dat");
-    try { await fsp.unlink(sessionFile); } catch {}
+    try { await fsp.unlink(sessionFile); } catch { }
     return { ok: true };
   });
 
@@ -744,9 +759,103 @@ function registerIpc() {
   guarded("desktop:restart-app", async () => {
     try {
       app.releaseSingleInstanceLock();
-    } catch {}
+    } catch { }
     app.relaunch();
     app.quit();
+    return { ok: true };
+  });
+
+  let failedPinAttempts = 0;
+  let lockoutUntil = 0;
+  let currentLockoutSeconds = 30;
+
+  function hashPin(pin, salt) {
+    return crypto.scryptSync(String(pin), salt, 64).toString("hex");
+  }
+
+  guarded("desktop:pin-status", async () => {
+    const p = readJsonSafe(profileFile, {});
+    const now = Date.now();
+    const isLocked = now < lockoutUntil;
+    return {
+      enabled: Boolean(p.pin && p.pin.enabled && p.pin.hash),
+      locked: isLocked,
+      remainingSeconds: isLocked ? Math.ceil((lockoutUntil - now) / 1000) : 0,
+    };
+  });
+
+  guarded("desktop:set-pin", async (pin) => {
+    const pinStr = String(pin || "").trim();
+    if (!/^\d{4,6}$/.test(pinStr)) {
+      return { ok: false, error: "PIN must be between 4 and 6 digits." };
+    }
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = hashPin(pinStr, salt);
+    const p = readJsonSafe(profileFile, {});
+    p.pin = { hash, salt, enabled: true };
+    writeJsonSafe(profileFile, p);
+    failedPinAttempts = 0;
+    lockoutUntil = 0;
+    currentLockoutSeconds = 30;
+    return { ok: true };
+  });
+
+  guarded("desktop:verify-pin", async (pin) => {
+    const p = readJsonSafe(profileFile, {});
+    if (!p.pin || !p.pin.enabled) {
+      return { ok: true, notConfigured: true };
+    }
+    const now = Date.now();
+    if (now < lockoutUntil) {
+      return {
+        ok: false,
+        locked: true,
+        remainingSeconds: Math.ceil((lockoutUntil - now) / 1000),
+      };
+    }
+    const pinStr = String(pin || "").trim();
+    const computed = hashPin(pinStr, p.pin.salt);
+    if (computed === p.pin.hash) {
+      failedPinAttempts = 0;
+      lockoutUntil = 0;
+      currentLockoutSeconds = 30;
+      return { ok: true };
+    }
+    failedPinAttempts++;
+    if (failedPinAttempts >= 5) {
+      lockoutUntil = now + currentLockoutSeconds * 1000;
+      const duration = currentLockoutSeconds;
+      currentLockoutSeconds = Math.min(15 * 60, currentLockoutSeconds * 2);
+      return {
+        ok: false,
+        locked: true,
+        remainingSeconds: duration,
+        error: `Too many failed attempts. Locked for ${duration}s.`,
+      };
+    }
+    return {
+      ok: false,
+      locked: false,
+      attemptsRemaining: 5 - failedPinAttempts,
+      error: "Incorrect PIN.",
+    };
+  });
+
+  guarded("desktop:remove-pin", async (currentPin) => {
+    const p = readJsonSafe(profileFile, {});
+    if (!p.pin || !p.pin.enabled) {
+      return { ok: true };
+    }
+    const pinStr = String(currentPin || "").trim();
+    const computed = hashPin(pinStr, p.pin.salt);
+    if (computed !== p.pin.hash) {
+      return { ok: false, error: "Incorrect PIN." };
+    }
+    delete p.pin;
+    writeJsonSafe(profileFile, p);
+    failedPinAttempts = 0;
+    lockoutUntil = 0;
+    currentLockoutSeconds = 30;
     return { ok: true };
   });
 
@@ -761,7 +870,7 @@ function registerIpc() {
 
   guarded("startup:open-logs", async () => {
     const logDir = path.join(RUNTIME_HOME, "logs");
-    try { await shell.openPath(logDir); } catch {}
+    try { await shell.openPath(logDir); } catch { }
     return { ok: true };
   });
 
@@ -840,7 +949,7 @@ function registerIpc() {
               if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
                 mainWindow.webContents.send("intelligence:progress", statusObj);
               }
-            } catch {}
+            } catch { }
           }
         });
         res.on("end", async () => {
@@ -951,6 +1060,9 @@ async function openApplication() {
       // Provide a brief pause so user sees 100% completion before UI transition
       setTimeout(async () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.once("did-finish-load", () => {
+            appendPrivateLog("workspace:ready");
+          });
           mainWindow.loadURL(`${uiOrigin}/papers`);
         }
       }, 450);
@@ -980,8 +1092,8 @@ function createWindow() {
   const appIcon = fs.existsSync(path.join(__dirname, "build", "icon.ico"))
     ? path.join(__dirname, "build", "icon.ico")
     : (fs.existsSync(path.join(__dirname, "build", "icon.png"))
-        ? path.join(__dirname, "build", "icon.png")
-        : undefined);
+      ? path.join(__dirname, "build", "icon.png")
+      : undefined);
 
   const profileData = readJsonSafe(profileFile, {});
   const winConfig = profileData.window || {};
@@ -1010,17 +1122,21 @@ function createWindow() {
   const isWindows = process.platform === "win32";
   const windowChromeOptions = isWindows
     ? {
-        titleBarStyle: "hidden",
-        titleBarOverlay: {
-          color: "#ffffff",
-          symbolColor: "#203449",
-          height: 40,
-        },
-      }
+      titleBarStyle: "hidden",
+      titleBarOverlay: {
+        color: "#ffffff",
+        symbolColor: "#203449",
+        height: 40,
+      },
+    }
     : {};
 
+  const appTitle = isDevMode
+    ? "[DEV] ResearchLens"
+    : (process.env.RESEARCHLENS_RUNTIME_HOME ? "[ISOLATED TEST ENVIRONMENT] ResearchLens" : "ResearchLens");
+
   mainWindow = new BrowserWindow({
-    title: process.env.RESEARCHLENS_RUNTIME_HOME ? "[ISOLATED TEST ENVIRONMENT] ResearchLens" : "ResearchLens",
+    title: appTitle,
     ...winBounds,
     minWidth: 1040,
     minHeight: 720,
@@ -1097,21 +1213,26 @@ function createWindow() {
       appendPrivateLog(`Window bounds save notice: ${e.message}`);
     }
   });
-  if (process.env.RESEARCHLENS_RUNTIME_HOME) {
+  if (isDevMode || process.env.RESEARCHLENS_RUNTIME_HOME) {
     mainWindow.on("page-title-updated", (event) => {
       event.preventDefault();
-      mainWindow.setTitle("[ISOLATED TEST ENVIRONMENT] ResearchLens");
+      mainWindow.setTitle(appTitle);
     });
   }
   mainWindow.once("ready-to-show", () => mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url && (
+    if (!url) return { action: "deny" };
+    if (
       (uiOrigin && url.startsWith(uiOrigin)) ||
       url.startsWith("http://127.0.0.1:") ||
       url.startsWith("http://localhost:") ||
       url.includes("/pdf-viewer")
-    )) {
-      return { action: "allow" };
+    ) {
+      mainWindow.loadURL(url);
+      return { action: "deny" };
+    }
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
     }
     return { action: "deny" };
   });
@@ -1125,7 +1246,7 @@ function createWindow() {
         ) {
           return;
         }
-      } catch {}
+      } catch { }
     }
     if (uiOrigin && (target === uiOrigin || target.startsWith(`${uiOrigin}/`))) return;
     event.preventDefault();
@@ -1142,7 +1263,7 @@ function killProcessTree(pid) {
   try {
     const taskkill = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
     spawn(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
-  } catch {}
+  } catch { }
 }
 
 function stopOwnedServices() {
@@ -1151,7 +1272,7 @@ function stopOwnedServices() {
     if (!proc || proc.killed) continue;
     try {
       proc.kill("SIGTERM");
-    } catch {}
+    } catch { }
   }
   // Allow graceful exit for database transactions before force kill
   setTimeout(() => {
@@ -1167,12 +1288,13 @@ app.on("before-quit", () => {
   if (readJsonSafe(profileFile, {}).rememberMe === false) {
     try {
       fs.unlinkSync(path.join(RUNTIME_HOME, "session.dat"));
-    } catch {}
+    } catch { }
   }
   stopOwnedServices();
 });
 app.on("window-all-closed", () => app.quit());
 app.whenReady().then(() => {
+  appendPrivateLog("app:ready");
   registerIpc();
   createWindow();
 }).catch((error) => {

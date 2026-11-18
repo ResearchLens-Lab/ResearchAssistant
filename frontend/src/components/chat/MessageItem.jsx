@@ -88,7 +88,7 @@ function ResearchActivityCard({ summary, meta, content, sources, isPending, prog
             <span className="font-semibold text-slate-500 block">Answer style:</span>
             <span className="text-slate-800">
               {provider === "local_intelligence"
-                ? "Local AI summary, checked against sources"
+                ? "Synthesized summary, checked against sources"
                 : "Quoted directly from sources"}
             </span>
           </div>

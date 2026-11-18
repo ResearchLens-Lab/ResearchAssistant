@@ -78,7 +78,9 @@ export default function PaperLibraryPage() {
             id,
             {
               total: documents.length,
-              indexed: documents.filter((doc) => doc.processing_status === "indexed").length,
+              indexed: documents.filter(
+                (doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)
+              ).length,
               processing: documents.filter(
                 (doc) => doc.processing_status === "processing" || doc.processing_status === "uploaded"
               ).length,

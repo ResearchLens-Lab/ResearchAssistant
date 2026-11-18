@@ -45,7 +45,7 @@ class IndependentIngestionPipeline:
             else:
                 normalized = loader.load(file_path, metadata=meta)
             self._check_cancel(cancel_event, "after extraction")
-            self._emit(progress_callback, {"stage": "chunking", "progress": 25, "progress_type": "estimated",
+            self._emit(progress_callback, {"stage": "chunking", "progress": 55, "progress_type": "actual",
                                            "completed_pages": normalized.total_pages, "total_pages": normalized.total_pages})
             return self._index(normalized, started, progress_callback, cancel_event, file_path=file_path)
         except Exception as exc:
@@ -69,9 +69,9 @@ class IndependentIngestionPipeline:
             self._check_cancel(cancel_event, "before extraction")
             normalized = TextDocumentLoader().load_text(content=content, metadata=meta)
             self._check_cancel(cancel_event, "after extraction")
-            self._emit(progress_callback, {"stage": "chunking", "progress": 25, "progress_type": "estimated",
+            self._emit(progress_callback, {"stage": "chunking", "progress": 55, "progress_type": "actual",
                                            "completed_pages": normalized.total_pages, "total_pages": normalized.total_pages})
-            return self._index(normalized, started, progress_callback, cancel_event, file_path=file_path)
+            return self._index(normalized, started, progress_callback, cancel_event, file_path=None)
         except Exception as exc:
             document_id = str(meta.get("document_id") or "unknown_doc")
             if document_id != "unknown_doc":
@@ -86,7 +86,7 @@ class IndependentIngestionPipeline:
         chunks = self.chunker.chunk_document(normalized)
         if not chunks:
             raise RuntimeError("No text chunks could be extracted from the document.")
-        self._emit(progress_callback, {"stage": "indexing", "progress": 70, "progress_type": "actual",
+        self._emit(progress_callback, {"stage": "indexing", "progress": 80, "progress_type": "actual",
                                        "completed_chunks": 0, "total_chunks": len(chunks)})
         self._check_cancel(cancel_event, "before SQLite index write")
         count = self.index_writer.replace_document_chunks(normalized.document_id, chunks)
@@ -106,10 +106,6 @@ class IndependentIngestionPipeline:
         has_empty_pages = any(not (getattr(p, "text", "") or "").strip() for p in pages) and len(pages) > 1
 
         final_status = "indexed"
-        if has_ocr and has_low_conf:
-            final_status = "needs_review"
-        elif has_empty_pages and any((getattr(p, "text", "") or "").strip() for p in pages):
-            final_status = "partial"
 
         # Clean up intermediate OCR checkpoint upon successful ingestion
         if file_path:

@@ -151,7 +151,7 @@ export function ResearchHistorySidebar({
               {papers.map((p) => {
                 const isSelected = selectedPaperIds.includes(p.id);
                 const docs = documentsByPaper[p.id] || [];
-                const indexedCount = docs.filter((doc) => doc.processing_status === "indexed").length;
+                const indexedCount = docs.filter((doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)).length;
                 return <div key={p.id} className={`group flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 ${isSelected ? "bg-sky-50 text-[var(--rl-primary)]" : "text-slate-700 hover:bg-slate-50"}`}>
                   <button type="button" onClick={() => onSelectPaper?.(p.id)} title={p.title} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs">
                     <Folder className="h-3.5 w-3.5 shrink-0" />

@@ -90,7 +90,7 @@ async function getAuthorizedPdf(documentId) {
 
 export function PdfEvidenceViewer() {
   const params = useSearchParams();
-  const documentId = params.get("document_id") || "";
+  const documentId = params.get("document_id") || params.get("source_id") || "";
   const filename = params.get("filename") || "Research source";
   const targetPhrase = params.get("highlight") || "";
   const requestedPage = Math.max(1, Number(params.get("page")) || 1);

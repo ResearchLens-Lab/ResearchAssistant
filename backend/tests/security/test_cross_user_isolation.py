@@ -134,7 +134,7 @@ async def test_user_cannot_query_other_users_papers_via_rag(db: AsyncSession, tm
         assert len(sources_attack) == 0, \
             f"SECURITY VIOLATION: Alice accessed Bob's paper content! Retrieved: {sources_attack}"
         answer_attack = result_attack.get("answer", "").lower()
-        assert "cobalt" not in answer_attack, \
+        assert "vacuum" not in answer_attack and "ultra-high" not in answer_attack, \
             "SECURITY VIOLATION: Alice received answer containing Bob's confidential content!"
 
         # Scenario 2: Alice queries Alice's own paper (legitimate access)

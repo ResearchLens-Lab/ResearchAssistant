@@ -50,6 +50,8 @@ class LocalIntelligenceService:
 
     def is_available(self) -> bool:
         """Fast check whether local inference service is responsive."""
+        if os.getenv("RESEARCHLENS_ENABLE_LOCAL_LLM", "").lower() not in ("1", "true", "yes"):
+            return False
         try:
             with httpx.Client(timeout=1.5) as client:
                 resp = client.get(f"{self.base_url}/api/tags")

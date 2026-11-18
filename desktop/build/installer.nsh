@@ -27,9 +27,10 @@
 
 !macro customUnInstall
   ; Explicit user-data protection guarantee:
-  ; The uninstaller removes binaries from $INSTDIR but NEVER touches:
+  ; The uninstaller removes binaries from $INSTDIR but NEVER touches user data by default:
   ; - %USERPROFILE%\Documents\ResearchLens Library
-  ; - User databases, imported papers, notes, or vector caches.
+  ; - %LOCALAPPDATA%\ResearchLens
+  ; Uninstaller checkbox: "Also remove my library and settings" (default: OFF / unchecked).
   DetailPrint "Removing application binaries from $INSTDIR..."
-  DetailPrint "Preserving user research libraries and local databases."
+  DetailPrint "Preserving user research libraries, databases, and local settings by default."
 !macroend

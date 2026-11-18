@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld("researchLensDesktop", Object.freeze({
   getExternalLookups: () => ipcRenderer.invoke("desktop:get-external-lookups"),
   setExternalLookups: (enabled) => ipcRenderer.invoke("desktop:set-external-lookups", enabled),
   restartApp: () => ipcRenderer.invoke("desktop:restart-app"),
+  getPinStatus: () => ipcRenderer.invoke("desktop:pin-status"),
+  setPin: (pin) => ipcRenderer.invoke("desktop:set-pin", pin),
+  verifyPin: (pin) => ipcRenderer.invoke("desktop:verify-pin", pin),
+  removePin: (pin) => ipcRenderer.invoke("desktop:remove-pin", pin),
   onIntelligenceProgress: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on("intelligence:progress", handler);

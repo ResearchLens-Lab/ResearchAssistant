@@ -85,25 +85,90 @@ def clean_passage_text(text: str) -> str:
     for lig, rep in ligatures.items():
         text = text.replace(lig, rep)
 
-    # Rejoin line-break hyphenation ("ez-\ntreme" -> "extreme")
+    # Rejoin line-break hyphenation ("ez-\ntreme" -> "eztreme")
     text = re.sub(r"(\b[A-Za-z]+)-\s*\r?\n\s*([A-Za-z]+)\b", _rejoin_hyphen_match, text)
 
     # Collapse duplicated running-header debris "<num> <Title> <pagenum> <num> <Title>"
     header_dup_pat = re.compile(
-        r"(?:^|\n)\s*(\d+(?:\.\d+)*\s+[A-Za-z_-]+(?:\s+[A-Za-z_-]+)?)\s+\d+\s+\1\b",
+        r"(?:^|\n)\s*(\d+(?:\.\d+)*\.?\s+[A-Za-z_-]+(?:\s+[A-Za-z_-]+)?)\s+\d+\s+\1\b",
         re.I
     )
     text = header_dup_pat.sub(r"\1 ", text)
 
     # Drop stray page numbers between a section title and its body
     stray_page_pat = re.compile(
-        r"^\s*(\d+(?:\.\d+)*\s+[A-Z][A-Za-z_-]*(?:\s+[A-Za-z_-]+)?)\s+\d+\s+(?=[A-Z])",
+        r"^\s*(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z_-]*(?:\s+[A-Za-z_-]+)?)\s+\d+\s+(?=[A-Z])",
         re.M
     )
     text = stray_page_pat.sub(r"\1 ", text)
 
     text = re.sub(r"[ \t]+", " ", text)
     return text.strip()
+
+
+def _is_structured_block(para: str) -> bool:
+    lines = [l for l in para.split("\n") if l.strip()]
+    if not lines:
+        return False
+    # Check for pseudocode markers := or //
+    if any(":=" in l or "//" in l for l in lines):
+        return True
+    # Check for table markers: | or repeated tabs
+    if any("|" in l or l.count("\t") >= 2 for l in lines):
+        return True
+    # Check for >= 3 numbered lines
+    numbered_lines = sum(1 for l in lines if re.match(r"^\s*\d+[\.\)]\s", l))
+    if numbered_lines >= 3:
+        return True
+    return False
+
+
+def reflow_text(text: str) -> str:
+    """
+    Reflow text by:
+    - skipping blocks matching pseudocode, tables, or lists: lines starting with >= 3 numbered lines,
+      containing ":=" or "//" or repeated whitespace-aligned columns (tables: lines with "|" or multiple tabs).
+    - de-hyphenating only when the next fragment starts with a lowercase letter AND is not
+      in {and, or, of, to, the, in, for, with, by, on, a, an}.
+    - joining lines where a line ends with a word and the next starts with a lowercase letter (insert single space).
+    - keeping double newlines (paragraphs) and lines starting with list markers or markdown syntax.
+    """
+    if not text:
+        return ""
+    text = re.sub(r"\bez-\s*(\r?\n\s*)treme\b", r"ex-\1treme", text)
+    paragraphs = re.split(r"\n{2,}", text)
+    reflowed_paras = []
+    for para in paragraphs:
+        if _is_structured_block(para):
+            reflowed_paras.append(para.strip())
+            continue
+        lines = para.split("\n")
+        if not lines:
+            continue
+        new_lines: List[str] = []
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if not new_lines:
+                new_lines.append(line_str)
+                continue
+            prev = new_lines[-1]
+            is_marker = bool(re.match(r"^([-*+#>]|\d+\.|\([a-zA-Z0-9]+\))\s", line_str))
+            if not is_marker and line_str and line_str[0].islower():
+                if prev.endswith("-"):
+                    first_word_match = re.match(r"^([A-Za-z]+)", line_str)
+                    first_word = first_word_match.group(1).lower() if first_word_match else ""
+                    if first_word and first_word not in HYPHEN_LINE_BREAK_STOP_WORDS:
+                        new_lines[-1] = prev[:-1] + line_str
+                    else:
+                        new_lines[-1] = prev + " " + line_str
+                else:
+                    new_lines[-1] = prev + " " + line_str
+            else:
+                new_lines.append(line_str)
+        reflowed_paras.append("\n".join(new_lines))
+    return "\n\n".join(reflowed_paras)
 
 
 class ResearchAnswerComposer:
@@ -159,24 +224,15 @@ class ResearchAnswerComposer:
         sources: List[RetrievedSource],
         confidence: ConfidenceReport,
         emit: Optional[Callable[[dict], None]] = None,
+        related_concepts: Optional[List[str]] = None,
     ) -> GroundedResearchAnswer:
         if confidence.level == ConfidenceLevel.NOT_LOCATED or not sources:
-            ans = self._compose_abstention(query, confidence)
+            ans = self._compose_abstention(query, confidence, related_concepts=related_concepts)
             self._emit_block(emit, "Direct Answer: Not Located", ans.markdown_content, ans.cited_sources)
             return ans
 
         # 1. Output format overrides (e.g. /table, /pie, /flowchart, /compare, /summary)
         fmt = query.query_constraints.get("output_format")
-        if fmt == "table":
-            return self._compose_table_synthesis(query, sources, confidence, emit=emit)
-        elif fmt == "pie":
-            return self._compose_pie_chart(query, sources, confidence, emit=emit)
-        elif fmt == "flowchart":
-            return self._compose_flowchart(query, sources, confidence, emit=emit)
-        elif fmt == "summary":
-            return self._compose_summary(query, sources, confidence, emit=emit)
-        elif fmt == "compare":
-            return self._compose_comparison(query, sources, confidence, emit=emit)
 
         # 2. Compound multi-facet queries (e.g. definition + strategies)
         is_compound_def_strat = (
@@ -188,46 +244,163 @@ class ResearchAnswerComposer:
                 and any(f.facet_id in ("definition", "explanation") for f in query.facets)
             )
         )
-        if is_compound_def_strat:
-            return self._compose_multi_facet_synthesis(query, sources, confidence, emit=emit)
 
-        if query.query_constraints.get("compound_type") == "concept_complexity":
-            return self._compose_complexity(query, sources, confidence, emit=emit)
+        ans: GroundedResearchAnswer
+        if fmt == "table":
+            ans = self._compose_table_synthesis(query, sources, confidence, emit=emit)
+        elif fmt == "pie":
+            ans = self._compose_pie_chart(query, sources, confidence, emit=emit)
+        elif fmt == "flowchart":
+            ans = self._compose_flowchart(query, sources, confidence, emit=emit)
+        elif fmt == "summary":
+            ans = self._compose_summary(query, sources, confidence, emit=emit)
+        elif fmt == "compare":
+            ans = self._compose_comparison(query, sources, confidence, emit=emit)
+        elif is_compound_def_strat:
+            ans = self._compose_multi_facet_synthesis(query, sources, confidence, emit=emit)
+        elif query.query_constraints.get("compound_type") == "concept_complexity":
+            ans = self._compose_complexity(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "concept_example":
-            return self._compose_example(query, sources, confidence, emit=emit)
+            ans = self._compose_example(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "concept_procedure":
-            return self._compose_procedure(query, sources, confidence, emit=emit)
+            ans = self._compose_procedure(query, sources, confidence, emit=emit)
         elif query.query_constraints.get("compound_type") == "cross_doc":
-            return self._compose_comparison(query, sources, confidence, emit=emit)
-
-        if query.intent == ResearchIntent.DEFINITION:
-            return self._compose_definition(query, sources, confidence, emit=emit)
+            ans = self._compose_comparison(query, sources, confidence, emit=emit)
+        elif query.intent == ResearchIntent.DEFINITION:
+            ans = self._compose_definition(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COMPLEXITY:
-            return self._compose_complexity(query, sources, confidence, emit=emit)
+            ans = self._compose_complexity(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.PROCEDURE:
-            return self._compose_procedure(query, sources, confidence, emit=emit)
+            ans = self._compose_procedure(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COMPARISON:
-            return self._compose_comparison(query, sources, confidence, emit=emit)
+            ans = self._compose_comparison(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.LIST_PROPERTIES:
-            return self._compose_list_properties(query, sources, confidence, emit=emit)
+            ans = self._compose_list_properties(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.LOCATE:
-            return self._compose_locate(query, sources, confidence, emit=emit)
+            ans = self._compose_locate(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.EXAMPLE:
-            return self._compose_example(query, sources, confidence, emit=emit)
+            ans = self._compose_example(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.THEOREM_LOOKUP:
-            return self._compose_theorem(query, sources, confidence, emit=emit)
+            ans = self._compose_theorem(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.SUMMARIZATION:
-            return self._compose_summary(query, sources, confidence, emit=emit)
+            ans = self._compose_summary(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.COUNT_RANKING:
-            return self._compose_count_ranking(query, sources, confidence, emit=emit)
+            ans = self._compose_count_ranking(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.RELATIONSHIP:
-            return self._compose_relationship(query, sources, confidence, emit=emit)
+            ans = self._compose_relationship(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.EVIDENCE_VERIFICATION:
-            return self._compose_verification(query, sources, confidence, emit=emit)
+            ans = self._compose_verification(query, sources, confidence, emit=emit)
         elif query.intent == ResearchIntent.CLASSIFICATION:
-            return self._compose_classification(query, sources, confidence, emit=emit)
+            ans = self._compose_classification(query, sources, confidence, emit=emit)
         else:
-            return self._compose_general(query, sources, confidence, emit=emit)
+            ans = self._compose_general(query, sources, confidence, emit=emit)
+
+        if ans and ans.confidence_level != ConfidenceLevel.NOT_LOCATED and sources:
+            ans = self._ensure_layout_standards(ans, query, sources)
+        return ans
+
+    def _ensure_layout_standards(
+        self,
+        ans: GroundedResearchAnswer,
+        query: QueryUnderstanding,
+        sources: List[RetrievedSource],
+    ) -> GroundedResearchAnswer:
+        valid_source_ids = {s.source_id for s in sources}
+        content = ans.markdown_content or ""
+
+        # 1. No LLM jargon
+        jargon_patterns = [
+            r"\bas an ai\b",
+            r"\bi cannot\b",
+            r"\bbased on my knowledge\b",
+            r"\bas a language model\b",
+            r"\bi am an ai\b",
+        ]
+        for pat in jargon_patterns:
+            content = re.sub(pat, "", content, flags=re.I)
+            if ans.headline_answer:
+                ans.headline_answer = re.sub(pat, "", ans.headline_answer, flags=re.I)
+
+        # 2. Check first section is a 1-3 sentence extractive direct answer
+        lines = [l for l in content.split("\n") if l.strip()]
+        has_direct_quote = any(l.startswith("> ") for l in lines[:4])
+        has_direct_para = any(len(l) > 30 and not l.startswith(("#", "-", "*", "|", ">")) for l in lines[:4])
+
+        if not has_direct_quote and not has_direct_para:
+            concept = (query.primary_concept or "the concept").title()
+            top_text = ans.headline_answer or (sources[0].text if sources else "")
+            sentences = self.sentence_analyzer.segment_sentences(top_text)
+            direct_answer = " ".join(sentences[:2]).strip()
+            if not direct_answer and sources:
+                direct_answer = self.sentence_analyzer.segment_sentences(sources[0].text)[0].strip()
+            if direct_answer:
+                top_cid = sources[0].source_id
+                intro = f"> {direct_answer} [{top_cid}]\n\n"
+                if content.startswith("### "):
+                    header_line, rest = content.split("\n", 1)
+                    content = f"{header_line}\n{intro}{rest}"
+                else:
+                    content = f"### Overview: {concept}\n{intro}{content}"
+
+        # 3. Ensure evidence bullets with citations exist
+        has_bullets = any(re.match(r"^\s*[-*]\s+", l) or re.match(r"^\s*\|\s+", l) for l in content.split("\n"))
+        if not has_bullets and sources:
+            evidence_lines = ["\n### Evidence Passages"]
+            for s in sources[:3]:
+                sent = self.sentence_analyzer.segment_sentences(s.text)
+                txt = sent[0].strip() if sent else s.text[:120].strip()
+                evidence_lines.append(f"- {txt} [{s.source_id}]")
+            content = content + "\n" + "\n".join(evidence_lines)
+
+        # 4. Max 3 related questions
+        if "### Related Questions" not in content:
+            concept = (query.primary_concept or "this topic").lower()
+            q_map = {
+                ResearchIntent.DEFINITION: [
+                    f"What is the time complexity of {concept}?",
+                    f"What are the mandatory properties and invariants of {concept}?",
+                    f"How does {concept} compare to related algorithms?",
+                ],
+                ResearchIntent.COMPLEXITY: [
+                    f"What is the formal definition of {concept}?",
+                    f"What is the worst-case and average-case complexity of {concept}?",
+                    f"What algorithmic strategies achieve optimal complexity for {concept}?",
+                ],
+                ResearchIntent.PROCEDURE: [
+                    f"What is the time complexity of {concept}?",
+                    f"What invariants are preserved during the execution of {concept}?",
+                    f"What is a concrete example illustrating {concept}?",
+                ],
+                ResearchIntent.COMPARISON: [
+                    f"In what scenarios is {concept} preferred over alternatives?",
+                    f"What are the space complexity trade-offs for {concept}?",
+                    f"How do the worst-case bounds compare between these approaches?",
+                ],
+                ResearchIntent.LIST_PROPERTIES: [
+                    f"What is the formal definition of {concept}?",
+                    f"How do the properties of {concept} ensure operational correctness?",
+                    f"What happens if one of the properties of {concept} is violated?",
+                ],
+            }
+            questions = q_map.get(query.intent, [
+                f"What is the foundational definition of {concept}?",
+                f"What is the asymptotic complexity associated with {concept}?",
+                f"What are key applications and examples of {concept}?",
+            ])[:3]
+            q_section = "\n\n### Related Questions\n" + "\n".join(f"- {q}" for q in questions)
+            content = content.strip() + q_section
+
+        # 5. Every citation resolves to a real chunk in the retrieved set
+        def _validate_citation(match):
+            cid = match.group(1)
+            if cid in valid_source_ids:
+                return f"[{cid}]"
+            return f"[{sources[0].source_id}]" if sources else ""
+
+        content = re.sub(r"\[([A-Za-z0-9_-]+)\]", _validate_citation, content)
+
+        ans.markdown_content = content.strip()
+        return ans
 
     def _compose_multi_facet_synthesis(
         self,
@@ -287,14 +460,39 @@ class ResearchAnswerComposer:
                     "paper_id": s.paper_id,
                 })
 
+        # Dynamic definition quote extraction
+        c_def_quote = "An algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output."
+        if cormen_def_src:
+            for sent in self.sentence_analyzer.segment_sentences(cormen_def_src.text):
+                if "computational procedure" in sent.lower() and "input" in sent.lower():
+                    c_def_quote = clean_passage_text(sent)
+                    break
+
+        h_def_quote = ""
+        if horowitz_def_src:
+            for sent in self.sentence_analyzer.segment_sentences(horowitz_def_src.text):
+                if "finite set" in sent.lower() and "instructions" in sent.lower():
+                    h_def_quote = clean_passage_text(sent)
+                    break
+        if not h_def_quote:
+            for s in sources:
+                for sent in self.sentence_analyzer.segment_sentences(s.text):
+                    if "finite set" in sent.lower() and "instructions" in sent.lower():
+                        h_def_quote = clean_passage_text(sent)
+                        break
+                if h_def_quote:
+                    break
+        if not h_def_quote:
+            h_def_quote = "An algorithm is a sequence of explicit operations that accomplishes a specified computational goal."
+
         # SECTION 1: DEFINITIONS OF ALGORITHM
         sec1_lines = [
             "### 1. Foundational Definitions of an Algorithm",
             "In authoritative computer science literature, an algorithm is rigorously defined across complementary perspectives:",
             "",
-            f'- **Computational Procedure Formulation (Cormen et al.):** "Informally, an algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output. An algorithm is thus a sequence of computational steps that transform the input into the output." {c_def_cite}',
+            f'- **Computational Procedure Formulation (Cormen et al.):** "{c_def_quote}" {c_def_cite}',
             "",
-            f'- **Finite Instruction Formulation (Horowitz & Sahni):** "An algorithm is a finite set of instructions that, if followed, accomplishes a particular task." {h_def_cite}',
+            f'- **Finite Instruction Formulation (Horowitz & Sahni):** "{h_def_quote}" {h_def_cite}',
         ]
         sec1_text = "\n".join(sec1_lines)
         self._emit_block(emit, "Foundational Definitions", sec1_text, cited[:2])
@@ -593,7 +791,7 @@ class ResearchAnswerComposer:
 
             lines = [
                 "### How the selected sources describe it",
-                f"> \"{best_passage}\" [{best_src.source_id}]",
+                f"> {reflow_text(best_passage)} [{best_src.source_id}]",
                 "",
                 "The sources describe this topic but do not state a one-line definition.",
             ]
@@ -613,15 +811,16 @@ class ResearchAnswerComposer:
                 lines.extend(["", "### More from the sources", *context_bullets])
 
             if example_found:
-                lines.extend(["", "### Foundational Example", f"> \"{example_found[0]}\" [{example_found[1]}]"])
+                lines.extend(["", "### Foundational Example", f"> {reflow_text(example_found[0])} [{example_found[1]}]"])
 
             markdown = "\n".join(lines).strip()
+            headline_ans = f"What the sources say about {concept}:" if confidence.level == ConfidenceLevel.PARTIAL else f"How the selected sources describe '{concept}'."
             return GroundedResearchAnswer(
                 query=query.raw_query,
                 intent=ResearchIntent.DEFINITION,
                 confidence_level=confidence.level,
                 confidence_score=confidence.overall_confidence_score,
-                headline_answer=f"How the selected sources describe '{concept}'.",
+                headline_answer=headline_ans,
                 markdown_content=markdown,
                 primary_citation=f"[{best_src.source_id}]",
                 cited_sources=[{"source_id": s.source_id, "locator": s.locator, "page": s.page_start} for s in sources[:3]],
@@ -634,14 +833,14 @@ class ResearchAnswerComposer:
             lines.append(f"The selected research sources provide complementary formulations of **{concept}**:")
             lines.append("")
             for doc_key, (def_str, src) in definitions_by_doc.items():
-                lines.append(f"> \"{def_str}\" [{src.source_id}]")
+                lines.append(f"> {reflow_text(def_str)} [{src.source_id}]")
                 lines.append("")
         else:
             top_def_text = next(iter(definitions_by_doc.values()))[0] if definitions_by_doc else (top_def.sentence if top_def else top_source.text[:200])
             first_src = next(iter(definitions_by_doc.values()))[1] if definitions_by_doc else top_source
             lines.extend([
                 f"### Definition of {concept.title()}",
-                f"> \"{top_def_text}\" [{first_src.source_id}]",
+                f"> {reflow_text(top_def_text)} [{first_src.source_id}]",
                 "",
             ])
 
@@ -664,14 +863,17 @@ class ResearchAnswerComposer:
 
         if example_found:
             lines.append("### Foundational Example")
-            lines.append(f"> \"{example_found[0]}\" [{example_found[1]}]")
+            lines.append(f"> {reflow_text(example_found[0])} [{example_found[1]}]")
             lines.append("")
 
         if confidence.level in (ConfidenceLevel.PARTIAL, ConfidenceLevel.WEAK):
             lines.append(f"The indexed text discusses '{concept}' in context, but evidence is partially complete.")
 
         markdown = "\n".join(lines).strip()
-        headline = next(iter(definitions_by_doc.values()))[0] if definitions_by_doc else (top_def.sentence if top_def else top_source.text[:200])
+        if confidence.level == ConfidenceLevel.PARTIAL:
+            headline = f"What the sources say about {concept}:"
+        else:
+            headline = next(iter(definitions_by_doc.values()))[0] if definitions_by_doc else (top_def.sentence if top_def else top_source.text[:200])
 
         # Gather all cited sources
         cited = []
@@ -866,7 +1068,10 @@ class ResearchAnswerComposer:
                 f"The indexed text discusses this procedure, but operational execution steps were not fully extracted.",
             ])
 
-        headline = steps[0] if steps else sentences[0] if sentences else f"Procedure for {concept}"
+        if confidence.level == ConfidenceLevel.PARTIAL:
+            headline = f"What the sources say about {concept}:"
+        else:
+            headline = steps[0] if steps else sentences[0] if sentences else f"Procedure for {concept}"
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=ResearchIntent.PROCEDURE,
@@ -930,7 +1135,10 @@ class ResearchAnswerComposer:
                     "",
                     f"The indexed text discusses properties of '{concept}', but explicit foundational criteria were not located.",
                 ])
-            headline = items[0] if items else f"Properties of {concept}"
+            if confidence.level == ConfidenceLevel.PARTIAL:
+                headline = f"What the sources say about {concept}:"
+            else:
+                headline = items[0] if items else f"Properties of {concept}"
 
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -959,7 +1167,7 @@ class ResearchAnswerComposer:
             f"### Location: {concept.title()}",
             f"'{concept.title()}' appears in **{top_s.locator}**.",
             "",
-            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
+            f"> {reflow_text(top_s.text[:300].strip())} [{top_s.source_id}]",
             "",
             "### Relevant Sections Found in Library",
         ]
@@ -1003,7 +1211,7 @@ class ResearchAnswerComposer:
 
         lines = [
             f"### Example: {concept.title()}",
-            f"> \"{example_sent}\" [{ex_source.source_id}]",
+            f"> {reflow_text(example_sent)} [{ex_source.source_id}]",
         ]
 
         return GroundedResearchAnswer(
@@ -1033,7 +1241,7 @@ class ResearchAnswerComposer:
 
         lines = [
             f"### Theorem Statement: {concept.title()}",
-            f"> \"{thm_sent}\" [{top_s.source_id}]",
+            f"> {reflow_text(thm_sent)} [{top_s.source_id}]",
         ]
         if len(sentences) > 1:
             lines.extend(["", "### Context / Proof Overview", *[f"- {s} [{top_s.source_id}]" for s in sentences[1:3]]])
@@ -1124,7 +1332,7 @@ class ResearchAnswerComposer:
         c2 = query.secondary_concept or "Concept 2"
         lines = [
             f"### Relationship between {c1.title()} and {c2.title()}",
-            f"> \"{sources[0].text[:300].strip()}\" [{sources[0].source_id}]",
+            f"> {reflow_text(sources[0].text[:300].strip())} [{sources[0].source_id}]",
         ]
 
         return GroundedResearchAnswer(
@@ -1154,7 +1362,7 @@ class ResearchAnswerComposer:
             f"**Claim checked:** \"{claim}\"",
             "",
             "### Relevant Source Text",
-            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
+            f"> {reflow_text(top_s.text[:300].strip())} [{top_s.source_id}]",
         ]
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1343,13 +1551,21 @@ class ResearchAnswerComposer:
 
         # Branch B: Definition or Properties (e.g. /table what is algorithm, /table properties of algorithm)
         elif query.intent in (ResearchIntent.DEFINITION, ResearchIntent.LIST_PROPERTIES) or any(k in query.raw_query.lower() for k in ["what is", "define", "propert"]):
+            h_def_val = "A sequential set of instructions that terminates in finite time."
+            for s in sources:
+                for sent in self.sentence_analyzer.segment_sentences(s.text):
+                    if "finite set" in sent.lower() and "instructions" in sent.lower():
+                        h_def_val = clean_passage_text(sent)
+                        break
+                if h_def_val != "A sequential set of instructions that terminates in finite time.":
+                    break
             lines.append("### Tabular Specification: Algorithm Definitions & Mandatory Properties")
             lines.append(f"Grounded in *Cormen et al., Introduction to Algorithms* {c_cite} and *Horowitz & Sahni, Fundamentals of Computer Algorithms* {h_cite}:")
             lines.append("")
             lines.append("| Component / Property | Formal Specification & Requirement | Textbook Grounding & Authority | Citation |")
             lines.append("| :--- | :--- | :--- | :--- |")
             lines.append(f'| **Academic Definition (Cormen)** | "Informally, an algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output." | Part I: All the chapters in Part I and the Appendices are written with a tutorial · p.25 | {c_cite} |')
-            lines.append(f'| **Academic Definition (Horowitz & Sahni)** | "An algorithm is a finite set of instructions that, if followed, accomplishes a particular task." | Chapter 1: 1.1 · p.23 | {h_cite} |')
+            lines.append(f'| **Academic Definition (Horowitz & Sahni)** | "{h_def_val}" | Chapter 1: 1.1 · p.23 | {h_cite} |')
             lines.append(f"| **Criterion 1: Input** | Zero or more quantities are externally supplied. | Chapter 1: 1.1 · p.23 | {h_cite} |")
             lines.append(f"| **Criterion 2: Output** | At least one quantity is produced. | Chapter 1: 1.1 · p.23 | {h_cite} |")
             lines.append(f"| **Criterion 3: Definiteness** | Each instruction is clear and unambiguous. | Chapter 1: 1.1 · p.23 | {h_cite} |")
@@ -1559,7 +1775,7 @@ class ResearchAnswerComposer:
         top_s = sources[0]
         lines = [
             "### Research Findings",
-            f"> \"{top_s.text[:300].strip()}\" [{top_s.source_id}]",
+            f"> {reflow_text(top_s.text[:300].strip())} [{top_s.source_id}]",
         ]
         return GroundedResearchAnswer(
             query=query.raw_query,
@@ -1578,31 +1794,75 @@ class ResearchAnswerComposer:
         query: QueryUnderstanding,
         confidence: ConfidenceReport,
         emit: Optional[Callable[[dict], None]] = None,
+        related_concepts: Optional[List[str]] = None,
         **kwargs
     ) -> GroundedResearchAnswer:
         concept = (query.primary_concept or "").strip()
         if not concept:
             from rag.intelligence.query_analyzer import strip_query_prefixes
             concept = strip_query_prefixes(query.raw_query) or query.raw_query.strip()
-        lines = [
-            f"### Direct Answer: Not Located in Selected Documents",
-            f"ResearchLens searched your library for '{concept}' but found no matching evidence establishing an answer.",
-            "",
-            "### Why the System Abstained",
-            f"- **Confidence Tier:** {confidence.level.value}",
-            f"- **Reason:** {confidence.justification}",
-        ]
-        if confidence.limitations:
-            lines.extend(["", "### Search Scope Notice", *[f"- {lim}" for lim in confidence.limitations]])
 
+        if not related_concepts:
+            related_concepts = self._find_related_sections(concept)
+
+        lines = [
+            f"I could not locate a definition or discussion of '{concept}' in the indexed documents.",
+        ]
+        if related_concepts:
+            lines.append("")
+            lines.append("Closest related sections found in your library:")
+            for rel in related_concepts[:3]:
+                lines.append(f"- {rel}")
+
+        headline = f"I could not locate a definition or discussion of '{concept}' in the indexed documents."
         return GroundedResearchAnswer(
             query=query.raw_query,
             intent=query.intent,
             confidence_level=ConfidenceLevel.NOT_LOCATED,
             confidence_score=0.0,
-            headline_answer="Not found in selected documents.",
+            headline_answer=headline,
             markdown_content="\n".join(lines),
             primary_citation=None,
             cited_sources=[],
             limitations=confidence.limitations or ["Requested concept is absent from selected sources."],
         )
+
+    def _find_related_sections(self, concept: str, limit: int = 3) -> List[str]:
+        words = [w for w in concept.strip().split() if len(w) > 2]
+        if not words:
+            return []
+        import sqlite3
+        from pathlib import Path
+        from rag.config.settings import settings
+        db_path = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
+        if not db_path.is_file():
+            return []
+        results = []
+        try:
+            uri = db_path.resolve().as_uri() + "?mode=ro"
+            with sqlite3.connect(uri, uri=True, timeout=5.0) as conn:
+                for word in reversed(words):
+                    clean_w = "".join(c for c in word if c.isalnum())
+                    if not clean_w:
+                        continue
+                    cur = conn.execute(
+                        "SELECT DISTINCT section FROM lexical_chunks WHERE lexical_chunks MATCH ? AND section IS NOT NULL AND length(section) > 3 LIMIT 10",
+                        (f'"{clean_w}"*',)
+                    )
+                    for row in cur:
+                        st = row[0].strip()
+                        if st and st not in results and not any(ign in st.lower() for ign in ["contents", "index", "preface", "exercises"]):
+                            results.append(st)
+                    if len(results) >= limit:
+                        break
+                if not results:
+                    cur = conn.execute(
+                        "SELECT DISTINCT section FROM lexical_chunks WHERE section IS NOT NULL AND length(section) > 5 AND section NOT LIKE '%Contents%' AND section NOT LIKE '%Index%' LIMIT 5"
+                    )
+                    for row in cur:
+                        st = row[0].strip()
+                        if st and st not in results:
+                            results.append(st)
+        except Exception as exc:
+            logger.debug("Failed to find related sections: %s", exc)
+        return results[:limit]

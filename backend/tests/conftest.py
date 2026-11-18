@@ -72,7 +72,7 @@ class FakeRAGGateway:
         if self.mode == "unavailable":
             raise RAGUnavailableError()
 
-    async def ingest_document(self, file_path, paper_id, metadata=None, progress_callback=None):
+    async def ingest_document(self, file_path, paper_id, metadata=None, progress_callback=None, **kwargs):
         self.calls.append(("ingest_document", paper_id))
         if self.mode == "timeout":
             raise RAGUnavailableError("The RAG service timed out. Cancellation was requested.")
@@ -111,13 +111,22 @@ class FakeRAGGateway:
             "error": None,
         }
 
+    async def cancel_ingest(self, document_id: str) -> bool:
+        return True
+
     async def delete_document_chunks(self, document_id):
         self.indexed_chunks[document_id] = 0
         return 0
 
     async def get_document_index_counts(self, document_id):
         count = self.indexed_chunks.get(document_id, 0)
-        return {"chroma_count": count, "fts_count": count, "ids_match": True}
+        return {
+            "chroma_count": count,
+            "fts_count": count,
+            "unique_fts_count": count,
+            "storage_mode": "sqlite_fts5_only",
+            "ids_match": True,
+        }
 
     async def ask_question(self, question, user_id, paper_ids=None, top_k=None, progress_callback=None, **kwargs):
         """Mock ask_question with SEC-001 user_id parameter."""
