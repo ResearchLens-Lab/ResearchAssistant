@@ -140,9 +140,16 @@ class StructuredAnswerComposer:
     def _definition(analysis, sources, facts):
         definitions = [fact for fact in facts if fact.fact_type == "definition"]
         q = analysis.normalized_question.casefold()
+        primary_phrase = getattr(analysis, "primary_phrase", "") or ""
         subject_m = re.search(r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of)\s+(?:an?|the\s+)?([a-z0-9\s-]{2,40}?)(?:\s+(?:mean|is|are|defined)|\?|$)", q)
-        primary_subject = subject_m.group(1).strip() if subject_m else (analysis.important_terms[0] if analysis.important_terms else "")
-        subjects = [primary_subject] if primary_subject else analysis.important_terms[:2]
+        primary_subject = primary_phrase or (subject_m.group(1).strip() if subject_m else (analysis.important_terms[0] if analysis.important_terms else ""))
+        subjects = []
+        if primary_phrase:
+            subjects.append(primary_phrase)
+        if primary_subject and primary_subject != primary_phrase:
+            subjects.append(primary_subject)
+        if not subjects:
+            subjects = analysis.important_terms[:2]
 
         def direct_subject(fact):
             text = unicodedata.normalize("NFKC", fact.supporting_passage).casefold().strip(" \t\r\n\"'“”")
@@ -1149,7 +1156,7 @@ class StructuredAnswerComposer:
     def _best_sentences(analysis, sources, limit, required_terms=None):
         scored = []
         terms = list(OrderedDict.fromkeys([*analysis.important_terms, *analysis.expanded_terms]))
-        primary_concept = analysis.important_terms[0] if analysis.important_terms else ""
+        primary_concept = getattr(analysis, "primary_phrase", "") or (analysis.important_terms[0] if analysis.important_terms else "")
         seen_texts = set()
 
         for source in sources:
@@ -1181,6 +1188,17 @@ class StructuredAnswerComposer:
                 if primary_concept and re.search(rf"\bis\s+(?:an?\s+)?example\s+of\b.{{0,40}}{re.escape(primary_concept.casefold())}", s_lower):
                     if not re.match(rf"^\s*(?:an?|the)?\s*{re.escape(primary_concept.casefold())}\b", s_lower):
                         score -= 4.0
+
+                # Penalty: sentence where another concept is defined/described, and our query concept appears incidentally
+                if primary_concept and len(primary_concept.split()) >= 2:
+                    # Check if sentence starts with a different concept (not our primary)
+                    s_start = s_lower[:60]
+                    if not re.match(rf"^(?:an?\s+)?{re.escape(primary_concept.casefold())}\b", s_lower):
+                        # If the primary concept appears in the sentence but as the predicate/example
+                        if primary_concept.casefold() in s_lower:
+                            # Only penalize if the sentence defines/describes something ELSE
+                            if re.search(r"^(?:a|an)\s+\w+\s+(?:is|are)\s+", s_lower):
+                                score -= 2.0
 
                 # Preference for well-formed informative sentences (50 to 280 chars)
                 length = len(clean_s)

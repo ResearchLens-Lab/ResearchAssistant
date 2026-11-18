@@ -35,7 +35,7 @@ def _clean(value: str) -> str:
 class FactExtractor:
     """Extract exact values and sentences; ambiguous names remain flagged for review."""
 
-    def extract(self, sources: list[RetrievedSource], important_terms: list[str] | None = None) -> list[ExtractedFact]:
+    def extract(self, sources: list[RetrievedSource], important_terms: list[str] | None = None, query_analysis=None) -> list[ExtractedFact]:
         facts: list[ExtractedFact] = []
         seen: set[tuple[str, str, str]] = set()
         for source in sources:
@@ -49,9 +49,47 @@ class FactExtractor:
                 if self._matches(sentence, important_terms or []):
                     self._add(facts, seen, source, "evidence_sentence", sentence, sentence,
                               "question_term_sentence_overlap", "exact_source_sentence")
-                if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
-                    self._add(facts, seen, source, "definition", sentence, sentence,
-                              "definition_copula_pattern", "exact_source_sentence")
+                # Targeted definition extraction using primary_phrase
+                primary_phrase = getattr(query_analysis, "primary_phrase", "") if query_analysis else ""
+                if not primary_phrase and important_terms:
+                    # Use first multi-word term as primary phrase
+                    for t in (important_terms or []):
+                        if len(t.split()) >= 2:
+                            primary_phrase = t
+                            break
+
+                if primary_phrase:
+                    phrase_re = re.escape(primary_phrase.casefold())
+                    # Positive: sentence where the concept IS the subject being defined
+                    targeted_def_match = re.search(
+                        rf"\b{phrase_re}(?:s|es)?\s+(?:is|are|refers?\s+to|means?|(?:is|are)\s+defined\s+as|can\s+be\s+defined\s+as)\b",
+                        sentence.casefold()
+                    )
+                    # Negative: sentence where concept is just mentioned as example
+                    is_example = re.search(
+                        rf"\bis\s+(?:an?\s+)?(?:example|instance|type|kind)\s+of\b.{{0,60}}{phrase_re}",
+                        sentence.casefold()
+                    ) or re.search(
+                        rf"\b{phrase_re}\s+(?:such\s+as|like|for\s+example|e\.g\.|including)\b",
+                        sentence.casefold()
+                    )
+                    if targeted_def_match and not is_example:
+                        self._add(facts, seen, source, "definition", sentence, sentence,
+                                  "targeted_phrase_definition_pattern", "exact_source_sentence")
+                        # Skip generic definition check for this sentence
+                    elif primary_phrase:
+                        is_just_example = re.search(
+                            rf"\bis\s+(?:an?\s+)?(?:example|instance|type|kind)\s+of\b",
+                            sentence.casefold()
+                        )
+                        if not is_just_example:
+                            if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
+                                self._add(facts, seen, source, "definition", sentence, sentence,
+                                          "definition_copula_pattern", "exact_source_sentence")
+                else:
+                    if re.search(r"\b(?:is defined as|are defined as|means|refers to|defined to be|(?:an?|the)?\s*[\w\s-]{2,40}?\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way|a\s+collection|a\s+specialized|a\s+format))\b", sentence, re.I):
+                        self._add(facts, seen, source, "definition", sentence, sentence,
+                                  "definition_copula_pattern", "exact_source_sentence")
                 if re.search(r"\b(?:method(?:ology)?|approach|algorithm|procedure|technique|architecture|design)\b", sentence, re.I):
                     self._add(facts, seen, source, "method", sentence, sentence,
                               "method_term_context", "exact_source_sentence")

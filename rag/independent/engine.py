@@ -86,7 +86,7 @@ class IndependentResearchEngine:
             return self._result(answer, analysis, [], sources=[], explanations={}, decision=decision, selected_papers=selected_papers, started=started, paper_metadata=paper_metadata)
 
         emit({"type": "sources_found", "count": len(sources), "engine": "independent"})
-        facts = self.fact_extractor.extract(sources, analysis.important_terms)
+        facts = self.fact_extractor.extract(sources, analysis.important_terms, query_analysis=analysis)
         answer = self.composer.compose(analysis, sources, facts)
         decision = self.validator.validate(answer, sources, facts, analysis.important_terms, intent=analysis.intent)
         if answer.startswith("### Direct answer\nNot found in your selected documents.") and sources:

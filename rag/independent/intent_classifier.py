@@ -372,6 +372,27 @@ class QuestionIntentClassifier:
             important.extend([t for t in anchor_terms if t not in important])
             important = important[:15]
 
+        # Extract primary phrase for multi-word concepts
+        primary_phrase = ""
+        if intent in {QuestionIntent.DEFINITION, QuestionIntent.DIRECT_DEFINITION, QuestionIntent.CONCEPT_EXPLANATION, QuestionIntent.EXPLANATION, QuestionIntent.FACT_LOOKUP}:
+            # Try to extract: "what is [a/an/the] <concept>", "define <concept>", "explain <concept>"
+            phrase_match = re.search(
+                r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain(?:\s+the\s+concept\s+of)?|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z][A-Za-z0-9\s-]{1,60}?)(?:\s+(?:mean|is|are|defined|in\s+detail)|\?|$)",
+                normalized.casefold()
+            )
+            if phrase_match:
+                primary_phrase = phrase_match.group(1).strip().rstrip("?").strip()
+            # Also check for "what are the properties/types of X"
+            if not primary_phrase:
+                props_match = re.search(r"\bwhat\s+are\s+the\s+(?:properties|types|advantages|disadvantages|applications|uses|features)\s+of\s+([A-Za-z][A-Za-z0-9\s-]{1,60}?)(?:\?|$)", normalized.casefold())
+                if props_match:
+                    primary_phrase = props_match.group(1).strip()
+            # Ensure important_terms has the full phrase as first element (if multi-word)
+            if primary_phrase and len(primary_phrase.split()) >= 2:
+                clean_phrase = " ".join(_tokens(primary_phrase))
+                if clean_phrase and clean_phrase not in important:
+                    important.insert(0, clean_phrase)
+
         self_terms = _expand_with(important, self.synonyms)
         filters: dict[str, object] = {}
         if paper_ids:
@@ -396,6 +417,7 @@ class QuestionIntentClassifier:
             intent=intent,
             normalized_question=normalized,
             search_query=search_question,
+            primary_phrase=primary_phrase,
             entities=_entities(search_question),
             important_terms=important,
             expanded_terms=self_terms,

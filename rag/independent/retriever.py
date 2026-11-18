@@ -82,7 +82,19 @@ class IndependentRetriever:
         terms = list(dict.fromkeys(raw_terms or []))[:32]
         if not terms:
             terms = ["finding", "method", "result", "conclusion", "table", "summary", "paper"]
-        match_query = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
+        primary_phrase = getattr(analysis, "primary_phrase", "") or ""
+        # Build progressive FTS5 query
+        # 1. Try exact phrase match first (highest precision)
+        # 2. Fall back to AND match
+        # 3. Fall back to OR match (current behavior)
+        def _build_fts_query(phrase: str, term_list: list[str]) -> str:
+            if phrase and len(phrase.split()) >= 2:
+                # Quote the multi-word phrase for FTS5 phrase search
+                safe_phrase = phrase.replace('"', '""')
+                return f'"{safe_phrase}"'
+            return " OR ".join('"' + t.replace('"', '""') + '"' for t in term_list)
+
+        match_query = _build_fts_query(primary_phrase, terms)
         constraints: list[str] = ["collection_name = ?"]
         values: list[Any] = [match_query, self.collection_name]
         if owner_id:
@@ -108,6 +120,29 @@ class IndependentRetriever:
             try:
                 connection.row_factory = sqlite3.Row
                 rows = connection.execute(sql, values).fetchall()
+                # Progressive fallback: if phrase query returned too few results, try AND then OR
+                if len(rows) < 3 and primary_phrase and len(primary_phrase.split()) >= 2:
+                    # Try AND matching
+                    and_terms = ['"' + t.replace('"', '""') + '"' for t in _tokens(primary_phrase)]
+                    if len(and_terms) >= 2:
+                        and_query = " AND ".join(and_terms)
+                        and_values = [and_query] + values[1:]
+                        try:
+                            and_rows = connection.execute(sql, and_values).fetchall()
+                            if len(and_rows) > len(rows):
+                                rows = and_rows
+                        except sqlite3.OperationalError:
+                            pass
+                if len(rows) < 3:
+                    # Fall back to OR of all terms
+                    or_query = " OR ".join('"' + t.replace('"', '""') + '"' for t in terms)
+                    or_values = [or_query] + values[1:]
+                    try:
+                        or_rows = connection.execute(sql, or_values).fetchall()
+                        if len(or_rows) > len(rows):
+                            rows = or_rows
+                    except sqlite3.OperationalError:
+                        pass
                 if analysis.intent == QuestionIntent.AUTHOR_LOOKUP:
                     # Author questions often target a title page whose text has
                     # names but no literal "author" keyword. Inspect only early
@@ -230,6 +265,12 @@ class IndependentRetriever:
                         score += 0.015
                         reasons.append(f"passage contains exact phrase '{q_term}'")
 
+            # Exact phrase match bonus for multi-word primary concepts
+            if primary_phrase and len(primary_phrase.split()) >= 2:
+                if re.search(re.escape(primary_phrase), str(row[9]), re.I):
+                    score += 0.03
+                    reasons.append(f"exact phrase '{primary_phrase}' found in passage")
+
             # Boost results and findings for summary or table synthesis
             if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS}:
                 if re.search(r"\b(?:results and discussion|findings|key results|threat detection)\b", str(row[9]), re.I):
@@ -262,6 +303,18 @@ class IndependentRetriever:
             QuestionIntent.CHART_SYNTHESIS,
             QuestionIntent.DIAGRAM_SYNTHESIS,
         }
+        # Per-document diversification: prevent one large document monopolizing pool
+        if not whole_scope_intent:
+            per_doc_limit = max(top_k * 2, 15)  # At least 15 per doc, min top_k*2
+            by_doc: dict[str, list] = {}
+            for item in fused:
+                doc_id = str(item[2][2])  # document_id column
+                by_doc.setdefault(doc_id, []).append(item)
+            diversified = []
+            for doc_items in by_doc.values():
+                diversified.extend(doc_items[:per_doc_limit])
+            # Re-sort by score after diversification
+            fused = sorted(diversified, key=lambda item: (-item[0], item[2][0]))
         if whole_scope_intent:
             fused.sort(key=lambda item: (
                 str(item[2][2]),

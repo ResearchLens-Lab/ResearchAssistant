@@ -73,6 +73,7 @@ class QueryAnalysis(BaseModel):
     retrieval_strategy: list[str] = Field(default_factory=list)
     expected_answer_structure: list[str] = Field(default_factory=list)
     intent_signals: list[str] = Field(default_factory=list)
+    primary_phrase: str = ""
 
 
 class ExtractedFact(BaseModel):
