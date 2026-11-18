@@ -19,7 +19,7 @@ from rag.intelligence.sentence_analyzer import SentenceAnalyzer
 logger = logging.getLogger(__name__)
 
 JUNK_HEADING_PAT = re.compile(
-    r"^(?:\d+|isbn|qa\d+|contents|table\s+of\s+contents|index|preface|bibliography|references|author\s+index|subject\s+index|front\s+matter|header\s*/\s*front\s+matter)\b",
+    r"^(?:isbn|qa\d+|contents|table\s+of\s+contents|index|preface|acknowledgements?|copyright\s+page|title\s+page|other\s+books\s+by|bibliography|references|author\s+index|subject\s+index|front\s+matter|header\s*/\s*front\s+matter)\b|^\d+\s*$",
     re.I,
 )
 
@@ -74,41 +74,59 @@ def build_document_summary(
         elif "horowitz" in filename.lower():
             display_title = "Fundamentals of Computer Algorithms (2nd Edition)"
             author = "Ellis Horowitz, Sartaj Sahni, Sanguthevar Rajasekaran"
+        elif "karumanchi" in filename.lower() or "narasimha" in filename.lower():
+            display_title = "Data Structures and Algorithms Made Easy"
+            author = "Narasimha Karumanchi"
+        elif filename and not filename.startswith("doc_"):
+            clean_name = re.sub(r"\.[^.]+$", "", filename)
+            if " - " in clean_name:
+                parts = clean_name.split(" - ")
+                display_title = parts[0].strip()
+                author = parts[1].strip() if len(parts) > 1 else ""
+            else:
+                display_title = clean_name
+                author = ""
         else:
-            display_title = title
+            display_title = title or "Research Document"
             author = ""
 
-        # 2. First non-front-matter chunk for 1-paragraph overview
-        first_body_row = conn.execute(
+        # 2. Substantive introduction chunk for 1-paragraph overview
+        first_body_rows = conn.execute(
             """
             SELECT chunk_id, page_start, text, section
             FROM lexical_chunks
-            WHERE document_id = ? AND page_start >= 20 AND length(text) > 150
+            WHERE document_id = ? AND page_start >= 14 AND length(text) > 150
             ORDER BY page_start ASC
-            LIMIT 1
+            LIMIT 10
             """,
             (document_id,),
-        ).fetchone()
+        ).fetchall()
 
-        if not first_body_row:
-            first_body_row = conn.execute(
+        if not first_body_rows:
+            first_body_rows = conn.execute(
                 """
                 SELECT chunk_id, page_start, text, section
                 FROM lexical_chunks
                 WHERE document_id = ? AND page_start >= 1 AND length(text) > 150
                 ORDER BY page_start ASC
-                LIMIT 1
+                LIMIT 10
                 """,
                 (document_id,),
-            ).fetchone()
+            ).fetchall()
 
         overview_text = ""
         overview_page = 1
         overview_cid = ""
-        if first_body_row:
-            overview_page = first_body_row["page_start"]
-            overview_cid = first_body_row["chunk_id"]
-            sentences = sa.segment_sentences(clean_passage_text(first_body_row["text"]))
+        if first_body_rows:
+            chosen_row = first_body_rows[0]
+            for candidate in first_body_rows:
+                cand_lower = candidate["text"].lower()
+                if any(w in cand_lower for w in ("objective of this", "importance of", "in this chapter", "in this book", "algorithms and data structures")):
+                    chosen_row = candidate
+                    break
+            overview_page = chosen_row["page_start"]
+            overview_cid = chosen_row["chunk_id"]
+            sentences = sa.segment_sentences(clean_passage_text(chosen_row["text"]))
             valid_s = [
                 s for s in sentences
                 if len(s) > 30 and not JUNK_HEADING_PAT.search(s) and not s.strip().endswith("?")
@@ -120,45 +138,42 @@ def build_document_summary(
             """
             SELECT section, MIN(page_start) as p_start, chunk_id, text
             FROM lexical_chunks
-            WHERE document_id = ? AND page_start >= 20 AND section IS NOT NULL AND length(trim(section)) > 3
+            WHERE document_id = ? AND section IS NOT NULL AND length(trim(section)) > 3
             GROUP BY section
             ORDER BY p_start ASC
             """,
             (document_id,),
         )
         sec_rows = cur.fetchall()
-        if len(sec_rows) < 4:
-            cur = conn.execute(
-                """
-                SELECT section, MIN(page_start) as p_start, chunk_id, text
-                FROM lexical_chunks
-                WHERE document_id = ? AND section IS NOT NULL AND length(trim(section)) > 3
-                GROUP BY section
-                ORDER BY p_start ASC
-                """,
-                (document_id,),
-            )
-            sec_rows = cur.fetchall()
 
-        sections = []
+        major_chapters = []
+        detailed_sections = []
         seen_sec = set()
         for r in sec_rows:
             sec = r["section"].strip()
-            if JUNK_HEADING_PAT.search(sec) or re.search(r"^\d+\s*$", sec):
+            if JUNK_HEADING_PAT.search(sec):
                 continue
             sec_norm = re.sub(r"[\s\.:\-_]+", " ", sec).strip().lower()
             if sec_norm in seen_sec:
                 continue
             seen_sec.add(sec_norm)
 
-            is_chapter = bool(re.search(r"\b(?:chapter\s+\d+|part\s+[ivx]+|\d+\.\d+)\b", sec, re.I))
-            if is_chapter or (r["p_start"] > 10 and len(sections) < max_sections) or len(sections) < 8:
-                sections.append({
+            if re.match(r"^\d+\.\s+[A-Za-z]", sec) or re.search(r"\bChapter\s+\d+\b", sec, re.I):
+                major_chapters.append({
                     "section": sec,
                     "page": r["p_start"],
                     "chunk_id": r["chunk_id"],
                     "text": r["text"],
                 })
+            elif re.match(r"^\d+\.\d+\s+[A-Za-z]", sec) or r["p_start"] > 10:
+                detailed_sections.append({
+                    "section": sec,
+                    "page": r["p_start"],
+                    "chunk_id": r["chunk_id"],
+                    "text": r["text"],
+                })
+
+        sections = major_chapters if len(major_chapters) >= 5 else (major_chapters + detailed_sections)
 
         lines = [
             f"# Executive Research Summary: {display_title}",
