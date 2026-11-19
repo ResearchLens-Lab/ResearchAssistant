@@ -5,6 +5,7 @@ export const knowledgeGraphService = {
     const searchParams = new URLSearchParams();
     if (params.q) searchParams.set("q", params.q);
     if (params.node_type) searchParams.set("node_type", params.node_type);
+    if (params.paper_id && params.paper_id !== "all") searchParams.set("paper_id", params.paper_id);
     if (params.limit) searchParams.set("limit", String(params.limit));
     const qs = searchParams.toString();
     return apiClient(`/knowledge-graph/nodes${qs ? `?${qs}` : ""}`);

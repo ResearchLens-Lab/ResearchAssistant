@@ -50,8 +50,77 @@ class IndependentResearchEngine:
         selected_papers = list(dict.fromkeys(paper_ids or []))
         selected_documents = list(dict.fromkeys(document_ids or []))
         effective_owner = user_id or owner_id
+
+        # Check for compound questions (bypass for comparison tasks)
+        sub_questions = self.classifier.decompose_compound_question(question) if output_format not in ("table", "side_by_side", "detailed_report") else [question]
+        if len(sub_questions) > 1:
+            emit({"type": "planning_completed", "intent": "COMPOUND_QUESTION", "sub_questions": len(sub_questions), "engine": "independent"})
+            all_sources = []
+            all_facts = []
+            all_explanations = {}
+            sub_sections = []
+            seen_chunk_ids = set()
+
+            for idx, sub_q in enumerate(sub_questions, start=1):
+                sub_analysis = self.classifier.classify(sub_q, selected_papers, selected_documents, conversation_context)
+                if output_format: sub_analysis.document_filters["output_format"] = output_format
+                if document_labels: sub_analysis.document_filters["document_labels"] = document_labels
+                
+                try:
+                    sub_sources, sub_expl = self.retriever.retrieve(
+                        sub_analysis, paper_ids=selected_papers or None,
+                        document_ids=selected_documents or None, section_names=section_names,
+                        top_k=top_k, owner_id=effective_owner,
+                    )
+                except IndependentIndexUnavailable as exc:
+                    sub_sources, sub_expl = [], {}
+
+                # Map source IDs sequentially
+                source_id_map = {}
+                renamed_sources = []
+                for s in sub_sources:
+                    if s.chunk_id in seen_chunk_ids:
+                        continue
+                    seen_chunk_ids.add(s.chunk_id)
+                    new_id = f"S{len(all_sources) + 1}"
+                    source_id_map[s.source_id] = new_id
+                    s_new = s.model_copy(update={"source_id": new_id})
+                    all_sources.append(s_new)
+                    renamed_sources.append(s_new)
+                    all_explanations[new_id] = sub_expl.get(s.source_id, [])
+
+                sub_facts = self.fact_extractor.extract(renamed_sources, sub_analysis.important_terms, query_analysis=sub_analysis)
+                all_facts.extend(sub_facts)
+                sub_ans = self.composer.compose(sub_analysis, renamed_sources, sub_facts)
+                for old_id, new_id in source_id_map.items():
+                    if old_id != new_id:
+                        sub_ans = re.sub(rf"\[{old_id}\]", f"[{new_id}]", sub_ans)
+
+                # Format section title
+                sub_title = sub_q.strip().rstrip("?")
+                if sub_title.lower().startswith("what is an "):
+                    sub_title = f"Definition of {sub_title[11:].title()}"
+                elif sub_title.lower().startswith("what is a "):
+                    sub_title = f"Definition of {sub_title[10:].title()}"
+                elif sub_title.lower().startswith("what is "):
+                    sub_title = f"Definition of {sub_title[8:].title()}"
+                elif sub_title.lower().startswith("tell me "):
+                    sub_title = sub_title[8:].title()
+
+                sub_sections.append(f"### {idx}. {sub_title}\n{sub_ans}")
+
+            combined_answer = "\n\n---\n\n".join(sub_sections)
+            primary_analysis = self.classifier.classify(question, selected_papers, selected_documents, conversation_context)
+            decision = self.validator.validate(combined_answer, all_sources, all_facts, primary_analysis.important_terms, intent=primary_analysis.intent)
+            reasons = "; ".join(decision.reasons)
+            combined_answer += f"\n\nEvidence state: **{decision.status}** — {reasons}"
+            return self._result(combined_answer, primary_analysis, all_facts, all_sources, all_explanations, decision, selected_papers, started, paper_metadata)
+
         analysis = self.classifier.classify(question, selected_papers, selected_documents, conversation_context)
-        if output_format:
+        if output_format in ("table", "side_by_side", "detailed_report"):
+            analysis.intent = QuestionIntent.COMPARISON
+            analysis.document_filters["output_format"] = output_format
+        elif output_format:
             analysis.document_filters["output_format"] = output_format
         if document_labels:
             analysis.document_filters["document_labels"] = document_labels

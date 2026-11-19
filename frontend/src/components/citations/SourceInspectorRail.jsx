@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useCitationStore } from "@/store/citationStore";
 import { SourceCard } from "./SourceCard";
 import { BookOpen, FileText, X } from "lucide-react";
@@ -41,10 +41,29 @@ export function SourceInspectorRail({ className = "", onClose }) {
     ? conversationMessages.find((m) => m.id === scopedMessageId)
     : conversationMessages.slice().reverse().find((m) => m.role === "assistant" && (m.sources?.length || m.content?.includes("[S")));
 
-  const displaySources =
-    evidenceScope === "answer" && targetMessage
-      ? filterSourcesByScopedAnswer(targetMessage, sources)
-      : sources;
+  const displaySources = useMemo(() => {
+    if (evidenceScope === "answer") {
+      if (targetMessage) {
+        return filterSourcesByScopedAnswer(targetMessage, sources);
+      }
+      return sources;
+    }
+    // Whole conversation: aggregate all assistant messages' sources, deduplicated
+    const aggregated = [];
+    const seen = new Set();
+    for (const msg of conversationMessages) {
+      if (msg.role === "assistant" && Array.isArray(msg.sources)) {
+        for (const s of msg.sources) {
+          const key = `${s.document_id || s.paper_id || s.filename || "doc"}-${s.chunk_id || ""}-${s.page_start || s.page || 1}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            aggregated.push(s);
+          }
+        }
+      }
+    }
+    return aggregated.length > 0 ? aggregated : sources;
+  }, [evidenceScope, targetMessage, sources, conversationMessages]);
 
   const citedSources = displaySources.filter((s) => s.source_id);
   const sourceGroups = citedSources.reduce((groups, source) => {

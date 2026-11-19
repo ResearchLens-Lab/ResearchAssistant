@@ -7,6 +7,7 @@ Populates kg_nodes, kg_relationships, and kg_graph_evidence with zero network ca
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -29,15 +30,19 @@ class ConceptGraphExtractor:
     # Patterns for definition extraction
     DEF_PATTERNS = [
         re.compile(
-            r"\b(?:A|An)\s+([A-Z][a-zA-Z0-9\-\s]{2,40}?)\s+is\s+(?:a|an|the|defined as)\s+([^.\n]{10,250}\.)",
+            r"(?:(?:A|An|The)\s+)?\b([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\s+(?:is|are|refers to|means)\s+(?:a|an|the|defined as|any|used to|a particular)\s+([^.\n]{10,250}\.)",
             re.MULTILINE,
         ),
         re.compile(
-            r"\b([A-Z][a-zA-Z0-9\-\s]{2,40}?)\s+is\s+defined\s+as\s+([^.\n]{10,250}\.)",
+            r"\b([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\s+is\s+defined\s+as\s+([^.\n]{10,250}\.)",
             re.MULTILINE,
         ),
         re.compile(
             r"\b(?:Definition|Theorem|Lemma)\s+(\d+(?:\.\d+)*)[:.]\s*([A-Z][a-zA-Z0-9\-\s]{2,40}?)\b",
+            re.MULTILINE,
+        ),
+        re.compile(
+            r"\*\*([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\*\*[:\-]\s*([^.\n]{10,250}\.)",
             re.MULTILINE,
         ),
     ]
@@ -154,12 +159,15 @@ class ConceptGraphExtractor:
         relations: List[Dict[str, Any]] = []
 
         # 1. Section Title Concept
-        clean_sec = re.sub(r"^(?:Chapter|Section|Part)\s+[\d.]+\s*[:\-]?\s*", "", section_name).strip()
-        if len(clean_sec) >= 3 and not clean_sec.lower().startswith("main content"):
+        clean_sec = re.sub(r"^(?:(?:Chapter|Section|Part)\s+)?[\d.]+\s*[:\-]?\s*", "", section_name).strip()
+        clean_sec = re.sub(r"^(?:What\s+is\s+(?:an?\s+)?|Why\s+(?:the\s+)?|How\s+to\s+)", "", clean_sec, flags=re.I).strip()
+        clean_sec = re.sub(r"\?$", "", clean_sec).strip()
+        ignore_titles = ("main content", "preface", "title page", "copyright page", "acknowledgements", "other books by")
+        if len(clean_sec) >= 3 and not any(clean_sec.lower().startswith(ign) for ign in ignore_titles):
             concepts.append({
                 "name": clean_sec.title(),
                 "type": "CONCEPT",
-                "description": f"Section topic: {section_name}",
+                "description": f"Topic: {section_name}",
                 "page": page_number,
                 "section": section_name,
                 "text": section_name,
@@ -273,7 +281,7 @@ class ConceptGraphExtractor:
                             INSERT INTO kg_nodes (
                                 id, owner_id, node_type, canonical_name, identity_key, description,
                                 first_document_id, identifiers, metadata, first_observed_at, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?)
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?)
                             """,
                             (
                                 node_id,
@@ -283,6 +291,7 @@ class ConceptGraphExtractor:
                                 ikey,
                                 c.get("description", ""),
                                 document_id,
+                                json.dumps({"paper_id": paper_id, "document_id": document_id}),
                                 now_str,
                                 now_str,
                                 now_str,

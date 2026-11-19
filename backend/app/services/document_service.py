@@ -189,6 +189,14 @@ class DocumentService:
             staged = None
             document.storage_path = str(storage_path)
             document.file_hash_sha256 = file_sha256
+
+            try:
+                from backend.app.services.paper_service import get_personal_research_dir
+                proj_folder = get_personal_research_dir(paper.title)
+                shutil.copy2(storage_path, proj_folder / filename)
+            except Exception as copy_err:
+                logger.debug("Failed saving project document copy: %s", copy_err)
+
             document.operation_type = OperationType.INITIAL_UPLOAD.value
             setattr(document, "_upload_outcome", DocumentUploadOutcome.STORED_NEW)
             setattr(document, "_upload_message", None)
@@ -753,8 +761,60 @@ class DocumentService:
 
         return document
 
+    async def scan_and_ingest_local_folder(self, user: User, paper: Paper, folder: Path) -> int:
+        """Scan project folder in Documents/Personal Research/<ProjectName> for new files."""
+        if not folder.is_dir():
+            return 0
+        added_count = 0
+        for entry in folder.iterdir():
+            if not entry.is_file() or entry.name.startswith("."):
+                continue
+            if entry.suffix.lower() not in {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx", ".pptx"}:
+                continue
+            try:
+                file_bytes = entry.read_bytes()
+                file_size = len(file_bytes)
+                file_hash = hashlib.sha256(file_bytes).hexdigest()
+                existing = await self.db.scalar(
+                    select(Document).where(Document.paper_id == paper.id, Document.file_hash_sha256 == file_hash)
+                )
+                if existing:
+                    continue
+
+                settings = get_settings()
+                upload_dir = settings.upload_path
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                new_doc = await self.documents.create(
+                    paper_id=paper.id,
+                    filename=entry.name,
+                    storage_path="",
+                    content_type="application/pdf" if entry.suffix.lower() == ".pdf" else "application/octet-stream",
+                    file_size=file_size,
+                )
+                storage_path = upload_dir / f"{new_doc.id}{entry.suffix.lower()}"
+                storage_path.write_bytes(file_bytes)
+                new_doc.storage_path = str(storage_path)
+                new_doc.file_hash_sha256 = file_hash
+                new_doc.operation_type = OperationType.INITIAL_UPLOAD.value
+                new_doc.processing_status = DocumentStatus.PROCESSING.value
+                new_doc.processing_stage = "extracting_text"
+                new_doc.processing_progress = 0
+                new_doc.processing_started_at = datetime.utcnow()
+                new_doc.processing_heartbeat_at = new_doc.processing_started_at
+                await self.db.commit()
+
+                launch_background_ingest(new_doc.id, paper.id, paper.owner_id)
+                added_count += 1
+                logger.info("Auto-ingested dropped file: %s for project %s", entry.name, paper.title)
+            except Exception as scan_err:
+                logger.debug("Error scanning local file %s: %s", entry.name, scan_err)
+        return added_count
+
     async def list_for_paper(self, user: User, paper_id: str) -> list[Document]:
-        await self.paper_service.get_owned(user, paper_id)
+        paper = await self.paper_service.get_owned(user, paper_id)
+        from backend.app.services.paper_service import get_personal_research_dir
+        folder = get_personal_research_dir(paper.title)
+        await self.scan_and_ingest_local_folder(user, paper, folder)
         documents = await self.documents.list_by_paper(paper_id)
         await self._mark_stalled_documents(documents)
         await self._attach_index_health(documents)

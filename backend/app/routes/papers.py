@@ -99,3 +99,13 @@ async def list_paper_documents(
     paper_id: str, current_user: CurrentUser, db: DBSession
 ):
     return await DocumentService(db).list_for_paper(current_user, paper_id)
+
+
+@router.post(
+    "/{paper_id}/open-folder",
+    summary="Open this project's local directory in Explorer",
+)
+async def open_project_folder(
+    paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    return await PaperService(db, rag).open_folder(current_user, paper_id)

@@ -121,7 +121,9 @@ def build_document_summary(
             chosen_row = first_body_rows[0]
             for candidate in first_body_rows:
                 cand_lower = candidate["text"].lower()
-                if any(w in cand_lower for w in ("objective of this", "importance of", "in this chapter", "in this book", "algorithms and data structures")):
+                if any(bad in cand_lower for bad in ("city \"a\" to city \"b\"", "by flight, by bus", "suppose we are going by flight")):
+                    continue
+                if any(w in cand_lower for w in ("objective of this", "importance of", "in this chapter", "in this book", "algorithms and data structures", "this book", "primary goal")):
                     chosen_row = candidate
                     break
             overview_page = chosen_row["page_start"]
@@ -175,6 +177,30 @@ def build_document_summary(
 
         sections = major_chapters if len(major_chapters) >= 5 else (major_chapters + detailed_sections)
 
+        if not sections:
+            # Fallback: Sample representative chunks across the document's pages
+            sample_rows = conn.execute(
+                """
+                SELECT chunk_id, page_start, text, COALESCE(section, 'Content') as section
+                FROM lexical_chunks
+                WHERE document_id = ? AND length(text) > 150
+                GROUP BY page_start
+                ORDER BY page_start ASC
+                LIMIT 15
+                """,
+                (document_id,),
+            ).fetchall()
+            for r in sample_rows:
+                sec_lbl = r["section"]
+                if not sec_lbl or sec_lbl == "Content":
+                    sec_lbl = f"Section at Page {r['page_start']}"
+                sections.append({
+                    "section": sec_lbl,
+                    "page": r["page_start"],
+                    "chunk_id": r["chunk_id"],
+                    "text": r["text"],
+                })
+
         lines = [
             f"# Executive Research Summary: {display_title}",
         ]
@@ -183,7 +209,7 @@ def build_document_summary(
         if overview_text:
             lines.extend([
                 "### Overview",
-                f"{overview_text} [p. {overview_page}]",
+                f"{overview_text} [S1] [p. {overview_page}]",
                 "",
             ])
 
@@ -193,7 +219,7 @@ def build_document_summary(
         cited_count = 0
         if overview_cid:
             sources.append({
-                "source_id": f"S{len(sources)+1}",
+                "source_id": "S1",
                 "page": overview_page,
                 "chunk_id": overview_cid,
                 "locator": f"p.{overview_page}",
@@ -202,6 +228,7 @@ def build_document_summary(
                 "document_id": document_id,
                 "text": overview_text,
             })
+            cited_count += 1
 
         for sec_info in sections[:max_sections]:
             sec_name = sec_info["section"]
@@ -212,27 +239,38 @@ def build_document_summary(
             bullets = []
             for s in sentences:
                 s_str = reflow_text(s.strip())
+                s_clean = re.sub(r"^\s*(?:\d+(?:\.\d+)*\s*|[A-Z]\.\s+)?(?:Introduction|Overview|Summary)?\s*[:.-]?\s*", "", s_str, flags=re.I)
+                if len(s_clean) >= 20:
+                    s_str = s_clean[0].upper() + s_clean[1:]
                 if len(s_str) > 30 and not JUNK_HEADING_PAT.search(s_str) and not s_str.endswith("?"):
                     bullets.append(s_str)
                     break
 
             for s in sentences:
                 s_str = reflow_text(s.strip())
+                s_clean = re.sub(r"^\s*(?:\d+(?:\.\d+)*\s*|[A-Z]\.\s+)?(?:Introduction|Overview|Summary)?\s*[:.-]?\s*", "", s_str, flags=re.I)
+                if len(s_clean) >= 20:
+                    s_str = s_clean[0].upper() + s_clean[1:]
                 if INFORMATIVE_CUE_PAT.search(s_str) and s_str not in bullets and len(s_str) > 30:
                     bullets.append(s_str)
                     break
 
             if not bullets and sentences:
-                bullets.append(reflow_text(sentences[0].strip()))
+                raw_s = reflow_text(sentences[0].strip())
+                s_clean = re.sub(r"^\s*(?:\d+(?:\.\d+)*\s*|[A-Z]\.\s+)?(?:Introduction|Overview|Summary)?\s*[:.-]?\s*", "", raw_s, flags=re.I)
+                if len(s_clean) >= 20:
+                    raw_s = s_clean[0].upper() + s_clean[1:]
+                bullets.append(raw_s)
 
             if bullets:
+                sec_sid = f"S{len(sources)+1}"
                 lines.append(f"#### {sec_name} (Page {p_num})")
                 for b in bullets[:2]:
-                    lines.append(f"- {b} [p. {p_num}]")
+                    lines.append(f"- {b} [{sec_sid}] [p. {p_num}]")
                     cited_count += 1
                 lines.append("")
                 sources.append({
-                    "source_id": f"S{len(sources)+1}",
+                    "source_id": sec_sid,
                     "page": p_num,
                     "chunk_id": sec_info["chunk_id"],
                     "locator": f"p.{p_num}",
@@ -295,8 +333,19 @@ def build_paper_summary(
     for doc_id in target_doc_ids:
         doc_res = build_document_summary(doc_id, db_path=db_path, max_sections=15)
         if doc_res.get("answer"):
-            all_answers.append(doc_res["answer"])
-            all_sources.extend(doc_res.get("sources", []))
+            doc_ans = doc_res["answer"]
+            doc_srcs = doc_res.get("sources", [])
+            id_map = {}
+            for s in doc_srcs:
+                old_id = s.get("source_id", "")
+                new_id = f"S{len(all_sources) + 1}"
+                id_map[old_id] = new_id
+                s_copy = dict(s)
+                s_copy["source_id"] = new_id
+                all_sources.append(s_copy)
+            for old_id, new_id in id_map.items():
+                doc_ans = re.sub(rf"\[{re.escape(old_id)}\]", f"[{new_id}]", doc_ans)
+            all_answers.append(doc_ans)
             total_chapters += doc_res.get("chapters_count", 0)
             total_citations += doc_res.get("citations_count", 0)
 

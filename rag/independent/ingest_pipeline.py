@@ -91,6 +91,27 @@ class IndependentIngestionPipeline:
         self._check_cancel(cancel_event, "before SQLite index write")
         count = self.index_writer.replace_document_chunks(normalized.document_id, chunks)
         try:
+            from rag.intelligence.concept_graph_extractor import ConceptGraphExtractor
+            db_candidates = [
+                Path(self.index_writer.db_path).parent.parent / "library.sqlite3",
+                Path(self.index_writer.db_path).parent / "library.sqlite3",
+                Path(os.environ.get("LOCALAPPDATA", "")) / "ResearchLens" / "Library" / "library.sqlite3",
+                Path("library.sqlite3"),
+            ]
+            kg_db = next((p for p in db_candidates if p.exists()), None)
+            if kg_db:
+                owner_id = str(getattr(normalized, "metadata", {}).get("owner_id", ""))
+                extractor = ConceptGraphExtractor(db_path=kg_db)
+                extractor.ingest_document_kg(
+                    owner_id=owner_id,
+                    paper_id=normalized.paper_id,
+                    document_id=normalized.document_id,
+                    chunks_or_sections=chunks,
+                    db_path=kg_db,
+                )
+        except Exception as kg_err:
+            logger.debug("Concept graph auto-ingestion notice: %s", kg_err)
+        try:
             self._check_cancel(cancel_event, "after SQLite index write")
         except Exception:
             self.index_writer.delete_document(normalized.document_id)

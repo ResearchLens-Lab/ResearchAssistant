@@ -191,19 +191,19 @@ export function GroundedAnswer({
             );
           },
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-lg border border-zinc-200 bg-white shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">
-              <table className="w-full text-xs text-left">{children}</table>
+            <div className="my-3 max-w-full overflow-x-auto rounded-lg border border-zinc-200 bg-white shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">
+              <table className="min-w-[620px] w-full border-collapse text-xs text-left table-auto">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] font-semibold text-zinc-600 uppercase tracking-wider dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300">
+            <th className="border-b border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-[11px] font-semibold text-zinc-700 uppercase tracking-wider whitespace-nowrap dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300">
               {children}
             </th>
           ),
           td: ({ children }) => {
             const heading = currentHeading;
             return (
-              <td className="border-b border-zinc-100 px-3 py-2 align-top text-xs text-zinc-800 dark:border-zinc-800/60 dark:text-zinc-200">
+              <td className="border-b border-zinc-100 px-3.5 py-2.5 align-top text-xs text-zinc-800 dark:border-zinc-800/60 dark:text-zinc-200 break-words whitespace-normal leading-relaxed">
                 {mapWithCitations(children, heading)}
               </td>
             );

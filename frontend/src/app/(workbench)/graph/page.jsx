@@ -177,8 +177,12 @@ export default function ResearchMapPage() {
   const { setSources, setResearchTrace, isDrawerOpen, openDrawer, closeDrawer } = useCitationStore();
 
   const conceptNodesQuery = useQuery({
-    queryKey: ["kg-nodes", search],
-    queryFn: () => knowledgeGraphService.getNodes({ q: search, limit: 100 }),
+    queryKey: ["kg-nodes", search, selectedPaper],
+    queryFn: () => knowledgeGraphService.getNodes({
+      q: search,
+      paper_id: selectedPaper !== "all" ? selectedPaper : undefined,
+      limit: 120,
+    }),
     enabled: activeTab === "concepts",
   });
 
@@ -257,7 +261,10 @@ export default function ResearchMapPage() {
   const rawConcepts = Array.isArray(conceptNodesQuery.data) ? conceptNodesQuery.data : [];
   const filteredConcepts = useMemo(() => {
     return rawConcepts.filter((c) => {
-      if (selectedPaper !== "all" && c.first_document_id !== selectedPaper) return false;
+      if (selectedPaper !== "all") {
+        const pId = c.metadata_json?.paper_id || c.metadata?.paper_id;
+        if (pId && pId !== selectedPaper) return false;
+      }
       return true;
     });
   }, [rawConcepts, selectedPaper]);
@@ -423,8 +430,14 @@ export default function ResearchMapPage() {
           ) : filteredConcepts.length === 0 ? (
             <div className="m-auto max-w-md px-6 text-center">
               <CircleHelp className="mx-auto h-9 w-9 text-[var(--rl-sky)]" />
-              <h2 className="mt-3 text-base font-semibold text-[var(--rl-ink)]">No concepts found</h2>
-              <p className="mt-1 text-sm text-[var(--rl-muted)]">Extracted concepts and relationships will appear here when documents are indexed.</p>
+              <h2 className="mt-3 text-base font-semibold text-[var(--rl-ink)]">
+                {selectedPaper !== "all" ? "No concepts for this project" : "No concepts found"}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--rl-muted)]">
+                {selectedPaper !== "all"
+                  ? "Select 'All Papers' or upload and index documents in this project to extract concepts."
+                  : "Extracted concepts and relationships will appear here when documents are indexed."}
+              </p>
             </div>
           ) : (
             <>
@@ -688,7 +701,21 @@ export default function ResearchMapPage() {
         </>)}
       </section>
 
-      {isDrawerOpen && <div role="dialog" aria-modal="true" aria-label="Evidence Trail" className="fixed inset-x-0 bottom-0 top-16 z-40 flex justify-end bg-slate-950/35" onClick={closeDrawer} onKeyDown={(event) => { if (event.key === "Escape") closeDrawer(); }}><div className="h-full w-[min(26rem,94vw)] shadow-xl" onClick={(event) => event.stopPropagation()}><SourceInspectorRail onClose={closeDrawer} /></div></div>}
+      {isDrawerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Evidence Trail"
+          className="fixed inset-y-0 right-0 top-16 z-40 flex justify-end pointer-events-none"
+        >
+          <div
+            className="h-full w-[min(26rem,94vw)] shadow-2xl border-l border-slate-200/90 pointer-events-auto bg-white"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <SourceInspectorRail onClose={closeDrawer} />
+          </div>
+        </div>
+      )}
       <style jsx>{`.map-control{display:inline-flex;height:2rem;min-width:2rem;align-items:center;justify-content:center;gap:.35rem;border:1px solid var(--rl-border);border-radius:.5rem;background:white;padding:0 .5rem;color:var(--rl-ink);font-size:.7rem}.map-control:hover{background:var(--rl-tint)}`}</style>
     </div>
   );

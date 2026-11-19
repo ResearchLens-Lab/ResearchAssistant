@@ -12,7 +12,7 @@ import { SourceInspectorRail } from "@/components/citations/SourceInspectorRail"
 import { EditPaperModal } from "@/components/papers/EditPaperModal";
 import { AddSourcesModal } from "@/components/upload/AddSourcesModal";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, AlertCircle, UploadCloud, ArrowRight } from "lucide-react";
+import { ChevronLeft, AlertCircle, UploadCloud, ArrowRight, FolderOpen } from "lucide-react";
 import Link from "next/link";
 import { hasIndexedSources } from "@/lib/researchWorkspace.mjs";
 import { papersService } from "@/services/papers.service";
@@ -151,6 +151,23 @@ export default function PaperDetailsPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={async () => {
+                try {
+                  await papersService.openFolder(paperId);
+                } catch (e) {
+                  console.error("Failed opening project folder", e);
+                }
+              }}
+              title="Open project folder in Windows Explorer (Documents/Personal Research)"
+              className="h-8 text-xs text-slate-700 hover:text-slate-900 rounded-full"
+            >
+              <FolderOpen className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
+              <span>Open folder</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!evidenceAvailable || isLoadingDocuments || isDocumentsError}
               title={
                 isDocumentsError
@@ -214,14 +231,10 @@ export default function PaperDetailsPage() {
           role="dialog"
           aria-modal="true"
           aria-label="Evidence Trail"
-          className="fixed inset-x-0 bottom-0 top-16 z-40 flex justify-end bg-slate-950/35"
-          onClick={closeDrawer}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") closeDrawer();
-          }}
+          className="fixed inset-y-0 right-0 top-16 z-40 flex justify-end pointer-events-none"
         >
           <div
-            className="h-full w-[min(26rem,94vw)] shadow-xl"
+            className="h-full w-[min(26rem,94vw)] shadow-2xl border-l border-slate-200/90 pointer-events-auto bg-white"
             onClick={(event) => event.stopPropagation()}
           >
             <SourceInspectorRail onClose={closeDrawer} />

@@ -145,6 +145,7 @@ function childEnvironment(extra) {
     PYTHONPATH: sourceRoot,
     PYTHONNOUSERSITE: "1",
     PYTHONUTF8: "1",
+    PYTHONUNBUFFERED: "1",
     PYTHONDONTWRITEBYTECODE: "1",
     ...extra,
   };
@@ -535,7 +536,7 @@ async function startLocalServices() {
       Origin: uiOrigin,
       Host: `127.0.0.1:${apiPort}`,
       "X-ResearchLens-Desktop-Key": requestKey,
-    }, 45000, backendProcess);
+    }, 90000, backendProcess);
     const engineMs = Date.now() - t2;
     emitStage("engine", "completed", `Starting local services (${engineMs}ms)`, 80, "Research intelligence engine healthy and ready.");
 
@@ -547,7 +548,7 @@ async function startLocalServices() {
       env: { NODE_ENV: "production", HOSTNAME: "127.0.0.1", PORT: String(uiPort), NEXT_TELEMETRY_DISABLED: "1" },
     });
 
-    await waitForHttp(uiOrigin, {}, 45000, frontendProcess);
+    await waitForHttp(uiOrigin, {}, 60000, frontendProcess);
     const workbenchMs = Date.now() - t3;
     emitStage("workbench", "completed", "Ready", 100, "Ready");
 
@@ -860,8 +861,7 @@ function registerIpc() {
   });
 
   guarded("startup:retry", async () => {
-    stopOwnedServices();
-    shuttingDown = false;
+    await stopOwnedServicesAsync();
     backendProcess = null;
     frontendProcess = null;
     openApplication();
@@ -884,8 +884,7 @@ function registerIpc() {
   });
 
   guarded("startup:select-library", async () => {
-    stopOwnedServices();
-    shuttingDown = false;
+    await stopOwnedServicesAsync();
     backendProcess = null;
     frontendProcess = null;
     appSettings = null;
@@ -1258,12 +1257,49 @@ function createWindow() {
   openApplication();
 }
 
+function killProcessTreeAsync(pid) {
+  if (!pid) return Promise.resolve();
+  return new Promise((resolve) => {
+    try {
+      const isWindows = process.platform === "win32";
+      if (isWindows) {
+        const taskkill = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+        const k = spawn(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        k.on("close", () => resolve());
+        k.on("error", () => resolve());
+        setTimeout(resolve, 1500);
+      } else {
+        try { process.kill(-pid, "SIGKILL"); } catch { }
+        resolve();
+      }
+    } catch {
+      resolve();
+    }
+  });
+}
+
 function killProcessTree(pid) {
   if (!pid) return;
-  try {
-    const taskkill = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
-    spawn(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
-  } catch { }
+  killProcessTreeAsync(pid).catch(() => {});
+}
+
+async function stopOwnedServicesAsync() {
+  shuttingDown = true;
+  const procs = [frontendProcess, backendProcess, ollamaProcess].filter((p) => p && !p.killed && p.pid);
+  for (const proc of procs) {
+    try {
+      proc.kill("SIGTERM");
+    } catch { }
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  for (const proc of procs) {
+    if (proc.pid) {
+      await killProcessTreeAsync(proc.pid);
+    }
+  }
+  // Brief pause to allow OS file handles and sockets in TIME_WAIT to cleanly release
+  await new Promise((r) => setTimeout(r, 600));
+  shuttingDown = false;
 }
 
 function stopOwnedServices() {

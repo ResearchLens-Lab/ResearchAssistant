@@ -63,4 +63,10 @@ export const papersService = {
       body: JSON.stringify({ paper_ids: paperIds }),
     });
   },
+
+  async openFolder(paperId) {
+    return apiClient(`/papers/${paperId}/open-folder`, {
+      method: "POST",
+    });
+  },
 };

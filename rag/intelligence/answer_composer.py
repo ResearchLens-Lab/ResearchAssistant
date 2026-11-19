@@ -102,6 +102,16 @@ def clean_passage_text(text: str) -> str:
     )
     text = stray_page_pat.sub(r"\1 ", text)
 
+    words = text.split()
+    if len(words) >= 8:
+        for length in range(min(len(words) // 2, 25), 3, -1):
+            phrase = " ".join(words[:length])
+            remaining = " ".join(words[length:])
+            idx = remaining.find(phrase)
+            if idx != -1 and idx < 160:
+                text = remaining[idx:]
+                break
+
     text = re.sub(r"[ \t]+", " ", text)
     return text.strip()
 

@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,6 +25,17 @@ from backend.app.schemas.paper import PaperCompareRequest, PaperCreate, PaperUpd
 from backend.app.utils.pagination import PageParams, page_payload
 
 logger = logging.getLogger("backend.papers")
+
+
+def get_personal_research_dir(paper_title: str = "") -> Path:
+    base = Path.home() / "Documents" / "Personal Research"
+    if paper_title:
+        clean_name = re.sub(r'[<>:"/\\|?*]', "_", paper_title).strip() or "Untitled Project"
+        folder = base / clean_name
+    else:
+        folder = base
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 class PaperService:
@@ -41,6 +57,35 @@ class PaperService:
         if paper is None or paper.owner_id != user.id:
             raise PaperNotFoundError()
         return paper
+
+    async def open_folder(self, user: User, paper_id: str) -> dict[str, str]:
+        paper = await self.get_owned(user, paper_id)
+        folder = get_personal_research_dir(paper.title)
+
+        result = await self.db.execute(select(Document).where(Document.paper_id == paper.id))
+        docs = result.scalars().all()
+        for doc in docs:
+            if doc.storage_path and Path(doc.storage_path).is_file():
+                dest = folder / doc.filename
+                if not dest.exists():
+                    try:
+                        shutil.copy2(doc.storage_path, dest)
+                    except Exception as copy_err:
+                        logger.debug("Failed copying doc to project folder: %s", copy_err)
+
+        from backend.app.services.document_service import DocumentService
+        doc_service = DocumentService(self.db, self.rag)
+        await doc_service.scan_and_ingest_local_folder(user, paper, folder)
+
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(folder))
+            else:
+                subprocess.Popen(["xdg-open", str(folder)])
+        except Exception as e:
+            logger.warning("Could not open folder %s: %s", folder, e)
+
+        return {"folder_path": str(folder), "status": "opened"}
 
     async def list(self, user: User, params: PageParams) -> dict[str, Any]:
         items, total = await self.papers.list_by_owner(
@@ -102,15 +147,43 @@ class PaperService:
         isolation to prevent any vector/lexical leaks.
         """
         await self.get_owned(user, paper_id)
-        result = await self.rag.summarize_paper(
-            paper_id=paper_id,
-            user_id=str(user.id),  # SEC-001: Pass authenticated user ID
-        )
-        return {
-            "paper_id": paper_id,
-            "answer": result.get("answer", ""),
-            "sources": result.get("sources", []),
-        }
+        try:
+            result = await self.rag.summarize_paper(
+                paper_id=paper_id,
+                user_id=str(user.id),  # SEC-001: Pass authenticated user ID
+            )
+            return {
+                "paper_id": paper_id,
+                "answer": result.get("answer", ""),
+                "sources": result.get("sources", []),
+            }
+        except Exception as exc:
+            logger.warning("RAG gateway summarize_paper failed; using deterministic summarizer fallback: %s", exc)
+            from rag.intelligence.summarizer import build_paper_summary
+            from rag.citations.citation_mapper import SourceCitation
+            summary_dict = build_paper_summary(paper_id=paper_id, user_id=str(user.id))
+            sources = []
+            for s in summary_dict.get("sources", []):
+                sources.append({
+                    "source_id": s.get("source_id", ""),
+                    "paper_id": paper_id,
+                    "document_id": s.get("document_id", paper_id),
+                    "chunk_id": s.get("chunk_id", ""),
+                    "page_start": s.get("page", 1),
+                    "page_end": s.get("page", 1),
+                    "locator": s.get("locator", f"p. {s.get('page', 1)}"),
+                    "section": s.get("section", "Main Content"),
+                    "text": s.get("text", ""),
+                    "title": s.get("title", ""),
+                    "filename": s.get("filename", ""),
+                    "paper_title": s.get("title", ""),
+                    "citation_label": f"[{s.get('source_id', '')}]",
+                })
+            return {
+                "paper_id": paper_id,
+                "answer": summary_dict.get("answer", ""),
+                "sources": sources,
+            }
 
     async def compare(self, user: User, payload: PaperCompareRequest) -> dict[str, Any]:
         """

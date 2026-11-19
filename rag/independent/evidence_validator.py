@@ -55,6 +55,10 @@ class EvidenceValidator:
             if not clean_l or clean_l.startswith((
                 "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
                 "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
+                "Each document receives its own retrieval pass", "This report organizes retrieved evidence",
+                "The excerpts are presented source by source", "The comparison is limited to the selected documents",
+                "Only reported text is included", "Similarity or equivalence is not inferred",
+                "No relevant passage was retrieved", "No relevant passage retrieved",
                 "The names were extracted from an explicit author label/byline;", "Not found in your selected documents.",
                 "The names were extracted from title-page or bibliographic structure;",
                 "The retrieved text does not contain a clear definition; these passages are related evidence:",

@@ -15,7 +15,18 @@ router = APIRouter(prefix="/knowledge-graph", tags=["knowledge-graph"])
 
 def _dump(value):
     if hasattr(value, "__table__"):
-        return {column.name: _dump(getattr(value, column.key)) for column in value.__table__.columns}
+        res = {}
+        for column in value.__table__.columns:
+            key = column.key
+            if key == "metadata" and hasattr(value, "metadata_json"):
+                meta_val = value.metadata_json
+                res["metadata"] = _dump(meta_val)
+                res["metadata_json"] = res["metadata"]
+            else:
+                res[column.name] = _dump(getattr(value, key))
+        if hasattr(value, "metadata_json") and "metadata_json" not in res:
+            res["metadata_json"] = _dump(value.metadata_json)
+        return res
     if isinstance(value, dict): return {k: _dump(v) for k, v in value.items()}
     if isinstance(value, list): return [_dump(v) for v in value]
     if hasattr(value, "isoformat"): return value.isoformat()
@@ -107,9 +118,10 @@ async def create_relationship(payload: RelationshipCreateRequest, current_user: 
 @router.get("/nodes", summary="Search this user's canonical graph nodes")
 async def search_nodes(current_user: CurrentUser, db: DBSession,
                        q: str = "", node_type: str | None = None, identifier: str | None = None,
+                       paper_id: str | None = None,
                        limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     service, owner = _service(db, current_user)
-    return [_dump(row) for row in await service.search_nodes(owner, q, node_type, identifier, limit, offset)]
+    return [_dump(row) for row in await service.search_nodes(owner, q, node_type, identifier, limit, offset, paper_id=paper_id)]
 
 
 @router.get("/nodes/{node_id}", summary="Read an owned canonical graph node")

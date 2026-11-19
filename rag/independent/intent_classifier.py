@@ -44,6 +44,8 @@ TERM_SYNONYMS: dict[str, tuple[str, ...]] = {
     "stated": ("reported", "described"),
     "shown": ("reported", "measured"),
     "table": ("findings", "results", "methods", "summary"),
+    "strategy": ("technique", "design technique", "paradigm", "classification", "method"),
+    "strategies": ("techniques", "design techniques", "paradigms", "classifications", "methods", "divide and conquer", "greedy", "dynamic programming", "backtracking"),
 }
 
 
@@ -181,6 +183,14 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bwritten\s+by\b",
         r"\bauthorship\b",
     ), ("authors", "authorship")),
+    (QuestionIntent.COMPARISON, (
+        r"(?:^|\s)/(?:compare|diff)\b",
+        r"\bcompare\b",
+        r"\bcompar(?:e|ison|ing)\b",
+        r"\bdifferences?\b",
+        r"\bversus\b",
+        r"\bvs\.?\b",
+    ), ("comparison", "similarities", "differences")),
     (QuestionIntent.LIMITATIONS_EXTRACTION, (
         r"\b(?:reported\s+)?limitations?\b",
         r"\bthreats?\s+to\s+validity\b",
@@ -211,14 +221,6 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bkey\s+findings\b",
         r"\bcore\s+findings\b",
     ), ("summary", "findings", "limitations")),
-    (QuestionIntent.COMPARISON, (
-        r"(?:^|\s)/(?:compare|diff)\b",
-        r"\bcompare\b",
-        r"\bcompar(?:e|ison|ing)\b",
-        r"\bdifferences?\b",
-        r"\bversus\b",
-        r"\bvs\.?\b",
-    ), ("comparison", "similarities", "differences")),
     (QuestionIntent.NUMERICAL_QUERY, (
         r"\bhow\s+many\b",
         r"\bhow\s+much\b",
@@ -268,6 +270,9 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\blist\b",
         r"\bwhich\s+(?:ones|items|papers|algorithms|authors|datasets|methods)\b",
         r"\bname\s+(?:the|all)\b",
+        r"\b(?:different|various|multiple)\s+(?:strategies|techniques|paradigms|types|methods|classifications|categories|kinds|algorithms)\b",
+        r"\b(?:tell\s+me|what\s+are|enumerate|show|explain|give)\b.{0,30}\b(?:different|various|all|multiple)?\s*(?:strategies|techniques|paradigms|types|methods|classifications|categories|kinds)\b",
+        r"\bwhat\s+are\s+(?:the\s+)?(?:properties|characteristics|features|types|strategies|techniques)\b",
     ), ("items", "sources")),
     (QuestionIntent.FACT_LOOKUP, (
         r"\bwho\b",
@@ -446,6 +451,43 @@ class QuestionIntentClassifier:
             expected_answer_structure=answer_shape or ["evidence summary", "source passages", "limitations"],
             intent_signals=signals,
         )
+
+    @staticmethod
+    def decompose_compound_question(question: str) -> list[str]:
+        raw = question.strip()
+        parts = [p.strip() for p in re.split(r"\?\s+", raw) if p.strip()]
+        if len(parts) > 1:
+            main_concept = ""
+            m = re.search(r"\b(?:what\s+is\s+(?:an?\s+)?|define\s+|explain\s+)([a-zA-Z0-9\-\s]+)", parts[0], re.I)
+            if m:
+                main_concept = m.group(1).strip()
+            subqs = [parts[0] + ("?" if not parts[0].endswith("?") else "")]
+            for p in parts[1:]:
+                p_clean = p + ("?" if not p.endswith("?") else "")
+                if main_concept:
+                    p_clean = re.sub(r"\b(it's|its|their|these)\b", f"{main_concept}'s", p_clean, flags=re.I)
+                subqs.append(p_clean)
+            return subqs
+
+        pattern = re.compile(
+            r"^(?P<q1>.+?)\s+(?:,\s*)?(?:and(?:\s+also)?|as\s+well\s+as)\s+(?P<q2>(?:tell\s+me\s+(?:about\s+)?|explain\s+|list\s+|describe\s+|what\s+are\s+|how\s+does\s+|show\s+|give\s+).+)$",
+            re.I
+        )
+        m = pattern.match(raw.rstrip("?"))
+        if m:
+            q1 = m.group("q1").strip()
+            q2 = m.group("q2").strip()
+            main_concept = ""
+            cm = re.search(r"\b(?:what\s+is\s+(?:an?\s+)?|define\s+|explain\s+)([a-zA-Z0-9\-\s]+)", q1, re.I)
+            if cm:
+                main_concept = cm.group(1).strip()
+            if main_concept:
+                q2_resolved = re.sub(r"\b(it's|its)\b", f"{main_concept}", q2, flags=re.I)
+                q2_resolved = re.sub(r"\b(their|these)\b", f"{main_concept}", q2_resolved, flags=re.I)
+            else:
+                q2_resolved = q2
+            return [q1, q2_resolved]
+        return [raw]
 
 
 def _expand_with(terms: Iterable[str], synonyms: dict[str, tuple[str, ...]]) -> list[str]:

@@ -74,8 +74,8 @@ class PaperSummaryResponse(BaseModel):
 
 
 class PaperCompareRequest(BaseModel):
-    paper_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
-    document_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
+    paper_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=10)
+    document_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=10)
     focus_area: Optional[str] = Field(default=None, max_length=500)
     output_format: Literal["table", "side_by_side", "detailed_report"] = "table"
 
