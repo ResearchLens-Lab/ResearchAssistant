@@ -128,21 +128,31 @@ class IndependentResearchEngine:
         emit({"type": "retrieval_started", "strategy": "fts5_bm25_tfidf"})
         try:
             if analysis.intent == QuestionIntent.COMPARISON and selected_documents:
-                # Give each explicitly selected document its own bounded retrieval
-                # pass so a larger file cannot consume the entire comparison budget.
+                # Aspect-aware stratified retrieval per document across decomposed dimensions
+                aspects = self.classifier.decompose_comparison_aspects(question)
                 sources = []
                 explanations = {}
-                per_document_k = max(1, min(top_k, 4))
-                for document_id in selected_documents:
-                    document_sources, document_explanations = self.retriever.retrieve(
-                        analysis, paper_ids=selected_papers or None,
-                        document_ids=[document_id], section_names=section_names,
-                        top_k=per_document_k, owner_id=effective_owner,
+                seen_chunk_ids = set()
+                per_doc_aspect_k = max(1, min(2, top_k // len(aspects) if len(aspects) else 2))
+
+                for aspect in aspects:
+                    aspect_analysis = self.classifier.classify(
+                        aspect["query"], selected_papers, selected_documents, conversation_context
                     )
-                    for source in document_sources:
-                        source_id = f"S{len(sources) + 1}"
-                        sources.append(source.model_copy(update={"source_id": source_id}))
-                        explanations[source_id] = document_explanations.get(source.source_id, [])
+                    aspect_analysis.important_terms = aspect.get("terms", [])
+                    for document_id in selected_documents:
+                        doc_sources, doc_explanations = self.retriever.retrieve(
+                            aspect_analysis, paper_ids=selected_papers or None,
+                            document_ids=[document_id], section_names=section_names,
+                            top_k=per_doc_aspect_k, owner_id=effective_owner,
+                        )
+                        for source in doc_sources:
+                            if source.chunk_id in seen_chunk_ids:
+                                continue
+                            seen_chunk_ids.add(source.chunk_id)
+                            source_id = f"S{len(sources) + 1}"
+                            sources.append(source.model_copy(update={"source_id": source_id}))
+                            explanations[source_id] = doc_explanations.get(source.source_id, [])
             else:
                 sources, explanations = self.retriever.retrieve(
                     analysis, paper_ids=selected_papers or None,
@@ -159,6 +169,38 @@ class IndependentResearchEngine:
         emit({"type": "sources_found", "count": len(sources), "engine": "independent"})
         facts = self.fact_extractor.extract(sources, analysis.important_terms, query_analysis=analysis)
         answer = self.composer.compose(analysis, sources, facts)
+
+        # Consecutively renumber citations in answer, format projections, and sources
+        cited_ids_order = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", answer, re.I)))
+        if cited_ids_order:
+            id_map = {old_id.upper(): f"S{i + 1}" for i, old_id in enumerate(cited_ids_order)}
+            for old_id, new_id in id_map.items():
+                if old_id != new_id:
+                    answer = re.sub(rf"\[{old_id}\]", f"[{new_id}]", answer, flags=re.I)
+            by_old_id = {s.source_id.upper(): s for s in sources}
+            renamed_sources = []
+            for old_id in cited_ids_order:
+                src = by_old_id.get(old_id.upper())
+                if src:
+                    renamed_sources.append(src.model_copy(update={"source_id": id_map[old_id.upper()]}))
+            if renamed_sources:
+                sources = renamed_sources
+            facts = [
+                f.model_copy(update={"source_id": id_map[f.source_id.upper()]})
+                for f in facts
+                if f.source_id.upper() in id_map
+            ]
+
+            projections = getattr(analysis, "document_filters", {}).get("_comparison_projections")
+            if projections:
+                renamed_proj = {}
+                for p_fmt, p_text in projections.items():
+                    for old_id, new_id in id_map.items():
+                        if old_id != new_id:
+                            p_text = re.sub(rf"\[{old_id}\]", f"[{new_id}]", p_text, flags=re.I)
+                    renamed_proj[p_fmt] = p_text
+                analysis.document_filters["_comparison_projections"] = renamed_proj
+
         decision = self.validator.validate(answer, sources, facts, analysis.important_terms, intent=analysis.intent)
         if answer.startswith("### Direct answer\nNot found in your selected documents.") and sources:
             decision = EvidenceDecision(status="NOT FOUND", reasons=["A target fact or explicitly labeled evidence was not present in the retrieved passages."])
@@ -214,29 +256,33 @@ class IndependentResearchEngine:
             "Explain in simple language",
             "Give a practical example",
         ]
+        result_metadata = {
+            "answer_mode": "independent_documents_only",
+            "generation_provider": "none",
+            "llm_provider": "none",
+            "llm_enabled": False,
+            "embedding_provider": "none",
+            "model_calls": 0,
+            "pretrained_embeddings_used": False,
+            "external_inference_used": False,
+            "output_format": document_filters.get("output_format", "table"),
+            "selected_document_ids": document_filters.get("document_ids", []),
+            "execution_time_seconds": round(time.perf_counter() - started, 4),
+            "follow_up_suggestions": follow_ups,
+            "independent_research": {
+                "intent": analysis.model_dump(mode="json") if hasattr(analysis, "model_dump") else {},
+                "facts": [fact.model_dump(mode="json") if hasattr(fact, "model_dump") else fact for fact in facts],
+                "evidence_decision": decision.model_dump(mode="json") if hasattr(decision, "model_dump") else {},
+                "retrieval_explanations": explanations,
+            },
+        }
+        if "_comparison_projections" in document_filters:
+            result_metadata["comparison_formats"] = document_filters["_comparison_projections"]
+
         return RAGResult(
             answer=structured.answer,
             sources=citations,
             paper_ids=selected_papers or list(dict.fromkeys(source.paper_id for source in sources)),
-            metadata={
-                "answer_mode": "independent_documents_only",
-                "generation_provider": "none",
-                "llm_provider": "none",
-                "llm_enabled": False,
-                "embedding_provider": "none",
-                "model_calls": 0,
-                "pretrained_embeddings_used": False,
-                "external_inference_used": False,
-                "output_format": document_filters.get("output_format", "table"),
-                "selected_document_ids": document_filters.get("document_ids", []),
-                "execution_time_seconds": round(time.perf_counter() - started, 4),
-                "follow_up_suggestions": follow_ups,
-                "independent_research": {
-                    "intent": analysis.model_dump(mode="json") if hasattr(analysis, "model_dump") else {},
-                    "facts": [fact.model_dump(mode="json") if hasattr(fact, "model_dump") else fact for fact in facts],
-                    "evidence_decision": decision.model_dump(mode="json") if hasattr(decision, "model_dump") else {},
-                    "retrieval_explanations": explanations,
-                },
-            },
+            metadata=result_metadata,
         )
 

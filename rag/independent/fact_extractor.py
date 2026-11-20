@@ -15,6 +15,27 @@ _NUMBER = re.compile(
 _DATE = re.compile(r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+(?:19|20)\d{2}\b|\b(?:19|20)\d{2}\b", re.I)
 _PERSON = re.compile(r"\b[A-Z][A-Za-z'’-]+(?:\s+[A-Z]\.)?\s+[A-Z][A-Za-z'’-]+\b")
 
+SYNTAX_CONVENTION_PATTERNS: tuple[str, ...] = (
+    r"\bcomments\s+begin\s+with\b",
+    r"\bblocks\s+are\s+indicated\s+with\b",
+    r"\bmatching\s+braces\b",
+    r"\ban?\s+identifier\s+begins\s+with\b",
+    r"\bkeywords\s+are\s+in\b",
+    r"\bpseudocode\s+conventions?\b",
+    r"\bresembles\s+c\s+and\s+pascal\b",
+    r"\boperators?\s+such\s+as\b",
+    r"\bcompound\s+statements?\b",
+    r"\bdata\s+types?\s+such\s+as\s+integer\b",
+    r"\ballocating\s+a\s+new\s+node\b",
+)
+
+
+def is_syntax_convention_noise(text: str) -> bool:
+    if not text:
+        return False
+    lower = text.lower()
+    return any(re.search(pat, lower) for pat in SYNTAX_CONVENTION_PATTERNS)
+
 
 def clean_academic_text(text: str) -> str:
     """Strip recurring journal banners, volume metadata, DOIs and URLs from academic text."""
@@ -46,6 +67,8 @@ class FactExtractor:
                 self._add(facts, seen, source, "document_title", source.title, source.title,
                           "indexed_source_metadata", "metadata_record")
             for sentence in sentences:
+                if is_syntax_convention_noise(sentence):
+                    continue
                 if self._matches(sentence, important_terms or []):
                     self._add(facts, seen, source, "evidence_sentence", sentence, sentence,
                               "question_term_sentence_overlap", "exact_source_sentence")
@@ -112,7 +135,7 @@ class FactExtractor:
             # Extract bullet and numbered list items from raw_text to preserve line breaks
             for match in re.finditer(r"(?:^|\n)\s*(?:[-*•]|\d+[.)])\s+([^\n]{8,})", raw_text):
                 value = _clean(match.group(1))
-                if value and len(value) >= 8:
+                if value and len(value) >= 8 and not is_syntax_convention_noise(value):
                     self._add(facts, seen, source, "list_item", value, _clean(match.group(0)),
                               "explicit_bullet_or_numbered_line", "exact_source_line")
 

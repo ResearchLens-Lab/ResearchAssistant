@@ -3,7 +3,7 @@
 import re
 import unicodedata
 from collections import OrderedDict
-from typing import Iterable
+from typing import Iterable, Any
 
 from rag.independent.models import QueryAnalysis, QuestionIntent
 
@@ -488,6 +488,89 @@ class QuestionIntentClassifier:
                 q2_resolved = q2
             return [q1, q2_resolved]
         return [raw]
+
+    @staticmethod
+    def decompose_comparison_aspects(question: str) -> list[dict[str, Any]]:
+        raw = question.strip()
+        q_clean = re.sub(r"^(?:compare\s+(?:the\s+)?(?:selected\s+)?(?:documents?|sources?|papers?)\s+(?:regarding|on|about|for):?\s*|i\s+want\s+to\s+know\s+|tell\s+me\s+about\s+)", "", raw, flags=re.I).strip()
+        q_lower = q_clean.lower()
+
+        # 1. Algorithm domain: Types & Limitations
+        has_algo = bool(re.search(r"\balgorithms?\b", q_lower))
+        has_types = bool(re.search(r"\b(?:types?|kinds?|paradigms?|strategies|techniques?|classes|categories|approaches?|classifications?)\b", q_lower))
+        has_limits = bool(re.search(r"\b(?:limitations?|drawbacks?|weaknesses?|constraints?|complexit(?:y|ies)|trade-offs?|challenges?|bounds?|costs?)\b", q_lower))
+
+        if has_algo and (has_types or has_limits):
+            aspects = []
+            aspects.append({
+                "key": "paradigms",
+                "title": "Algorithm Types & Design Paradigms",
+                "query": "algorithm design strategies techniques paradigms divide-and-conquer greedy dynamic programming backtracking branch-and-bound randomized approximation",
+                "terms": ["divide and conquer", "greedy", "dynamic programming", "backtracking", "branch and bound", "randomized", "approximation", "design technique", "strategy"],
+            })
+            aspects.append({
+                "key": "limitations",
+                "title": "Reported Limitations & Complexity Constraints",
+                "query": "algorithm limitations computational complexity worst-case running time NP-complete NP-hard lower bound constraints trade-offs",
+                "terms": ["limitation", "worst-case", "complexity", "running time", "NP-complete", "lower bound", "constraint", "trade-off"],
+            })
+            aspects.append({
+                "key": "definition",
+                "title": "Core Definition & Computational Scope",
+                "query": "algorithm definition computational procedure finite instructions inputs outputs problem solving",
+                "terms": ["algorithm", "definition", "computational procedure", "instructions", "finite", "input", "output"],
+            })
+            return aspects
+
+        # 2. General multi-aspect questions with 'and' or 'vs' / 'versus'
+        split_match = re.split(r"\s+(?:and(?:\s+also)?|versus|vs\.?|as\s+well\s+as)\s+", q_clean, flags=re.I)
+        if len(split_match) == 2 and all(len(part.strip()) >= 3 for part in split_match):
+            part1, part2 = split_match[0].strip(), split_match[1].strip()
+            title1 = re.sub(r"^(?:the\s+|different\s+|all\s+)", "", part1, flags=re.I).title()
+            title2 = re.sub(r"^(?:their\s+|its\s+|the\s+)", "", part2, flags=re.I).title()
+            return [
+                {
+                    "key": "aspect_1",
+                    "title": title1,
+                    "query": f"{q_clean} {part1}",
+                    "terms": [t for t in _tokens(part1) if t not in STOPWORDS],
+                },
+                {
+                    "key": "aspect_2",
+                    "title": title2,
+                    "query": f"{q_clean} {part2}",
+                    "terms": [t for t in _tokens(part2) if t not in STOPWORDS],
+                },
+                {
+                    "key": "aspect_3",
+                    "title": "Core Concepts & Scope",
+                    "query": f"{q_clean} definition overview methodology",
+                    "terms": [t for t in _tokens(q_clean) if t not in STOPWORDS][:5],
+                },
+            ]
+
+        # 3. Standard fallback structured dimensions for academic comparisons
+        return [
+            {
+                "key": "concepts_objectives",
+                "title": "Core Concepts & Objectives",
+                "query": f"{q_clean} objective definition concept problem scope",
+                "terms": ["objective", "definition", "concept", "problem", "scope"],
+            },
+            {
+                "key": "methods_paradigms",
+                "title": "Key Methods & Techniques",
+                "query": f"{q_clean} method algorithm technique approach architecture",
+                "terms": ["method", "algorithm", "technique", "approach", "design"],
+            },
+            {
+                "key": "limitations_constraints",
+                "title": "Reported Limitations & Constraints",
+                "query": f"{q_clean} limitation constraint complexity challenge drawback",
+                "terms": ["limitation", "constraint", "complexity", "challenge", "drawback"],
+            },
+        ]
+
 
 
 def _expand_with(terms: Iterable[str], synonyms: dict[str, tuple[str, ...]]) -> list[str]:

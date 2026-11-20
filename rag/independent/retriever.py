@@ -78,7 +78,15 @@ class IndependentRetriever:
 
     def __init__(self, db_path: str | Path | None = None, max_candidates: int = 1000,
                  collection_name: str | None = None):
-        self.db_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
+        if db_path:
+            self.db_path = Path(db_path)
+        else:
+            desktop_lex = Path.home() / "Documents" / "ResearchLens Library" / "indexes" / "researchlens_lexical.sqlite3"
+            chroma_lex = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
+            if desktop_lex.is_file() and str(settings.chroma_persist_dir) in (".", ".chroma"):
+                self.db_path = desktop_lex
+            else:
+                self.db_path = chroma_lex if chroma_lex.is_file() else desktop_lex
         self.max_candidates = max(20, min(max_candidates, 3000))
         self.collection_name = collection_name or configured_lexical_collection_name(self.db_path)
 
@@ -300,6 +308,16 @@ class IndependentRetriever:
             if is_ref and analysis.intent not in {QuestionIntent.DATE_LOOKUP, QuestionIntent.AUTHOR_LOOKUP}:
                 score *= 0.1
                 reasons.append("downweighted bibliographic reference chunk")
+
+            # Downweight pseudocode/syntax convention chunks unless specifically queried
+            is_syntax_conv = (
+                bool(re.search(r"\b(?:pseudocode conventions|syntax conventions|coding conventions)\b", section, re.I))
+                or bool(re.search(r"^\s*(?:\d+(?:\.\d+)*\s+)?Pseudocode Conventions\b", str(row[9]), re.I))
+            )
+            query_wants_syntax = any(t in {"pseudocode", "syntax", "convention", "conventions", "notation"} for t in getattr(analysis, "important_terms", []))
+            if is_syntax_conv and not query_wants_syntax:
+                score *= 0.1
+                reasons.append("downweighted pseudocode syntax convention chunk")
 
             if analysis.intent == QuestionIntent.AUTHOR_LOOKUP and row[4] is not None and int(row[4]) <= 8:
                 score += 0.02

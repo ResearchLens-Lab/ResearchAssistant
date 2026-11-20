@@ -66,7 +66,7 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [], ou
         </li>)}</ul>
       </section>}
 
-      {matrix ? <>
+      {matrix && outputFormat === "table" ? <>
         <div className="overflow-x-auto" tabIndex={0} aria-label="Scrollable comparison matrix">
           <table className="min-w-[760px] w-full border-collapse text-left text-sm">
             <thead className="bg-[var(--rl-tint)]"><tr>{matrix.headers.map((header, index) => <th key={`${header}-${index}`} scope="col" className="border-b border-[var(--rl-border)] px-3 py-3 font-semibold text-[var(--rl-ink)] sm:px-4">{header}</th>)}</tr></thead>
@@ -74,7 +74,16 @@ export function ComparisonSynthesisCard({ result, question, paperTitles = [], ou
           </table>
         </div>
         {matrix.synthesis && <div className="border-t border-[var(--rl-border)] bg-[var(--rl-tint)]/60 px-4 py-4 sm:px-5"><h3 className="mb-2 text-sm font-semibold text-[var(--rl-ink)]">Synthesis</h3><GroundedAnswer content={matrix.synthesis} sources={result?.sources} /></div>}
-      </> : <div className="p-4 sm:p-5"><p className="mb-3 rounded-lg border border-[var(--rl-border)] bg-[var(--rl-tint)] p-3 text-sm text-[var(--rl-muted)]">The provider returned a narrative comparison instead of a matrix. The answer is shown with its citations.</p><GroundedAnswer content={answer} sources={result?.sources} /></div>}
+      </> : (
+        <div className="p-4 sm:p-5">
+          {outputFormat === "table" && !matrix && (
+            <p className="mb-3 rounded-lg border border-[var(--rl-border)] bg-[var(--rl-tint)] p-3 text-sm text-[var(--rl-muted)]">
+              The provider returned a narrative comparison instead of a matrix. The answer is shown with its citations.
+            </p>
+          )}
+          <GroundedAnswer content={answer} sources={result?.sources} />
+        </div>
+      )}
 
       <footer className="border-t border-slate-100 px-4 py-3 text-xs leading-relaxed text-[var(--rl-muted)] sm:px-5">This report uses retrieved passages from the selected documents. A missing passage means retrieval did not find supporting text for this focus; it does not establish that the document contains no such information. Open a citation to inspect its document, location, and excerpt.</footer>
     </section>

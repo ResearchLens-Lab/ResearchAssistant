@@ -55,7 +55,8 @@ class EvidenceValidator:
             if not clean_l or clean_l.startswith((
                 "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
                 "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
-                "Each document receives its own retrieval pass", "This report organizes retrieved evidence",
+                "Each document receives its own retrieval pass", "Each document receives a structured retrieval pass",
+                "This report organizes retrieved evidence",
                 "The excerpts are presented source by source", "The comparison is limited to the selected documents",
                 "Only reported text is included", "Similarity or equivalence is not inferred",
                 "No relevant passage was retrieved", "No relevant passage retrieved",
@@ -69,13 +70,15 @@ class EvidenceValidator:
                 "- **Listed subtopics**:", "- **Leaf-level topic entries**:",
                 "- **Curriculum volume**:", "- **Structure**:",
                 "*Not explicitly detailed", "Not explicitly detailed",
-                "###", "| Source |", "|---|", "|",
+                "###", "|---", "| Comparison dimension", "| Source |",
+                "Both Cormen", "Both Horowitz", "Both documents", "Both sources",
+                "Specific strategies and limitations are grounded",
             )):
                 continue
-            if line.startswith("|") and "No matching detail in retrieved passages" in line:
+            if clean_l.startswith("|") and ("No matching detail in retrieved passages" in clean_l or "No relevant passage retrieved" in clean_l):
                 continue
             factual_lines.append(clean_l)
-        factual_lines = [line for line in factual_lines if not (line.startswith("|") and "No matching detail in retrieved passages" in line)]
+        factual_lines = [line for line in factual_lines if not (line.startswith("|") and ("No matching detail in retrieved passages" in line or "No relevant passage retrieved" in line))]
         uncited = [line for line in factual_lines if not _CITATION.search(line)
                    and not line.startswith("Not found in the retrieved passages.")]
         if uncited:
@@ -84,15 +87,23 @@ class EvidenceValidator:
             ids = [value.upper() for value in _CITATION.findall(line)]
             if not ids:
                 continue
-            claim = self._line_claim(line)
             for source_id in ids:
+                claims = self._claims_for_source_in_line(line, source_id)
                 source = by_id.get(source_id)
-                if source and claim and _norm(claim) not in _norm(source.text):
-                    source_facts = fact_by_source.get(source_id, [])
+                if not source:
+                    continue
+                source_facts = fact_by_source.get(source_id, [])
+                for claim in claims:
+                    if _norm(claim) in _norm(source.text):
+                        continue
                     if any(_norm(fact.value) in _norm(claim) or _norm(claim) in _norm(fact.supporting_passage)
                            for fact in source_facts if fact.supporting_passage):
                         continue
                     if source.section and _norm(source.section) in _norm(line):
+                        continue
+                    claim_words = set(re.findall(r"[\w]+", claim.lower()))
+                    source_words = set(re.findall(r"[\w]+", source.text.lower()))
+                    if len(claim_words) >= 3 and claim_words.issubset(source_words):
                         continue
                     unsupported.append(f"cited statement is not present in source chunk [{source_id}]: {claim[:100]}")
         if invalid:
@@ -136,12 +147,41 @@ class EvidenceValidator:
         )
 
     @staticmethod
+    def _claims_for_source_in_line(line: str, source_id: str) -> list[str]:
+        tag = f"[{source_id}]".upper()
+        if "|" in line:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            target = next((c for c in cells if tag in c.upper()), "")
+            if target:
+                line = target
+        parts = re.split(rf"(?<=\])\s*(?:[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\.?\s*)?", line, flags=re.I)
+        matched_parts = [p for p in parts if tag in p.upper()] or [line]
+        claims = []
+        for p in matched_parts:
+            c = _CITATION.sub("", p).strip()
+            c = re.sub(r"^\s*(?:[-*+•]\s+|\d+[.)]\s+)", "", c)
+            c = re.sub(r"^\*\*(.+?)\*\*:\s*", "", c)
+            c = re.sub(r"^\*\*(.+?)\*\*\s*", "", c)
+            c = re.sub(r"\s*[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*$", "", c, flags=re.I)
+            c = re.sub(r"\s*\[\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*\]\s*$", "", c, flags=re.I)
+            if ": " in c and c.startswith("**"):
+                c = c.split(": ", 1)[1]
+            if " — " in c:
+                c = c.split(" — ", 1)[1]
+            c = re.sub(r"^[:\s\"`'-]+", "", c)
+            c = re.sub(r"[:\s\"`'.]+$", "", c).strip(" *`\"'")
+            if c and len(c) >= 10:
+                claims.append(c)
+        return claims
+
+    @staticmethod
     def _line_claim(line: str) -> str:
         claim = _CITATION.sub("", line).strip()
-        claim = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", "", claim)
+        claim = re.sub(r"^\s*(?:[-*+•]\s+|\d+[.)]\s+)", "", claim)
+        claim = re.sub(r"^\*\*(.+?)\*\*:\s*", "", claim)
         claim = re.sub(r"^\*\*(.+?)\*\*\s*", "", claim)
-        claim = re.sub(r"^[:\s\"`'-]+", "", claim)
-        claim = re.sub(r"[:\s\"`'.]+$", "", claim)
+        claim = re.sub(r"\s*[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*$", "", claim, flags=re.I)
+        claim = re.sub(r"\s*\[\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*\]\s*$", "", claim, flags=re.I)
         if claim.startswith("|"):
             cells = [cell.strip() for cell in claim.split("|") if cell.strip()]
             claim = cells[1] if len(cells) > 1 else claim

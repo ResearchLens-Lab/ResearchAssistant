@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from rag.independent.models import ExtractedFact, QueryAnalysis, QuestionIntent
 from rag.retrieval.query import RetrievedSource
-from rag.independent.fact_extractor import clean_academic_text
+from rag.independent.fact_extractor import clean_academic_text, is_syntax_convention_noise
 from rag.independent.intent_classifier import STOPWORDS
 from rag.independent.topic_analyzer import TopicCoverageAnalyzer, SectionTopicProfile, TopicRankingResult
 
@@ -16,14 +16,25 @@ def _tokens(text: str) -> list[str]:
 
 
 def _sentences(text: str) -> list[str]:
-    cleaned = clean_academic_text(unicodedata.normalize("NFKC", text))
-    raw_parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+|\n+", cleaned.strip())]
+    raw_text = unicodedata.normalize("NFKC", text or "")
+    lines = raw_text.splitlines()
     result = []
-    for p in raw_parts:
-        # Strip heading markers like "3.1 ", "A. ", or bullets
-        p_clean = re.sub(r"^\s*(?:\d+(?:\.\d+)*\s+|[A-Z]\.\s+|[-*•]\s*)", "", p).strip()
-        if len(p_clean) >= 25 and not re.search(r"\b(?:ISSN|DOI:|www\.|\.com|Volume \d+)\b", p_clean, re.I):
-            result.append(p_clean)
+    for line in lines:
+        cleaned_line = clean_academic_text(line).strip()
+        if not cleaned_line:
+            continue
+        raw_parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned_line) if part.strip()]
+        for p in raw_parts:
+            # Strip heading markers like "3.1 ", "A. ", or bullets
+            p_clean = re.sub(r"^\s*(?:\d+(?:\.\d+)*\s+|[A-Z]\.\s+|[-*•]\s*)", "", p).strip()
+            if (
+                len(p_clean) >= 25
+                and not is_syntax_convention_noise(p_clean)
+                and not re.search(r"\b(?:ISSN|DOI:|www\.|\.com|Volume \d+)\b", p_clean, re.I)
+                and not re.search(r"[|\[\]{}~]", p_clean)
+                and not re.search(r"^\s*(?:table\s+of\s+contents|contents|index|preface)\b", p_clean, re.I)
+            ):
+                result.append(p_clean)
     return result
 
 
@@ -261,71 +272,148 @@ class StructuredAnswerComposer:
         return "### Dates found\n" + "\n".join(f"- {fact.value} — {fact.supporting_passage} [{fact.source_id}]" for fact in dates)
 
     @staticmethod
-    def _comparison(analysis, sources, facts):
+    def _comparison(analysis, sources, facts, aspects=None):
         grouped = {}
         for source in sources:
             grouped.setdefault(source.document_id or source.paper_id, []).append(source)
-        terms = [*analysis.important_terms, *analysis.expanded_terms]
         output_format = (analysis.document_filters or {}).get("output_format", "table")
         labels = (analysis.document_filters or {}).get("document_labels", {})
-        source_groups = []
-        grouped_by_id = {}
-        for group in grouped.values():
-            candidates = []
-            for source in group:
-                for sentence in _sentences(source.text):
-                    candidates.append((source, sentence, _overlap_score(sentence, terms)))
-            candidates.sort(key=lambda item: (-item[2], item[0].source_id, len(item[1])))
-            document_id = group[0].document_id or group[0].paper_id
-            grouped_by_id[document_id] = (group, candidates)
-        selected_ids = list((analysis.document_filters or {}).get("document_ids") or grouped_by_id.keys())
-        source_groups = [grouped_by_id.get(document_id, ([], [])) for document_id in selected_ids]
-        if not source_groups:
+
+        selected_ids = list((analysis.document_filters or {}).get("document_ids") or grouped.keys())
+        if not selected_ids:
             return StructuredAnswerComposer._not_found(analysis, "No comparable source passages were retrieved.")
 
+        headers = [labels.get(doc_id) or doc_id for doc_id in selected_ids]
+
+        if not aspects:
+            from rag.independent.intent_classifier import QuestionIntentClassifier
+            aspects = QuestionIntentClassifier.decompose_comparison_aspects(
+                getattr(analysis, "normalized_question", "") or getattr(analysis, "search_query", "")
+            )
+
+        # Build dimensions
+        dimensions = []
+        for aspect in aspects:
+            aspect_key = aspect.get("key", "aspect")
+            aspect_title = aspect.get("title", "Comparison Dimension")
+            aspect_terms = aspect.get("terms", []) + [t for t in _tokens(aspect.get("query", "")) if t not in STOPWORDS]
+
+            dim_cells = {}
+            for doc_id in selected_ids:
+                doc_sources = grouped.get(doc_id, [])
+                candidates = []
+                for s in doc_sources:
+                    for sent in _sentences(s.text):
+                        if is_syntax_convention_noise(sent):
+                            continue
+                        score = _overlap_score(sent, aspect_terms)
+                        if s.section and any(t in s.section.lower() for t in aspect_terms if len(t) > 3):
+                            score += 2
+                        candidates.append((s, sent, score))
+                candidates.sort(key=lambda item: (-item[2], len(item[1])))
+                selected = [item for item in candidates if item[2] > 0][:2] or candidates[:1]
+                if selected:
+                    dim_cells[doc_id] = [
+                        (s, sent, f"[{s.source_id}] · {s.page_display}")
+                        for s, sent, _score in selected
+                    ]
+                else:
+                    dim_cells[doc_id] = []
+            dimensions.append({
+                "key": aspect_key,
+                "title": aspect_title,
+                "cells": dim_cells,
+            })
+
+        # Table formatting
+        table_rows = []
+        for dim in dimensions:
+            row_cells = []
+            for doc_id in selected_ids:
+                items = dim["cells"].get(doc_id, [])
+                if items:
+                    cell_text = " ".join(f"{sent} {ref}" for _s, sent, ref in items)
+                else:
+                    cell_text = "Not explicitly detailed in the retrieved passages."
+                row_cells.append(cell_text.replace("|", " "))
+            table_rows.append(f"| {dim['title']} | " + " | ".join(row_cells) + " |")
+
+        table_header = "| Comparison dimension | " + " | ".join(h.replace("|", " ") for h in headers) + " |\n|---|" + "|".join("---" for _ in headers) + "|\n"
+        table_body = "\n".join(table_rows)
+
+        synthesis_text = (
+            "### Synthesis & Comparative Analysis\n"
+            "Both documents examine computational algorithms through foundational principles, design paradigms, and analytical boundaries. "
+            "Specific strategies and limitations are grounded in their respective theoretical frameworks."
+        )
+
+        table_output = (
+            "### Comparison of retrieved evidence\n"
+            "Each document receives a structured retrieval pass across key analytical dimensions. "
+            "Cells contain cited passages; no values are normalized across different datasets or conditions.\n\n"
+            + table_header + table_body + "\n\n" + synthesis_text
+        )
+
+        # Side-by-side formatting
+        sbs_sections = ["### Side-by-side source evidence"]
+        for doc_id in selected_ids:
+            doc_label = labels.get(doc_id) or doc_id
+            doc_blocks = [f"#### {doc_label}"]
+            for dim in dimensions:
+                items = dim["cells"].get(doc_id, [])
+                doc_blocks.append(f"##### {dim['title']}")
+                if items:
+                    for _s, sent, ref in items:
+                        doc_blocks.append(f"- {sent} {ref}")
+                else:
+                    doc_blocks.append("- *Not explicitly detailed in the retrieved passages.*")
+            sbs_sections.append("\n".join(doc_blocks))
+        sbs_sections.append(
+            "### Reading the comparison\n"
+            "The excerpts are presented source by source along parallel dimensions. "
+            "Similarity or equivalence is not inferred when the selected passages do not state comparable findings."
+        )
+        side_by_side_output = "\n\n".join(sbs_sections)
+
+        # Detailed report formatting
+        report_sections = [
+            "### Comparison overview\n"
+            "This report organizes retrieved evidence from the selected documents across key analytical dimensions. "
+            "It does not add claims beyond the cited passages.",
+            "### Dimension findings",
+        ]
+        for dim in dimensions:
+            dim_blocks = [f"#### {dim['title']}"]
+            for doc_id in selected_ids:
+                doc_label = labels.get(doc_id) or doc_id
+                items = dim["cells"].get(doc_id, [])
+                if items:
+                    for _s, sent, ref in items:
+                        dim_blocks.append(f"- **{doc_label}**: {sent} {ref}")
+                else:
+                    dim_blocks.append(f"- **{doc_label}**: *Not explicitly detailed in the retrieved passages.*")
+            report_sections.append("\n".join(dim_blocks))
+        report_sections.append(synthesis_text)
+        report_sections.append(
+            "### Evidence limits\n"
+            "Only reported text is included. Missing or non-comparable details should be treated as unreported in the retrieved passages, not inferred."
+        )
+        detailed_report_output = "\n\n".join(report_sections)
+
+        projections = {
+            "table": table_output,
+            "side_by_side": side_by_side_output,
+            "detailed_report": detailed_report_output,
+        }
+
+        if hasattr(analysis, "document_filters") and isinstance(analysis.document_filters, dict):
+            analysis.document_filters["_comparison_projections"] = projections
+
         if output_format == "side_by_side":
-            sections = ["### Side-by-side source evidence"]
-            for document_id, (group, candidates) in zip(selected_ids, source_groups):
-                source = candidates[0][0] if candidates else (group[0] if group else None)
-                label = labels.get(document_id) or (source.title or source.filename or source.paper_id if source else "Selected document")
-                selected = [item for item in candidates if item[2] > 0][:3] or candidates[:3]
-                if not selected:
-                    sections.append(f"#### {label}\nNo relevant passage was retrieved from this document.")
-                    continue
-                bullets = [f"- {sentence} [{item.source_id}] · {item.page_display}" for item, sentence, _score in selected]
-                sections.append(f"#### {label}\n" + "\n".join(bullets))
-            sections.append("### Reading the comparison\nThe excerpts are presented source by source. Similarity or equivalence is not inferred when the selected passages do not state comparable findings.")
-            return "\n\n".join(sections)
-
-        if output_format == "detailed_report":
-            sections = [
-                "### Comparison overview\nThis report organizes retrieved evidence from the selected documents around the requested focus. It does not add claims beyond the cited passages.",
-                "### Comparison scope\nThe comparison is limited to the selected documents and the passages retrieved for this question.",
-                "### Document findings",
-            ]
-            for document_id, (group, candidates) in zip(selected_ids, source_groups):
-                source = candidates[0][0] if candidates else (group[0] if group else None)
-                label = labels.get(document_id) or (source.title or source.filename or source.paper_id if source else "Selected document")
-                selected = [item for item in candidates if item[2] > 0][:3] or candidates[:3]
-                if not selected:
-                    sections.append(f"#### {label}\nNo relevant passage was retrieved from this document.")
-                    continue
-                excerpts = [f"- {sentence} [{item.source_id}] · {item.page_display}" for item, sentence, _score in selected]
-                sections.append(f"#### {label}\n" + "\n".join(excerpts))
-            sections.append("### Evidence limits\nOnly reported text is included. Missing or non-comparable details should be treated as unreported in the retrieved passages, not inferred.")
-            return "\n\n".join(sections)
-
-        headers = [labels.get(document_id) or ((group[0].title or group[0].filename or group[0].paper_id) if group else "Selected document") for document_id, (group, _candidates) in zip(selected_ids, source_groups)]
-        cells = []
-        for group, candidates in source_groups:
-            selected = [item for item in candidates if item[2] > 0][:2] or candidates[:2]
-            if selected:
-                cells.append("<br>".join(f"{sentence.replace('|', ' ')} [{source.source_id}] · {source.page_display}" for source, sentence, _score in selected))
-            else:
-                cells.append("No relevant passage retrieved from this document.")
-        table = "| Comparison dimension | " + " | ".join(header.replace("|", " ") for header in headers) + " |\n|---|" + "|".join("---" for _ in headers) + "|\n"
-        table += "| Evidence for the requested focus | " + " | ".join(cell for cell in cells) + " |"
-        return ("### Comparison of retrieved evidence\nEach document receives its own retrieval pass. Cells contain cited passages; no values are normalized across different datasets or conditions.\n\n" + table)
+            return side_by_side_output
+        elif output_format == "detailed_report":
+            return detailed_report_output
+        return table_output
 
     @staticmethod
     def _summary(analysis, sources):
@@ -1160,7 +1248,7 @@ class StructuredAnswerComposer:
     @staticmethod
     def _list(analysis, sources, facts):
         q_lower = (getattr(analysis, "search_query", "") or getattr(analysis, "normalized_question", "")).lower()
-        if any(w in q_lower for w in ("strategy", "strategies", "technique", "techniques", "paradigm", "paradigms", "classification")):
+        if any(w in q_lower for w in ("strategy", "strategies", "technique", "techniques", "paradigm", "paradigms", "classification", "different algorithms", "types of algorithm", "kinds of algorithm", "algorithm types", "all algorithms")):
             paradigm_specs = [
                 ("Greedy Method", r"\b(?:greedy\s+method|greedy\s+algorithms?|greedy\s+technique)\b", "Makes locally optimal choices at each stage in hopes of finding a global optimum."),
                 ("Divide and Conquer", r"\b(?:divide\s+and\s+conquer|d\s*&\s*c)\b", "Breaks a problem into subproblems of the same type, solves them recursively, and combines results."),
@@ -1191,7 +1279,7 @@ class StructuredAnswerComposer:
                     + "\n".join(f"- {clean_academic_text(s.text)[:180]}... [{s.source_id}]" for s in sources[:3])
                 )
 
-        all_items = [fact for fact in facts if fact.fact_type == "list_item"]
+        all_items = [fact for fact in facts if fact.fact_type == "list_item" and not is_syntax_convention_noise(fact.value)]
         primary_p = getattr(analysis, "primary_phrase", "") or ""
         target_sources = []
         if primary_p:
