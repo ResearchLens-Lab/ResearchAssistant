@@ -120,7 +120,7 @@ export function usePaperDetails(paperId) {
     documentsError: documentsQuery.error,
     refetchDocuments: documentsQuery.refetch,
     summarize: summarizeMutation.mutateAsync,
-    summaryData: summarizeMutation.data,
+    summaryData: summarizeMutation.data || paperQuery.data?.summary_json || null,
     isSummarizing: summarizeMutation.isPending,
     summaryError: summarizeMutation.error,
     uploadDocument: uploadDocumentMutation.mutateAsync,

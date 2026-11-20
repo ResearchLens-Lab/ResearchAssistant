@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import hashlib
+import json
 import zipfile
 import stat
 import tempfile
@@ -87,6 +88,74 @@ async def _run_background_ingest(document_id: str, paper_id: str, owner_id: str)
             await service._process(doc, paper)
     except Exception as exc:
         logger.error("Background ingestion crashed for doc %s: %s", document_id, exc, exc_info=True)
+
+
+def is_generated_summary_export(entry: Path) -> bool:
+    """Identifies generated summary files to prevent re-ingestion into library."""
+    name = entry.name.lower()
+    if name.startswith("grounded summary") or name.startswith("grounded_summary") or name.startswith(".summary"):
+        return True
+    if entry.suffix.lower() in {".md", ".txt"}:
+        try:
+            with open(entry, "r", encoding="utf-8", errors="ignore") as f:
+                head = f.read(300)
+                if "<!-- researchlens:generated-summary" in head or "researchlens-grounded-summary" in head:
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def _get_project_exclusions(folder: Path) -> set[str]:
+    """Returns set of explicitly removed filenames and hashes for a project folder."""
+    ex_file = folder / ".researchlens-exclusions.json"
+    if ex_file.is_file():
+        try:
+            data = json.loads(ex_file.read_text(encoding="utf-8"))
+            return set(data.get("excluded_filenames", []) + data.get("excluded_hashes", []))
+        except Exception:
+            pass
+    return set()
+
+
+def _add_project_exclusion(folder: Path, filename: str, file_hash: Optional[str] = None) -> None:
+    """Persists an exclusion to prevent auto-scanner re-import of an explicitly removed source."""
+    if not folder.is_dir():
+        return
+    ex_file = folder / ".researchlens-exclusions.json"
+    data = {"excluded_filenames": [], "excluded_hashes": []}
+    if ex_file.is_file():
+        try:
+            data = json.loads(ex_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    fn_list = set(data.get("excluded_filenames", []))
+    if filename:
+        fn_list.add(filename)
+    h_list = set(data.get("excluded_hashes", []))
+    if file_hash:
+        h_list.add(file_hash)
+    data["excluded_filenames"] = sorted(list(fn_list))
+    data["excluded_hashes"] = sorted(list(h_list))
+    try:
+        ex_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _remove_project_exclusion(folder: Path, filename: str, file_hash: Optional[str] = None) -> None:
+    """Clears an exclusion when a user explicitly uploads/re-adds a source."""
+    ex_file = folder / ".researchlens-exclusions.json"
+    if not ex_file.is_file():
+        return
+    try:
+        data = json.loads(ex_file.read_text(encoding="utf-8"))
+        data["excluded_filenames"] = [f for f in data.get("excluded_filenames", []) if f != filename]
+        if file_hash:
+            data["excluded_hashes"] = [h for h in data.get("excluded_hashes", []) if h != file_hash]
+        ex_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 class DocumentService:
@@ -404,7 +473,7 @@ class DocumentService:
 
         async def persist_progress(event: dict) -> None:
             stage = str(event.get("stage", ""))
-            if not stage or document.processing_status not in [DocumentStatus.PROCESSING.value, DocumentStatus.CANCEL_REQUESTED.value]:
+            if not stage or document.processing_status != DocumentStatus.PROCESSING.value:
                 return
             progress = max(document.processing_progress or 0, min(100 if stage == "ready" else 99, max(0, int(event.get("progress", 0)))))
             now = time.monotonic()
@@ -526,11 +595,29 @@ class DocumentService:
                 await release_worker_lease(self.db, lease.id)
 
         await self.db.refresh(document)
-        if document.processing_status == DocumentStatus.CANCELLED.value:
-            logger.info("Ingestion was cancelled during processing document_id=%s", document.id)
-            return
-
         reported_status = str(result.get("status", ""))
+        is_cancelled = (
+            document.processing_status in [DocumentStatus.CANCELLED.value, DocumentStatus.CANCEL_REQUESTED.value]
+            or reported_status == "cancelled"
+            or "cancelled" in str(result.get("error", "")).lower()
+        )
+
+        if is_cancelled:
+            logger.info("Cooperative ingestion cancellation completed document_id=%s is_reindex=%s", document.id, is_reindex)
+            if is_reindex or result.get("metadata", {}).get("existing_index_preserved"):
+                document.processing_status = DocumentStatus.INDEXED.value
+                document.processing_stage = "ready"
+                document.processing_error = None
+                document.cleanup_status = None
+            else:
+                document.processing_status = DocumentStatus.CANCELLED.value
+                document.processing_stage = "cancelled"
+                document.processing_progress = 0
+                document.processing_error = "Ingestion cancelled."
+                document.cleanup_status = CleanupStatus.COMPLETED.value
+                document.chunk_count = 0
+            await self.db.commit()
+            return
         success = result.get("success") and reported_status in {"indexed", "partial", "needs_review"}
         error = str(result.get("error") or "Indexing did not complete.")
         cleanup_safe = True
@@ -766,8 +853,14 @@ class DocumentService:
         if not folder.is_dir():
             return 0
         added_count = 0
+        exclusions = _get_project_exclusions(folder)
+        from sqlalchemy import or_
         for entry in folder.iterdir():
             if not entry.is_file() or entry.name.startswith("."):
+                continue
+            if is_generated_summary_export(entry):
+                continue
+            if entry.name in exclusions:
                 continue
             if entry.suffix.lower() not in {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx", ".pptx"}:
                 continue
@@ -775,10 +868,21 @@ class DocumentService:
                 file_bytes = entry.read_bytes()
                 file_size = len(file_bytes)
                 file_hash = hashlib.sha256(file_bytes).hexdigest()
+                if file_hash in exclusions:
+                    continue
                 existing = await self.db.scalar(
-                    select(Document).where(Document.paper_id == paper.id, Document.file_hash_sha256 == file_hash)
+                    select(Document).where(
+                        Document.paper_id == paper.id,
+                        or_(
+                            Document.file_hash_sha256 == file_hash,
+                            Document.filename == entry.name,
+                        )
+                    )
                 )
                 if existing:
+                    if not existing.file_hash_sha256:
+                        existing.file_hash_sha256 = file_hash
+                        await self.db.commit()
                     continue
 
                 settings = get_settings()
@@ -903,6 +1007,19 @@ class DocumentService:
         except Exception as lease_err:
             logger.debug("Worker lease release note on delete: %s", lease_err)
 
+        # If document is actively processing, signal cancellation
+        if document.processing_status in [
+            DocumentStatus.PROCESSING.value,
+            DocumentStatus.CANCEL_REQUESTED.value,
+            DocumentStatus.UPLOADED.value,
+            DocumentStatus.QUEUED.value,
+        ]:
+            if self.rag:
+                try:
+                    await self.rag.cancel_ingest(document.id)
+                except Exception:
+                    pass
+
         # Best-effort delete chunks from RAG index
         try:
             if self.rag:
@@ -910,7 +1027,39 @@ class DocumentService:
         except Exception as rag_err:
             logger.debug("RAG delete chunks note on delete: %s", rag_err)
 
-        # Delete file if not shared by another document record
+        # Check if another document in the same project still references this file
+        from sqlalchemy import or_
+        other_in_paper = await self.db.scalar(
+            select(Document).where(
+                Document.paper_id == document.paper_id,
+                Document.id != document.id,
+                or_(
+                    Document.filename == document.filename,
+                    Document.file_hash_sha256 == document.file_hash_sha256,
+                ),
+            )
+        )
+        if not other_in_paper:
+            try:
+                from backend.app.services.paper_service import get_personal_research_dir
+                paper = await self.paper_service.papers.get_by_id(document.paper_id)
+                if paper:
+                    folder = get_personal_research_dir(paper.title)
+                    _add_project_exclusion(folder, document.filename, document.file_hash_sha256)
+            except Exception as ex_err:
+                logger.debug("Could not record project exclusion: %s", ex_err)
+
+        # Mark project summary stale upon source removal
+        try:
+            paper = await self.paper_service.papers.get_by_id(document.paper_id)
+            if paper and paper.summary_json:
+                s_copy = dict(paper.summary_json)
+                s_copy["is_stale"] = True
+                paper.summary_json = s_copy
+        except Exception:
+            pass
+
+        # Delete backend file copy if not shared by another document record
         try:
             if document.storage_path:
                 other = await self.db.execute(

@@ -17,6 +17,7 @@ export function DocumentAttachmentsList({
   onRetry,
   onAddSource,
 }) {
+  const [docToDelete, setDocToDelete] = React.useState(null);
   const queryClient = useQueryClient();
   const retryMutation = useMutation({
     mutationFn: documentsService.retry,
@@ -159,8 +160,12 @@ export function DocumentAttachmentsList({
                         size="icon"
                         variant="ghost"
                         disabled={deleteMutation.isPending && deleteMutation.variables === doc.id}
-                        onClick={() => deleteMutation.mutate(doc.id)}
-                        className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDocToDelete(doc);
+                        }}
+                        className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Remove source"
                         aria-label={`Remove ${doc.filename}`}
                       >
@@ -175,6 +180,59 @@ export function DocumentAttachmentsList({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {docToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-source-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+                <X className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 id="remove-source-title" className="text-sm font-bold text-slate-900">
+                  Remove source from project?
+                </h3>
+                <p className="text-xs font-semibold text-slate-800 truncate" title={docToDelete.filename}>
+                  {docToDelete.filename}
+                </p>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  Uploaded {formatDate(docToDelete.created_at)} · {docToDelete.chunk_count || 0} chunks · {formatBytes(docToDelete.file_size)}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              This will remove this specific source entry and its index associations from this project. Any other identical source records and your original file in the project folder will remain intact.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDocToDelete(null)}
+                className="h-8 text-xs rounded-full"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  deleteMutation.mutate(docToDelete.id);
+                  setDocToDelete(null);
+                }}
+                className="h-8 text-xs rounded-full bg-rose-600 hover:bg-rose-700"
+              >
+                {deleteMutation.isPending ? "Removing…" : "Remove source"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

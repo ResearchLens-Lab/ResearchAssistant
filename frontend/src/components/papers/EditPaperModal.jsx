@@ -18,8 +18,10 @@ export function EditPaperModal({
   onClose,
   paper,
   onSubmit,
+  onSave,
   isLoading = false,
 }) {
+  const submitHandler = onSubmit || onSave;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -57,9 +59,14 @@ export function EditPaperModal({
       return;
     }
 
+    if (typeof submitHandler !== "function") {
+      setFormError("Edit project callback is not configured.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await onSubmit({
+      await submitHandler({
         id: paper.id,
         payload: {
           title: trimmedTitle,

@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.exceptions import DocumentNotFoundError, PaperNotFoundError, RequestValidationAppError
 from backend.app.integrations.rag_gateway import RAGGateway
-from backend.app.models.paper import Paper
+from backend.app.models.paper import Paper, ComparisonRecord
 from backend.app.models.document import Document, DocumentStatus
 from backend.app.models.user import User
 from backend.app.repositories.document_repository import DocumentRepository
@@ -87,6 +88,76 @@ class PaperService:
 
         return {"folder_path": str(folder), "status": "opened"}
 
+    async def export_summary(self, user: User, paper_id: str) -> dict[str, Any]:
+        paper = await self.get_owned(user, paper_id)
+        folder = get_personal_research_dir(paper.title)
+
+        summary = paper.summary_json
+        if not summary or not summary.get("answer"):
+            summary = await self.summarize(user, paper_id)
+
+        clean_name = re.sub(r'[<>:"/\\|?*]', '_', paper.title).strip() or f"Project_{paper.id[:8]}"
+        filename = f"Grounded Summary - {clean_name}.md"
+        dest_path = folder / filename
+        tmp_path = folder / f".{filename}.tmp"
+
+        sources = summary.get("sources", [])
+        answer = summary.get("answer", "")
+        exported_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        content_lines = [
+            "<!-- researchlens:generated-summary version=1.0 -->",
+            f"# Grounded Research Summary: {paper.title}",
+            "",
+            f"- **Project:** {paper.title}",
+            f"- **Exported:** {exported_at}",
+            f"- **Total Citations:** {len(sources)}",
+            "",
+            "---",
+            "",
+            "## Summary Synthesis",
+            "",
+            answer,
+            "",
+            "---",
+            "",
+            "## Evidence & Citations Audit Trail",
+            "",
+        ]
+
+        if not sources:
+            content_lines.append("*No citations attached to this summary.*")
+        else:
+            for s in sources:
+                sid = s.get("source_id") or s.get("citation_key") or "S?"
+                sec = s.get("section") or "Section"
+                fn = s.get("filename") or s.get("title") or "Source Document"
+                loc = s.get("locator") or f"Page {s.get('page', 1)}"
+                txt = (s.get("text") or s.get("quote") or "").strip()
+
+                content_lines.extend([
+                    f"### [{sid}] {sec}",
+                    f"- **Document:** {fn}",
+                    f"- **Locator:** {loc}",
+                    f"- **Passage Excerpt:**",
+                    f"> \"{txt}\"",
+                    "",
+                ])
+
+        content = "\n".join(content_lines).strip() + "\n"
+
+        # Atomic write
+        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.replace(dest_path)
+
+        logger.info("Exported summary for paper_id=%s to %s", paper_id, dest_path)
+        return {
+            "status": "success",
+            "filename": filename,
+            "path": str(dest_path),
+            "folder": str(folder),
+        }
+
     async def list(self, user: User, params: PageParams) -> dict[str, Any]:
         items, total = await self.papers.list_by_owner(
             user.id, params.offset, params.page_size
@@ -146,16 +217,18 @@ class PaperService:
         Ownership is already validated via get_owned(), but RAG layer also enforces
         isolation to prevent any vector/lexical leaks.
         """
-        await self.get_owned(user, paper_id)
+        paper = await self.get_owned(user, paper_id)
         try:
             result = await self.rag.summarize_paper(
                 paper_id=paper_id,
                 user_id=str(user.id),  # SEC-001: Pass authenticated user ID
             )
-            return {
+            summary_payload = {
                 "paper_id": paper_id,
                 "answer": result.get("answer", ""),
                 "sources": result.get("sources", []),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "is_stale": False,
             }
         except Exception as exc:
             logger.warning("RAG gateway summarize_paper failed; using deterministic summarizer fallback: %s", exc)
@@ -179,11 +252,17 @@ class PaperService:
                     "paper_title": s.get("title", ""),
                     "citation_label": f"[{s.get('source_id', '')}]",
                 })
-            return {
+            summary_payload = {
                 "paper_id": paper_id,
                 "answer": summary_dict.get("answer", ""),
                 "sources": sources,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "is_stale": False,
             }
+
+        paper.summary_json = summary_payload
+        await self.db.commit()
+        return summary_payload
 
     async def compare(self, user: User, payload: PaperCompareRequest) -> dict[str, Any]:
         """
@@ -252,10 +331,71 @@ class PaperService:
                 }
                 for document_id in document_ids
             ]
-        return {
+
+        final_response = {
             "paper_ids": paper_ids,
             "document_ids": document_ids,
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
             "metadata": metadata,
+        }
+
+        # Persist user-scoped comparison record
+        try:
+            record = ComparisonRecord(
+                owner_id=user.id,
+                focus_area=payload.focus_area,
+                output_format=payload.output_format or "table",
+                document_ids=document_ids,
+                paper_ids=paper_ids,
+                result_json=final_response,
+            )
+            self.db.add(record)
+            await self.db.commit()
+            final_response["comparison_id"] = record.id
+        except Exception as exc:
+            logger.warning("Could not persist comparison record: %s", exc)
+            await self.db.rollback()
+
+        return final_response
+
+    async def list_comparison_history(self, user: User, limit: int = 20) -> list[dict]:
+        stmt = (
+            select(ComparisonRecord)
+            .where(ComparisonRecord.owner_id == user.id)
+            .order_by(ComparisonRecord.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        records = result.scalars().all()
+        return [
+            {
+                "id": r.id,
+                "focus_area": r.focus_area,
+                "output_format": r.output_format,
+                "document_ids": r.document_ids or [],
+                "paper_ids": r.paper_ids or [],
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "result": r.result_json,
+            }
+            for r in records
+        ]
+
+    async def get_comparison_history(self, user: User, comparison_id: str) -> dict:
+        stmt = select(ComparisonRecord).where(
+            ComparisonRecord.id == comparison_id,
+            ComparisonRecord.owner_id == user.id,
+        )
+        result = await self.db.execute(stmt)
+        record = result.scalar_one_or_none()
+        if not record:
+            raise RequestValidationAppError("Comparison history entry not found.")
+        return {
+            "id": record.id,
+            "focus_area": record.focus_area,
+            "output_format": record.output_format,
+            "document_ids": record.document_ids or [],
+            "paper_ids": record.paper_ids or [],
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "result": record.result_json,
         }

@@ -63,6 +63,7 @@ class PaperResponse(BaseModel):
     doi: Optional[str] = None
     source_url: Optional[str] = None
     venue: Optional[str] = None
+    summary_json: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -71,6 +72,8 @@ class PaperSummaryResponse(BaseModel):
     paper_id: str
     answer: str
     sources: list[Source]
+    generated_at: Optional[str] = None
+    is_stale: Optional[bool] = False
 
 
 class PaperCompareRequest(BaseModel):
@@ -95,3 +98,4 @@ class PaperCompareResponse(BaseModel):
     answer: str
     sources: list[Source]
     metadata: dict[str, Any] = Field(default_factory=dict)
+    comparison_id: Optional[str] = None

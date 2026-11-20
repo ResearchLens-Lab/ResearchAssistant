@@ -50,6 +50,30 @@ async def compare_papers(
     return await PaperService(db, rag).compare(current_user, payload)
 
 
+@router.get(
+    "/compare/history",
+    summary="List past comparative analyses for the current user",
+)
+async def list_comparison_history(
+    current_user: CurrentUser,
+    db: DBSession,
+):
+    return await PaperService(db).list_comparison_history(current_user)
+
+
+@router.get(
+    "/compare/history/{comparison_id}",
+    summary="Get a past comparison by ID",
+)
+async def get_comparison_history(
+    comparison_id: str,
+    current_user: CurrentUser,
+    db: DBSession,
+):
+    return await PaperService(db).get_comparison_history(current_user, comparison_id)
+
+
+
 @router.get("/{paper_id}", response_model=PaperResponse, summary="Get a paper")
 async def get_paper(paper_id: str, current_user: CurrentUser, db: DBSession):
     return await PaperService(db).get_owned(current_user, paper_id)
@@ -109,3 +133,13 @@ async def open_project_folder(
     paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
 ):
     return await PaperService(db, rag).open_folder(current_user, paper_id)
+
+
+@router.post(
+    "/{paper_id}/export-summary",
+    summary="Export grounded summary and citations audit trail to project folder",
+)
+async def export_paper_summary(
+    paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    return await PaperService(db, rag).export_summary(current_user, paper_id)
