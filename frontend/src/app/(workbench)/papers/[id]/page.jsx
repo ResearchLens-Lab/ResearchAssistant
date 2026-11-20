@@ -44,10 +44,22 @@ export default function PaperDetailsPage() {
     summaryError,
   } = usePaperDetails(paperId);
 
-  const { setSources, openDrawer, isDrawerOpen, closeDrawer } = useCitationStore();
+  const {
+    openDrawer,
+    isDrawerOpen,
+    closeDrawer,
+    resetSummaryEvidence,
+    setSources,
+  } = useCitationStore();
   const { setLastViewedPaperId } = useChatScopeStore();
   const evidenceAvailable = hasIndexedSources(documents);
   const currentSummary = summaryData?.paper_id === paperId ? summaryData : null;
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [summaryNotice, setSummaryNotice] = useState("");
+
+  useEffect(() => {
+    setIsSummaryExpanded(false);
+  }, [paperId]);
 
   useEffect(() => {
     if (paperId) {
@@ -56,18 +68,17 @@ export default function PaperDetailsPage() {
   }, [paperId, setLastViewedPaperId]);
 
   useEffect(() => {
-    closeDrawer();
+    resetSummaryEvidence(currentSummary?.sources || []);
     return () => {
+      resetSummaryEvidence([]);
       closeDrawer();
     };
-  }, [closeDrawer]);
+  }, [paperId, currentSummary, resetSummaryEvidence, closeDrawer]);
 
-  useEffect(() => {
-    setSources(currentSummary?.sources || []);
-  }, [currentSummary, setSources]);
-
-  const handleSaveProject = async (updatedFields) => {
-    const updated = await papersService.update(paperId, updatedFields);
+  const handleSaveProject = async (args) => {
+    const payload = args && typeof args === "object" && "payload" in args ? args.payload : args;
+    const targetId = args && typeof args === "object" && args.id ? args.id : paperId;
+    const updated = await papersService.update(targetId, payload);
     queryClient.invalidateQueries({ queryKey: ["paper", paperId] });
     queryClient.invalidateQueries({ queryKey: ["papers"] });
     return updated;
@@ -177,7 +188,18 @@ export default function PaperDetailsPage() {
                   : undefined
               }
               onClick={() => {
-                setSources(currentSummary?.sources || []);
+                if (!isSummaryExpanded) {
+                  if (currentSummary) {
+                    setIsSummaryExpanded(true);
+                    resetSummaryEvidence(currentSummary.sources || []);
+                    openDrawer();
+                  } else {
+                    setSummaryNotice("Generate a grounded summary first to inspect citations and evidence.");
+                    setTimeout(() => setSummaryNotice(""), 5000);
+                  }
+                  return;
+                }
+                resetSummaryEvidence(currentSummary?.sources || []);
                 openDrawer();
               }}
               className="h-8 text-xs rounded-full"
@@ -214,8 +236,20 @@ export default function PaperDetailsPage() {
           <div className="lg:col-span-7 min-w-0">
             <GroundedSummaryCard
               summary={currentSummary}
+              paperId={paperId}
               isLoading={isSummarizing}
-              onGenerate={summarize}
+              onGenerate={async () => {
+                const res = await summarize();
+                setIsSummaryExpanded(true);
+                return res;
+              }}
+              isExpanded={isSummaryExpanded}
+              onViewSavedSummary={() => {
+                setIsSummaryExpanded(true);
+                resetSummaryEvidence(currentSummary?.sources || []);
+              }}
+              onCollapseSummary={() => setIsSummaryExpanded(false)}
+              notice={summaryNotice}
               error={summaryError}
               hasIndexedSources={evidenceAvailable}
               isCheckingSources={isLoadingDocuments}
@@ -237,7 +271,11 @@ export default function PaperDetailsPage() {
             className="h-full w-[min(26rem,94vw)] shadow-2xl border-l border-slate-200/90 pointer-events-auto bg-white"
             onClick={(event) => event.stopPropagation()}
           >
-            <SourceInspectorRail onClose={closeDrawer} />
+            <SourceInspectorRail
+              mode="summary"
+              sources={currentSummary?.sources || []}
+              onClose={closeDrawer}
+            />
           </div>
         </div>
       )}
@@ -247,6 +285,7 @@ export default function PaperDetailsPage() {
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         paper={paper}
+        onSubmit={handleSaveProject}
         onSave={handleSaveProject}
       />
 

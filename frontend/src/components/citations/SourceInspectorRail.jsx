@@ -8,9 +8,14 @@ import { openAuthenticatedPdfSource } from "@/services/documents.service";
 import { getSourceIdentity } from "@/utils/sourceIdentity";
 import { filterSourcesByScopedAnswer } from "@/utils/citationNumbering.mjs";
 
-export function SourceInspectorRail({ className = "", onClose }) {
+export function SourceInspectorRail({
+  className = "",
+  onClose,
+  mode = "chat",
+  sources: propSources,
+}) {
   const {
-    sources,
+    sources: storeSources,
     activeSourceKey,
     setActiveSource,
     evidenceScope = "answer",
@@ -19,6 +24,8 @@ export function SourceInspectorRail({ className = "", onClose }) {
     conversationMessages = [],
   } = useCitationStore();
   const [documentError, setDocumentError] = useState("");
+
+  const sources = propSources !== undefined ? propSources : storeSources;
 
   const openSource = async (source, highlightedText = "") => {
     setActiveSource(source);
@@ -42,6 +49,9 @@ export function SourceInspectorRail({ className = "", onClose }) {
     : conversationMessages.slice().reverse().find((m) => m.role === "assistant" && (m.sources?.length || m.content?.includes("[S")));
 
   const displaySources = useMemo(() => {
+    if (mode === "summary") {
+      return sources;
+    }
     if (evidenceScope === "answer") {
       if (targetMessage) {
         return filterSourcesByScopedAnswer(targetMessage, sources);
@@ -63,7 +73,7 @@ export function SourceInspectorRail({ className = "", onClose }) {
       }
     }
     return aggregated.length > 0 ? aggregated : sources;
-  }, [evidenceScope, targetMessage, sources, conversationMessages]);
+  }, [mode, evidenceScope, targetMessage, sources, conversationMessages]);
 
   const citedSources = displaySources.filter((s) => s.source_id);
   const sourceGroups = citedSources.reduce((groups, source) => {
@@ -93,7 +103,9 @@ export function SourceInspectorRail({ className = "", onClose }) {
                 Evidence & sources
               </h2>
               <p className="text-[11px] text-slate-500">
-                {citedSources.length} passages · {sourceGroups.size} documents · {scopeLabel}
+                {mode === "summary"
+                  ? `${citedSources.length} passages · ${sourceGroups.size} documents · grounded summary`
+                  : `${citedSources.length} passages · ${sourceGroups.size} documents · ${scopeLabel}`}
               </p>
             </div>
           </div>
@@ -110,31 +122,33 @@ export function SourceInspectorRail({ className = "", onClose }) {
           )}
         </div>
 
-        {/* C3: Scope Toggle */}
-        <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-[11px] font-medium text-slate-600 self-start">
-          <button
-            type="button"
-            onClick={() => setEvidenceScope?.("answer")}
-            className={`rounded-md px-2.5 py-0.5 transition-colors ${
-              evidenceScope === "answer"
-                ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                : "hover:text-slate-900"
-            }`}
-          >
-            This answer
-          </button>
-          <button
-            type="button"
-            onClick={() => setEvidenceScope?.("conversation")}
-            className={`rounded-md px-2.5 py-0.5 transition-colors ${
-              evidenceScope === "conversation"
-                ? "bg-white text-slate-900 shadow-2xs font-semibold"
-                : "hover:text-slate-900"
-            }`}
-          >
-            Whole conversation
-          </button>
-        </div>
+        {/* C3: Scope Toggle (Only in chat mode) */}
+        {mode !== "summary" && (
+          <div className="flex items-center rounded-lg bg-slate-100 p-0.5 text-[11px] font-medium text-slate-600 self-start">
+            <button
+              type="button"
+              onClick={() => setEvidenceScope?.("answer")}
+              className={`rounded-md px-2.5 py-0.5 transition-colors ${
+                evidenceScope === "answer"
+                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                  : "hover:text-slate-900"
+              }`}
+            >
+              This answer
+            </button>
+            <button
+              type="button"
+              onClick={() => setEvidenceScope?.("conversation")}
+              className={`rounded-md px-2.5 py-0.5 transition-colors ${
+                evidenceScope === "conversation"
+                  ? "bg-white text-slate-900 shadow-2xs font-semibold"
+                  : "hover:text-slate-900"
+              }`}
+            >
+              Whole conversation
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Evidence Content */}
@@ -153,10 +167,12 @@ export function SourceInspectorRail({ className = "", onClose }) {
             <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400 space-y-2">
               <FileText className="h-8 w-8 text-slate-300 stroke-[1.5]" />
               <p className="text-sm font-semibold text-slate-700">
-                No cited passages yet
+                {mode === "summary" ? "No summary citations" : "No cited passages yet"}
               </p>
               <p className="text-[11px] text-slate-500 max-w-[220px] leading-relaxed">
-                Source passages cited in an answer will appear here for review.
+                {mode === "summary"
+                  ? "Citations from the grounded summary will appear here for review."
+                  : "Source passages cited in an answer will appear here for review."}
               </p>
             </div>
           ) : (

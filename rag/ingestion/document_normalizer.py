@@ -8,6 +8,8 @@ import logging
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+from rag.ingestion.structure_extractor import is_valid_heading_title
+
 logger = logging.getLogger(__name__)
 
 
@@ -201,13 +203,20 @@ class DocumentNormalizer:
 
                 # 2. Check "Section \d+[:.]?" or "Section [A-ZIVXLCDM]+[:.]?"
                 if not matched_name:
-                    sec_m = re.match(r"^(Section|Unit|Module|Chapter|Part)\s+([0-9IVXLCDM]+)\s*[:.]?\s*(.*)$", stripped, re.IGNORECASE)
+                    sec_m = re.match(
+                        r"^(Section|Unit|Module|Chapter|Part)\s+([0-9IVXLCDM]+)(?:\s*[:.\-]\s*(.*)|\s*)$",
+                        stripped,
+                        re.IGNORECASE,
+                    )
                     if sec_m:
                         prefix_word = sec_m.group(1).title()
                         sec_num = sec_m.group(2).upper()
-                        inline_title = sec_m.group(3).strip()
-                        if inline_title and len(inline_title) > 1:
-                            matched_name = f"{prefix_word} {sec_num}: {inline_title}"
+                        inline_title = (sec_m.group(3) or "").strip()
+                        if inline_title:
+                            if is_valid_heading_title(inline_title):
+                                matched_name = f"{prefix_word} {sec_num}: {inline_title}"
+                            else:
+                                matched_name = None
                         else:
                             # Check next line for section title
                             next_idx = line_idx + 1
@@ -215,18 +224,21 @@ class DocumentNormalizer:
                                 next_idx += 1
                             if next_idx < len(lines):
                                 next_line = lines[next_idx].strip()
-                                if (len(next_line) <= 80 and not re.search(r"[.!?]$", next_line)
-                                        and not re.match(r"^(?:Section|Unit|Module|Chapter|Part)\b", next_line, re.IGNORECASE)):
+                                if is_valid_heading_title(next_line) and not re.match(
+                                    r"^(?:Section|Unit|Module|Chapter|Part)\b", next_line, re.IGNORECASE
+                                ):
                                     matched_name = f"{prefix_word} {sec_num}: {next_line}"
                                     matched_advance = (next_idx - line_idx) + 1
-                            if not matched_name:
+                            if not matched_name and len(stripped.split()) <= 4:
                                 matched_name = f"{prefix_word} {sec_num}"
 
                 # 3. Check numbered academic headings: e.g. "1. Introduction" or "2.3 Related Work"
                 if not matched_name and len(stripped) < 90:
                     num_m = re.match(r"^(\d+(?:\.\d+)*)\.?\s+([A-Z][A-Za-z0-9\s-]{2,70})$", stripped)
                     if num_m and not re.search(r"[.!?:;,]$", num_m.group(2)):
-                        matched_name = f"{num_m.group(1)} {num_m.group(2).strip()}"
+                        candidate_title = num_m.group(2).strip()
+                        if is_valid_heading_title(candidate_title):
+                            matched_name = f"{num_m.group(1)} {candidate_title}"
 
                 # 4. Check configured section patterns (Abstract, Introduction, etc.)
                 if not matched_name and len(stripped) < 70:

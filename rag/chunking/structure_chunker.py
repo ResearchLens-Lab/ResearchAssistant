@@ -312,13 +312,15 @@ class StructureAwareChunker(BaseChunkingStrategy):
                 text_unit = lines[1].strip()
 
             # Find page range for this specific text unit
-            p_start, p_end = self._find_page_range(
+            p_start, p_end, *extra = self._find_page_range(
                 document_text=source_text,
                 chunk_text=text_unit,
                 page_offsets=page_offsets,
                 fallback_start=section.page_start,
                 fallback_end=section.page_end,
+                pages=document.pages,
             )
+            provenance_resolved = extra[0] if extra else True
 
             chunk_id = make_chunk_id(
                 paper_id=document.paper_id,
@@ -330,7 +332,7 @@ class StructureAwareChunker(BaseChunkingStrategy):
             )
 
             breadcrumb = " > ".join(heading_path)
-            locator = f"{breadcrumb} · p.{p_start}"
+            locator = f"{breadcrumb} · p.{p_start}" if provenance_resolved else f"{breadcrumb} (unresolved page)"
 
             chunk_extra = {
                 "heading_path": heading_path,
@@ -340,6 +342,7 @@ class StructureAwareChunker(BaseChunkingStrategy):
                 "page_label_start": page_label_start,
                 "page_label_end": page_label_end,
                 "parent_chunk_id": parent_chunk_id if len(chunk_units) > 1 else None,
+                "provenance_resolved": provenance_resolved,
             }
             if running_hdr is not None:
                 chunk_extra["running_header"] = running_hdr
@@ -444,26 +447,75 @@ class StructureAwareChunker(BaseChunkingStrategy):
         page_offsets: List[Tuple[int, int]],
         fallback_start: int,
         fallback_end: int,
-    ) -> Tuple[int, int]:
-        if not page_offsets or not document_text:
-            return fallback_start, fallback_end
+        pages: Optional[List[Any]] = None,
+    ) -> Tuple[int, int, bool]:
+        """
+        Locates the physical page range for a chunk using page-scoped normalized matching.
+        Returns: (page_start, page_end, provenance_resolved)
+        """
+        if not chunk_text or not chunk_text.strip():
+            return fallback_start, fallback_end, False
 
-        # Use first 40 chars of chunk to locate starting offset in document_text
-        probe = chunk_text[:40].strip()
-        pos = document_text.find(probe) if probe else -1
-        if pos == -1:
-            return fallback_start, fallback_end
-
-        page_starts = [o[1] for o in page_offsets]
-        p_idx = bisect_right(page_starts, pos) - 1
-        p_start = page_offsets[max(0, p_idx)][0]
-
-        end_probe = chunk_text[-40:].strip()
-        end_pos = document_text.find(end_probe, pos) if end_probe else -1
-        if end_pos != -1:
-            p_end_idx = bisect_right(page_starts, end_pos) - 1
-            p_end = page_offsets[max(0, min(p_end_idx, len(page_offsets) - 1))][0]
+        clean_chunk = " ".join(chunk_text.split()).strip().lower()
+        if len(clean_chunk) < 20:
+            probe = clean_chunk
         else:
-            p_end = p_start
+            probe = clean_chunk[:50].strip()
 
-        return max(1, p_start), max(p_start, p_end)
+        end_probe = clean_chunk[-50:].strip() if len(clean_chunk) >= 50 else clean_chunk
+
+        # Strategy 1: Search within the section's candidate pages if pages list is provided
+        if pages:
+            # Candidate pages in the section
+            section_pages = [p for p in pages if fallback_start <= p.page_number <= fallback_end]
+            if not section_pages:
+                section_pages = pages
+
+            found_start = None
+            found_end = None
+
+            for p in section_pages:
+                p_norm = " ".join(p.text.split()).lower()
+                if probe in p_norm and found_start is None:
+                    found_start = p.page_number
+                if end_probe in p_norm:
+                    found_end = p.page_number
+
+            if found_start is not None:
+                final_end = found_end if (found_end is not None and found_end >= found_start) else found_start
+                return found_start, final_end, True
+
+            # Secondary pass: search across non-TOC pages if section is supposed to be body text
+            search_pages = [p for p in pages if p.page_number >= 14] if fallback_start >= 14 else pages
+            for p in search_pages:
+                p_norm = " ".join(p.text.split()).lower()
+                if probe in p_norm and found_start is None:
+                    found_start = p.page_number
+                if end_probe in p_norm:
+                    found_end = p.page_number
+
+            if found_start is not None:
+                final_end = found_end if (found_end is not None and found_end >= found_start) else found_start
+                return found_start, final_end, True
+
+        # Strategy 2: Normalized search in document_text
+        if page_offsets and document_text:
+            pos = document_text.lower().find(probe.lower()) if len(probe) >= 15 else -1
+            if pos != -1:
+                page_starts = [o[1] for o in page_offsets]
+                p_idx = bisect_right(page_starts, pos) - 1
+                p_start = page_offsets[max(0, p_idx)][0]
+
+                end_pos = document_text.lower().find(end_probe.lower(), pos) if len(end_probe) >= 15 else -1
+                if end_pos != -1:
+                    p_end_idx = bisect_right(page_starts, end_pos) - 1
+                    p_end = page_offsets[max(0, min(p_end_idx, len(page_offsets) - 1))][0]
+                else:
+                    p_end = p_start
+                return max(1, p_start), max(p_start, p_end), True
+
+        # If section is a single page, fallback is reliable
+        if fallback_start == fallback_end:
+            return fallback_start, fallback_end, True
+
+        return fallback_start, fallback_end, False

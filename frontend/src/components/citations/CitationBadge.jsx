@@ -78,7 +78,7 @@ export function CitationBadge({
               : "bg-[var(--rl-selected)] text-[var(--rl-primary)] hover:bg-[#d4e8f8]"
           )}
         >
-          {n}
+          [{n}]
         </button>
       </HoverCardTrigger>
       <HoverCardContent

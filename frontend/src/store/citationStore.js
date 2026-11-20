@@ -24,6 +24,21 @@ export const useCitationStore = create((set) => ({
   setConversationMessages: (conversationMessages) =>
     set((state) => ({ conversationMessages: conversationMessages || [] })),
 
+  resetSummaryEvidence: (sources = []) =>
+    set(() => {
+      const nextSources = Array.isArray(sources) ? sources : [];
+      const firstSource = nextSources[0] || null;
+      return {
+        sources: nextSources,
+        conversationMessages: [],
+        scopedMessageId: null,
+        evidenceScope: "answer",
+        activeSourceId: firstSource?.source_id || null,
+        activeSourceKey: firstSource ? getSourceIdentity(firstSource) : null,
+        activeHighlight: null,
+      };
+    }),
+
   setSources: (sources) =>
     set((state) => {
       const next = sources || [];

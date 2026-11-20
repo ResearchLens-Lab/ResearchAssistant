@@ -36,9 +36,47 @@ FUNCTION_WORDS = {
 }
 
 
+def is_valid_heading_title(title: str) -> bool:
+    title = (title or "").strip()
+    if not title:
+        return False
+    if len(title) < 2 or len(title) > 80:
+        return False
+    # Must not start or end with invalid punctuation (e.g. closing parenthesis from cross-page citations)
+    if title[0] in ")]},;:!?.|\\/`'\"":
+        return False
+    if title[-1] in ",;:|\\/`":
+        return False
+    # Must not start with lowercase letter
+    if title[0].islower():
+        return False
+    # Must not be an exercise or question instruction
+    if re.match(r"^(?:exercise|problem|review\s+questions?|self[- ]test|design|prove|show|assume|let|find|calculate|describe)\b", title, re.IGNORECASE):
+        return False
+    # Must not be a sentence continuation or connective
+    if re.match(r"^(?:and|or|but|because|which|where|when|if|then|with|by|for|from|as|in|to)\b", title, re.IGNORECASE):
+        return False
+    # Reject table cells or OCR glitches with repeated chars or table pipes
+    if "|" in title or "[" in title or "]" in title:
+        return False
+    # Must contain at least one alphanumeric word
+    words = re.findall(r"[A-Za-z0-9]+", title)
+    if not words:
+        return False
+    # Reject strings with repetitive garbled characters e.g. "eeees"
+    for w in words:
+        if re.search(r"(.)\1{3,}", w):
+            return False
+    if len(words) > 12:
+        return False
+    return True
+
+
 def is_valid_title_continuation(line: str) -> bool:
     line = (line or "").strip()
     if not line:
+        return False
+    if not is_valid_heading_title(line):
         return False
     if len(line) > 60:
         return False
@@ -199,6 +237,16 @@ class StructureExtractor:
         enriched: List[DocumentSectionNode] = []
 
         for node in base_nodes:
+            # Never decompose front matter, index, bibliography or TOC nodes into subsections:
+            # TOC pages list all book chapters/sections and cause fake subsections located on TOC pages!
+            is_non_decomposable = (
+                node.section_type in (SectionType.FRONT_MATTER, SectionType.INDEX, SectionType.BIBLIOGRAPHY)
+                or any(kw in node.title.lower() for kw in ("contents", "table of contents", "preface", "acknowledg", "foreword", "brief contents", "index", "references", "bibliography"))
+            )
+            if is_non_decomposable:
+                enriched.append(node)
+                continue
+
             # If the node spans multiple pages, check for subheadings
             if node.page_end > node.page_start:
                 sub_headings: List[Tuple[int, str]] = []  # (page_num, title)
@@ -208,13 +256,15 @@ class StructureExtractor:
                     for idx, line in enumerate(lines):
                         m_single = self.SUBSECTION_HEADING_RE.match(line)
                         if m_single:
-                            sub_headings.append((p_num, f"{m_single.group(1)} {m_single.group(2)}"))
+                            sub_title = m_single.group(2).strip()
+                            if is_valid_heading_title(sub_title):
+                                sub_headings.append((p_num, f"{m_single.group(1)} {sub_title}"))
                             continue
                         m_num = self.SUBSECTION_NUM_ONLY_RE.match(line)
                         if m_num and idx + 1 < len(lines):
                             next_l = lines[idx + 1]
                             if is_valid_title_continuation(next_l):
-                                sub_headings.append((p_num, f"{m_num.group(1)} {next_l}"))
+                                sub_headings.append((p_num, f"{m_num.group(1)} {next_l.strip()}"))
 
                 if sub_headings and len(sub_headings) >= 1:
                     # Decompose node into subsections
@@ -365,7 +415,9 @@ class StructureExtractor:
                 if m_chap:
                     chap_num = m_chap.group(1) or m_chap.group(3)
                     chap_title = (m_chap.group(2) or m_chap.group(4) or "").strip()
-                    if chap_num and not chap_title and idx + 1 < len(lines):
+                    if chap_title and not is_valid_heading_title(chap_title):
+                        m_chap = None
+                    elif chap_num and not chap_title and idx + 1 < len(lines):
                         next_idx = idx + 1
                         while next_idx < len(lines) and not lines[next_idx].strip():
                             next_idx += 1
@@ -374,6 +426,11 @@ class StructureExtractor:
                             if is_valid_title_continuation(next_l) and not self.CHAPTER_HEADING_RE.match(next_l):
                                 s = f"{s.rstrip(': ')}: {next_l}"
                                 advance = (next_idx - idx) + 1
+
+                if m_sub:
+                    sub_title = m_sub.group(2).strip()
+                    if not is_valid_heading_title(sub_title):
+                        m_sub = None
 
                 if m_chap or m_sub:
                     # Flush previous section
