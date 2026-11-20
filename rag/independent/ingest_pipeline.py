@@ -51,6 +51,18 @@ class IndependentIngestionPipeline:
         except Exception as exc:
             if not had_existing_index:
                 self.index_writer.delete_document(document_id)
+            is_cancelled = isinstance(exc, IngestionCancelled) or (cancel_event is not None and cancel_event.is_set())
+            if is_cancelled:
+                logger.info("Independent ingestion cancelled document_id=%s stage=%s", document_id, exc)
+                return IngestResult(
+                    success=False,
+                    status="cancelled",
+                    document_id=document_id,
+                    paper_id=str(meta.get("paper_id") or paper_id or "unknown_paper"),
+                    error="Ingestion cancelled by user.",
+                    execution_time_seconds=round(time.perf_counter() - started, 3),
+                    metadata={"index_mode": "sqlite_fts5_only", "pretrained_embeddings_used": False, "existing_index_preserved": had_existing_index},
+                )
             logger.error("Independent ingestion failed document_id=%s exception_type=%s", document_id, type(exc).__name__)
             return IngestResult(success=False, status="failed", document_id=document_id,
                                 paper_id=str(meta.get("paper_id") or paper_id or "unknown_paper"),

@@ -161,8 +161,15 @@ class PDFPreflightAnalyzer:
                 text_len = len(text.strip())
 
                 # 2. Printable character ratio
-                printable_count = sum(1 for ch in text if ch.isprintable() and not ch.isspace())
-                printable_ratio = (printable_count / max(1, text_len)) if text_len > 0 else 1.0
+                # Count non-printable control characters and private-use glyphs. Whitespace (spaces, newlines, tabs) is normal formatting.
+                non_printable_count = sum(
+                    1 for ch in text
+                    if (ord(ch) < 32 and ch not in ("\t", "\n", "\r"))
+                    or (0xE000 <= ord(ch) <= 0xF8FF)
+                    or (0xF0000 <= ord(ch) <= 0x10FFFD)
+                    or ch == "\ufffd"
+                )
+                printable_ratio = 1.0 - (non_printable_count / max(1, len(text))) if text else 1.0
                 total_printable_ratio += printable_ratio
 
                 # 3. Unicode / font corruption check
@@ -196,7 +203,8 @@ class PDFPreflightAnalyzer:
                     text_len < self.min_text_chars
                     and (image_area_ratio >= self.min_image_coverage or len(image_list) > 0)
                 )
-                requires_ocr = is_scanned or (is_broken_font and text_len > 50)
+                # Only require OCR for broken fonts if there are actually raster images to OCR
+                requires_ocr = is_scanned or (is_broken_font and len(image_list) > 0 and text_len > 50)
 
                 warn = None
                 if is_broken_font:
