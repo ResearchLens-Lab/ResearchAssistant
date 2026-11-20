@@ -456,16 +456,16 @@ async function startLocalServices() {
   requestKey = crypto.randomBytes(32).toString("base64url");
   let activeStageId = "runtime";
 
-  // Startup stages copy:
-  // 1: Getting ready / Checking your library folder
-  // 2: Opening your library / Making sure your projects are up to date
-  // 3: Starting search / Preparing your search tools
-  // 4: Opening your workspace / Almost ready
+  // Startup stages:
+  // 1: Starting ResearchLens / Checking local files
+  // 2: Opening your library / Loading projects
+  // 3: Starting local services / Starting backend
+  // 4: Opening your workspace / Loading interface
   const stagesState = [
-    { id: "runtime", title: "Getting ready", status: "pending", label: "Checking your library folder" },
-    { id: "database", title: "Opening your library", status: "pending", label: "Making sure your projects are up to date" },
-    { id: "engine", title: "Starting search", status: "pending", label: "Preparing your search tools" },
-    { id: "workbench", title: "Opening your workspace", status: "pending", label: "Almost ready" },
+    { id: "runtime", title: "Starting ResearchLens", status: "pending", label: "Checking local files" },
+    { id: "database", title: "Opening your library", status: "pending", label: "Loading projects" },
+    { id: "engine", title: "Starting local services", status: "pending", label: "Starting backend" },
+    { id: "workbench", title: "Opening your workspace", status: "pending", label: "Loading interface" },
   ];
 
   const emitStage = (stageId, status, label, percent, detail = "") => {
@@ -490,7 +490,7 @@ async function startLocalServices() {
   try {
     // STAGE 1: Runtime
     const t0 = Date.now();
-    emitStage("runtime", "in-progress", "Verifying application runtime…", 12, "Resolving local runtime binaries and ports…");
+    emitStage("runtime", "in-progress", "Checking local files…", 15, "Starting ResearchLens…");
 
     const pythonExe = path.join(pythonRoot, "python.exe");
     if (!fs.existsSync(pythonExe)) {
@@ -510,20 +510,20 @@ async function startLocalServices() {
     apiBaseUrl = `http://127.0.0.1:${apiPort}/api/v1`;
     uiOrigin = `http://127.0.0.1:${uiPort}`;
     const runtimeMs = Date.now() - t0;
-    emitStage("runtime", "completed", `Verified (${runtimeMs}ms)`, 25, "Application runtime and local ports ready.");
+    emitStage("runtime", "completed", "Ready", 25, "Application runtime ready.");
 
     // STAGE 2: Database / Library Check
     const t1 = Date.now();
-    emitStage("database", "in-progress", "Checking library…", 35, "Checking SQLite database and migrations…");
+    emitStage("database", "in-progress", "Loading projects…", 40, "Opening your library…");
     await runMigrations();
     const dbMs = Date.now() - t1;
-    emitStage("database", "completed", `Checking library (${dbMs}ms)`, 50, "SQLite database and migrations verified.");
+    emitStage("database", "completed", "Ready", 50, "Library database ready.");
 
     // STAGE 3: Research Engine & Local Intelligence
     const t2 = Date.now();
-    emitStage("engine", "in-progress", "Starting local services…", 60, "Verifying local intelligence engine…");
+    emitStage("engine", "in-progress", "Starting backend…", 65, "Starting local services…");
     await ensureLocalIntelligence();
-    emitStage("engine", "in-progress", "Starting local services…", 70, "Spawning FastAPI sidecar…");
+    emitStage("engine", "in-progress", "Starting backend…", 72, "Starting local services…");
     const apiEnv = appApiEnvironment();
     backendProcess = spawnTracked("fastapi-backend", pythonExe, [
       "-m", "uvicorn", "backend.app.main:app",
@@ -538,11 +538,11 @@ async function startLocalServices() {
       "X-ResearchLens-Desktop-Key": requestKey,
     }, 90000, backendProcess);
     const engineMs = Date.now() - t2;
-    emitStage("engine", "completed", `Starting local services (${engineMs}ms)`, 80, "Research intelligence engine healthy and ready.");
+    emitStage("engine", "completed", "Ready", 80, "Local services ready.");
 
     // STAGE 4: Workbench
     const t3 = Date.now();
-    emitStage("workbench", "in-progress", "Starting workbench application server…", 88, "Spawning Next.js application server…");
+    emitStage("workbench", "in-progress", "Loading interface…", 88, "Opening your workspace…");
     frontendProcess = spawnTracked("nextjs-workbench", nodeBinary, [path.join(frontendRoot, "server.js")], {
       cwd: frontendRoot,
       env: { NODE_ENV: "production", HOSTNAME: "127.0.0.1", PORT: String(uiPort), NEXT_TELEMETRY_DISABLED: "1" },
@@ -550,7 +550,7 @@ async function startLocalServices() {
 
     await waitForHttp(uiOrigin, {}, 60000, frontendProcess);
     const workbenchMs = Date.now() - t3;
-    emitStage("workbench", "completed", "Ready", 100, "Ready");
+    emitStage("workbench", "completed", "Ready", 100, "Workspace ready.");
 
     const totalDuration = Date.now() - overallStart;
     appendPrivateLog(`Local services started successfully in ${totalDuration}ms (runtime=${runtimeMs}ms, db=${dbMs}ms, engine=${engineMs}ms, workbench=${workbenchMs}ms, apiPort=${apiPort}, uiPort=${uiPort}).`);

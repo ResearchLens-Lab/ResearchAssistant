@@ -243,7 +243,7 @@ try {
     nodeVersion: process.version,
     electronVersion: '39.8.10',
     nextBuild: 'Next.js 15.5.28 Standalone Production',
-    databaseSchemaVersion: 'Alembic revision b1c2d3e4f5a6 (8 revisions, head)',
+    databaseSchemaVersion: 'Alembic revision d3e4f5a6b7c8 (head)',
     codeSigned: false,
     signatureNotice: 'Unsigned showcase build for Windows x64 evaluation',
     pythonExecutable: existsSync(join(runtime, 'python', 'python.exe')),
@@ -276,7 +276,7 @@ try {
   // 5. Package Windows x64 NSIS Installer
   if (!noPackage) {
     console.log(`\n[5/5] Packaging self-contained Windows x64 NSIS installer...`);
-    // Ensure NSIS direct-extraction optimization is applied to prevent progress bar reset and double I/O
+    // Ensure NSIS direct-extraction optimization is applied with unified status reporting
     const extractAppPackagePath = join(desktop, 'node_modules', 'app-builder-lib', 'templates', 'nsis', 'include', 'extractAppPackage.nsh');
     if (existsSync(extractAppPackagePath)) {
       let content = readFileSync(extractAppPackagePath, 'utf8');
@@ -285,7 +285,7 @@ try {
       content = content.replace(targetMacro, directExtractionMacro);
 
       const targetEmbedded = /!macro extractEmbeddedAppPackage[\s\S]*?!macroend/;
-      const newEmbedded = `!macro extractEmbeddedAppPackage\n  DetailPrint "Stage 1/2: Preparing application packages..."\n  !ifdef COMPRESS\n    SetCompress off\n  !endif\n\n  Var /GLOBAL packageArch\n  \n  !insertmacro identify_package\n  !insertmacro compute_files_for_current_arch\n\n  !ifdef COMPRESS\n    SetCompress "\${COMPRESS}"\n  !endif\n\n  DetailPrint "Stage 2/2: Installing application binaries and local intelligence runtime..."\n  !insertmacro decompress\n  Delete "$PLUGINSDIR\\\\app-$packageArch.7z"\n  !insertmacro custom_files_post_decompression\n!macroend`;
+      const newEmbedded = `!macro extractEmbeddedAppPackage\n  DetailPrint "Preparing installation..."\n  SetDetailsPrint textonly\n  !ifdef COMPRESS\n    SetCompress off\n  !endif\n\n  Var /GLOBAL packageArch\n  \n  !insertmacro identify_package\n  !insertmacro compute_files_for_current_arch\n\n  !ifdef COMPRESS\n    SetCompress "\${COMPRESS}"\n  !endif\n\n  DetailPrint "Extracting application files..."\n  SetDetailsPrint both\n  !insertmacro decompress\n  Delete "$PLUGINSDIR\\\\app-$packageArch.7z"\n  !insertmacro custom_files_post_decompression\n\n  DetailPrint "Finishing installation..."\n!macroend`;
       content = content.replace(targetEmbedded, newEmbedded);
       writeFileSync(extractAppPackagePath, content, 'utf8');
       console.log(`      Verified and applied high-performance NSIS extraction patch.`);
