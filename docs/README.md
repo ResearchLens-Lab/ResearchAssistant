@@ -39,6 +39,8 @@ This directory contains technical documentation for ResearchLens.
 - [Contributing Guidelines](contributing.md): Setup instructions, code conventions, and pull request procedures.
 - [Code of Conduct](code-of-conduct.md): Contributor expectations and community standards.
 - [Security Policy](security.md): Vulnerability reporting procedures and multi-user isolation invariants.
+- [Third-Party Legal Notices](legal/THIRD_PARTY_NOTICES.md): Open-source licenses, third-party component notices, and copyright attributions.
+- [Project License](../LICENSE): GNU Affero General Public License v3.0 (AGPL-3.0).
 
 ---
 

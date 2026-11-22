@@ -236,7 +236,7 @@ When a user enters a question in the Research Desk (e.g. *"What is an algorithm 
 ```
 
 #### Step 1: Query Analysis & Conversational Resolution
-- File: [rag/intelligence/query_analyzer.py](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/rag/intelligence/query_analyzer.py)
+- File: [rag/intelligence/query_analyzer.py](../../rag/intelligence/query_analyzer.py)
 - **Slash Command Parsing:** Detects commands like `/table`, `/pie`, `/flowchart`, `/compare`, `/summary`.
 - **Multi-Turn Context Resolution:** Resolves conversational references:
   - *Ordinals:* *"Explain the second one in detail"* -> scans previous assistant turn, maps "second" to item #2 (`Greedy Method`), and rewrites query to *"Explain Greedy Method in detail"*.
@@ -253,7 +253,7 @@ When a user enters a question in the Research Desk (e.g. *"What is an algorithm 
 - *Emitted Events:* `status`, `planning_completed`, `query_plan`.
 
 #### Step 2: Explainable FTS5 Retrieval
-- File: [rag/intelligence/retrieval_engine.py](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/rag/intelligence/retrieval_engine.py)
+- File: [rag/intelligence/retrieval_engine.py](../../rag/intelligence/retrieval_engine.py)
 - Queries SQLite FTS5 using BM25 scoring with custom algorithmic weights:
   - **Heading Boost:** Boosts chunks whose headings match algorithmic paradigms (+200% for *Divide-and-Conquer*, *Greedy*, *Dynamic Programming*, *Backtracking*, etc.).
   - **Section Prior Weighting:** Exercises (-90%), Bibliographies (-99%), and Front Matter (-95%) are downweighted for conceptual queries.
@@ -261,7 +261,7 @@ When a user enters a question in the Research Desk (e.g. *"What is an algorithm 
 - *Emitted Events:* `retrieval_started`, `sources_found`, `evidence_batch` (transmitting source cards immediately so the UI Evidence & Sources panel renders cards before the answer finishes generating!).
 
 #### Step 3: Calibrated Confidence Evaluation
-- File: [rag/intelligence/confidence_evaluator.py](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/rag/intelligence/confidence_evaluator.py)
+- File: [rag/intelligence/confidence_evaluator.py](../../rag/intelligence/confidence_evaluator.py)
 - Evaluates evidence quality across four tiers:
   1. `STRONG`: Explicit definitions, multiple textbook authorities, high term coverage.
   2. `PARTIAL`: Relevant context found, but some query aspects missing.
@@ -270,7 +270,7 @@ When a user enters a question in the Research Desk (e.g. *"What is an algorithm 
 - *Emitted Events:* `retrieval_summary`.
 
 #### Step 4: Structured Answer Composition
-- File: [rag/intelligence/answer_composer.py](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/rag/intelligence/answer_composer.py)
+- File: [rag/intelligence/answer_composer.py](../../rag/intelligence/answer_composer.py)
 - **Specialized Synthesis Engines:**
   - **Tabular Synthesis (`/table`):** Generates structured GitHub-flavored Markdown tables with aligned columns (Paradigm, Core Method, Examples, Textbook Citation).
   - **Distribution Pie Chart (`/pie`):** Emits a ````pie` code block rendered by the frontend as an interactive SVG pie chart showing syllabus coverage.
@@ -284,9 +284,9 @@ When a user enters a question in the Research Desk (e.g. *"What is an algorithm 
 - *Emitted Events:* `generation_started`, `generation_completed`.
 
 #### Step 5: Citation Mapping & UI Rendering
-- File: [rag/citations/citation_mapper.py](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/rag/citations/citation_mapper.py)
+- File: [rag/citations/citation_mapper.py](../../rag/citations/citation_mapper.py)
 - Replaces citation markers `[S1]`, `[S2]` with interactive `CitationBadge` components.
-- Displays the **Research Activity Summary Card** above the answer in [frontend/src/components/chat/MessageItem.jsx](file:///c:/Users/gorav/OneDrive/Desktop/college%20project/ResearchAssistant/frontend/src/components/chat/MessageItem.jsx).
+- Displays the **Research Activity Summary Card** above the answer in [frontend/src/components/chat/MessageItem.jsx](../../frontend/src/components/chat/MessageItem.jsx).
 - Clicking any citation badge opens the **Citation Drawer** on the right, which highlights the exact sentence in the source passage and provides a direct jump into the integrated PDF Viewer.
 
 ---
@@ -334,7 +334,7 @@ npm start
 
 To verify all 10 core RAG scenarios against your indexed library:
 ```powershell
-.\.venv_stabilization\Scripts\python.exe C:\Users\gorav\.gemini\antigravity\brain\69bbf8dc-c9ab-4927-9280-7087dc437229\scratch\verify_suite.py
+python -m pytest backend/tests/ rag/tests/
 ```
 *Expected Output:*
 ```

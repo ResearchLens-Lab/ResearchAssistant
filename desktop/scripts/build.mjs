@@ -170,6 +170,14 @@ try {
   if (existsSync(licenseFile)) {
     safeCopy(licenseFile, join(licensesTarget, 'THIRD_PARTY_LICENSES.md'));
   }
+  const rootLicense = join(repo, 'LICENSE');
+  if (existsSync(rootLicense)) {
+    safeCopy(rootLicense, join(licensesTarget, 'LICENSE'));
+  }
+  const legalNotices = join(repo, 'docs', 'legal', 'THIRD_PARTY_NOTICES.md');
+  if (existsSync(legalNotices)) {
+    safeCopy(legalNotices, join(licensesTarget, 'THIRD_PARTY_NOTICES.md'));
+  }
 
   // Compute comprehensive source and staged runtime hashes for manifest audit
   const computeFileHash = (filePath) => {
