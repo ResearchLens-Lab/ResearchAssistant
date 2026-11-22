@@ -245,7 +245,7 @@ def test_07_query_pipeline_routing():
         page_start=1,
         page_end=1,
         section="Abstract",
-        text="A fast deterministic research system.",
+        text="This research is defined as a fast deterministic research system.",
         score=0.99,
     )
     pipeline._independent_engine.retriever.retrieve = lambda *args, **kwargs: ([dummy_source], {"S1": []})

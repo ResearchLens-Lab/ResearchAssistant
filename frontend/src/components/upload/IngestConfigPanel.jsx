@@ -13,7 +13,7 @@ export function IngestConfigPanel() {
       <div className="space-y-2.5 text-[11px] font-mono">
         <div className="flex justify-between border-b border-zinc-100 pb-1.5 dark:border-zinc-800">
           <span className="text-zinc-500">Chunking Strategy:</span>
-          <Badge variant="secondary" className="text-[10px] font-mono font-semibold">
+          <Badge variant="secondary" className="text-[11px] font-mono font-semibold">
             section-aware
           </Badge>
         </div>
@@ -35,7 +35,7 @@ export function IngestConfigPanel() {
 
         <div className="flex justify-between">
           <span className="text-zinc-500">Chunk Hash Format:</span>
-          <span className="text-[10px] text-zinc-400">
+          <span className="text-[11px] text-zinc-400">
             {`{paper_id}_c{idx}_p{p1-p2}`}
           </span>
         </div>

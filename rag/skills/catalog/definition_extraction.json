@@ -1,0 +1,53 @@
+{
+  "skill_id": "definition_extraction",
+  "name": "Authoritative Definition Extraction",
+  "description": "Extracts verbatim textbook definitions with grammatical subject-position verification and formal characteristics.",
+  "supported_intent": "DEFINITION",
+  "trigger_patterns": [
+    "^\\s*what\\s+is\\s+(?:an?|the)?\\s*[\\w\\s-]+",
+    "^\\s*define\\s+[\\w\\s-]+",
+    "\\bdefinition\\s+of\\s+[\\w\\s-]+"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_heading_boost_definition_priors",
+  "evidence_requirements": [
+    "definition_copula",
+    "subject_in_subject_position"
+  ],
+  "output_schema": {
+    "definition": "string",
+    "key_characteristics": "list",
+    "supporting_context": "list",
+    "source_citation": "string"
+  },
+  "confidence_thresholds": {
+    "high": 0.85,
+    "low": 0.4
+  },
+  "abstention_behavior": "disclaim_and_context",
+  "regression_test_cases": [
+    {
+      "query": "What is an algorithm?",
+      "expected_intent": "DEFINITION",
+      "expected_slots": {
+        "primary_concept": "algorithm"
+      },
+      "min_confidence": 0.9,
+      "should_abstain": false
+    },
+    {
+      "query": "Define divide-and-conquer",
+      "expected_intent": "DEFINITION",
+      "expected_slots": {
+        "primary_concept": "divide-and-conquer"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

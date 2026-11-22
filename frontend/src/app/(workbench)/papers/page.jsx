@@ -78,7 +78,9 @@ export default function PaperLibraryPage() {
             id,
             {
               total: documents.length,
-              indexed: documents.filter((doc) => doc.processing_status === "indexed").length,
+              indexed: documents.filter(
+                (doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)
+              ).length,
               processing: documents.filter(
                 (doc) => doc.processing_status === "processing" || doc.processing_status === "uploaded"
               ).length,
@@ -136,23 +138,22 @@ export default function PaperLibraryPage() {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-[#f3f8fd]/70 via-[#f8fafc] to-[#f8fafc] py-6 sm:py-8 font-serif">
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 space-y-7">
-        {/* Top Header Section Arranged to Maximize Space and Place Search in Middle */}
+    <div className="page-shell space-y-7">
+      {/* Top Header Section Arranged to Maximize Space and Place Search in Middle */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2">
           {/* Left: Compact, Unique "Your Project Library" Branding */}
           <div className="shrink-0 max-w-sm">
             <div className="flex items-baseline gap-2">
-              <h1 className="text-2xl sm:text-[26px] font-serif font-bold text-slate-900 tracking-tight leading-tight">
-                Your Project <span className="italic font-normal text-[#1d6fc4]">Library</span>
+              <h1 className="text-2xl sm:text-[26px] font-bold text-slate-900 tracking-tight leading-tight">
+                Your Project <span className="text-[var(--rl-primary)]">Library</span>
               </h1>
               {!isLoading && (
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-100/70 border border-sky-200/60 text-[11px] font-semibold text-[#1d6fc4] font-serif">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-100/70 border border-sky-200/60 text-[11px] font-semibold text-[#1d6fc4]">
                   {pagination.total || papers.length}
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-xs text-slate-400 leading-snug font-serif">
+            <p className="mt-0.5 text-xs text-slate-400 leading-snug">
               One space for each study. Keep every paper and cited passage organized.
             </p>
           </div>
@@ -166,7 +167,7 @@ export default function PaperLibraryPage() {
                 placeholder="Search by title, description or source"
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                className="w-full h-10 pl-11 pr-10 rounded-full bg-white border border-slate-200/90 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 font-serif shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04)] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+                className="w-full h-10 pl-11 pr-10 rounded-full bg-white border border-slate-200/90 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.04)] focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
               />
               {searchFilter && (
                 <button
@@ -187,7 +188,7 @@ export default function PaperLibraryPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none rounded-full bg-white border border-slate-200/90 pl-3.5 pr-7 py-1.5 text-xs font-medium text-slate-700 font-serif shadow-[0_2px_6px_-2px_rgba(0,0,0,0.04)] outline-none hover:border-slate-300 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 cursor-pointer transition-all"
+                className="appearance-none rounded-full bg-white border border-slate-200/90 pl-3.5 pr-7 py-1.5 text-xs font-medium text-slate-700 shadow-[0_2px_6px_-2px_rgba(0,0,0,0.04)] outline-none hover:border-slate-300 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 cursor-pointer transition-all"
               >
                 <option value="recent">Recently created</option>
                 <option value="name">Project title (A–Z)</option>
@@ -232,14 +233,14 @@ export default function PaperLibraryPage() {
         {isError ? (
           <div
             role="alert"
-            className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800 font-serif"
+            className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800"
           >
             {error?.message || "Research projects could not be loaded. Please try again."}
           </div>
         ) : isLoading ? (
           <PaperGrid papers={[]} isLoading />
         ) : filteredAndSortedPapers.length === 0 && !isLoading ? (
-          <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 p-12 text-center space-y-4 font-serif">
+          <div className="rounded-3xl border border-dashed border-slate-200 bg-white/70 p-12 text-center space-y-4">
             <BookOpen className="mx-auto h-10 w-10 text-slate-300 stroke-[1.5]" />
             <div className="space-y-1">
               <h3 className="text-base font-semibold text-slate-800">
@@ -253,12 +254,12 @@ export default function PaperLibraryPage() {
             </div>
             {pagination.total === 0 ? (
               <>
-                <p className="mx-auto max-w-md text-xs text-slate-500 leading-relaxed font-serif">
+                <p className="mx-auto max-w-md text-xs text-slate-500 leading-relaxed">
                   Create a project to organize your papers, ask evidence-grounded questions, and inspect supporting citations.
                 </p>
                 <Button
                   onClick={() => setIsCreateOpen(true)}
-                  className="rounded-full bg-[#1d6fc4] hover:bg-[#185ea8] text-white text-xs font-semibold px-5 shadow-sm font-serif"
+                  className="rounded-full bg-[#1d6fc4] hover:bg-[#185ea8] text-white text-xs font-semibold px-5 shadow-sm"
                 >
                   <Plus className="h-4 w-4 mr-1.5" />
                   <span>Create a project</span>
@@ -269,7 +270,7 @@ export default function PaperLibraryPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setSearchFilter("")}
-                className="rounded-full text-xs font-serif"
+                className="rounded-full text-xs"
               >
                 Clear search filter
               </Button>
@@ -297,7 +298,7 @@ export default function PaperLibraryPage() {
 
         {/* Pagination Controls */}
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-200/80 pt-5 text-xs text-slate-500 font-serif">
+          <div className="flex items-center justify-between border-t border-slate-200/80 pt-5 text-xs text-slate-500">
             <span>
               Page {pagination.page} of {pagination.totalPages} ({pagination.total} total items)
             </span>
@@ -308,7 +309,7 @@ export default function PaperLibraryPage() {
                 size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={pagination.page <= 1}
-                className="h-8 rounded-full text-xs gap-1 border-slate-200 font-serif"
+                className="h-8 rounded-full text-xs gap-1 border-slate-200"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 <span>Previous</span>
@@ -318,7 +319,7 @@ export default function PaperLibraryPage() {
                 size="sm"
                 onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                 disabled={pagination.page >= pagination.totalPages}
-                className="h-8 rounded-full text-xs gap-1 border-slate-200 font-serif"
+                className="h-8 rounded-full text-xs gap-1 border-slate-200"
               >
                 <span>Next</span>
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -365,6 +366,5 @@ export default function PaperLibraryPage() {
           isLoading={isDeleting}
         />
       </div>
-    </div>
   );
 }

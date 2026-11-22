@@ -21,7 +21,9 @@ export function indexedPaperIds(entries = []) {
 }
 
 export function hasIndexedSources(documents = []) {
-  return documents.some((doc) => doc.processing_status === "indexed");
+  return documents.some(
+    (doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)
+  );
 }
 
 export function togglePaperSelection(current = [], paperId) {
@@ -100,11 +102,12 @@ export function documentType(filename = "") {
 
 export function batchIngestStatus(documents = [], failures = []) {
   if (failures.length && !documents.length) return "failed";
-  const allIndexed = documents.length > 0 && documents.every((d) => d.processing_status === "indexed") && !failures.length;
+  const isDocReady = (d) => d.processing_status === "indexed" || ((d.processing_status === "needs_review" || d.processing_status === "partial") && (d.chunk_count || 0) > 0);
+  const allIndexed = documents.length > 0 && documents.every(isDocReady) && !failures.length;
   if (allIndexed) return "indexed";
   const anyProcessing = documents.some((d) => d.processing_status === "processing" || d.processing_status === "uploaded");
   if (anyProcessing) return "processing";
-  if (documents.some((d) => d.processing_status === "indexed")) return "partial";
+  if (documents.some(isDocReady)) return "partial";
   if (documents.some((d) => d.processing_status === "cancelled")) return "cancelled";
   return "failed";
 }
@@ -150,9 +153,146 @@ export function formatUploadSize(bytes = 0) {
 }
 
 export function applyChatStreamEvent(message, event) {
-  if (event.type === "token") return { ...message, content: message.content + (event.data?.text || ""), progress: "Draft answer · checking evidence…", provisional: true };
-  if (event.type === "completed") return { ...message, content: event.data?.answer || "", sources: event.data?.sources || [], meta: { research: event.data?.metadata?.research || {}, answer_mode: event.data?.metadata?.answer_mode, generation_reason: event.data?.metadata?.generation_reason, generation_provider: event.data?.metadata?.generation_provider, cache_hit: event.data?.metadata?.cache_hit, follow_up_suggestions: event.data?.metadata?.follow_up_suggestions || [] }, progress: "Saved answer · evidence check complete", provisional: false };
-  return message;
+  if (!message || !event) return message;
+
+  const currentSummary = message.activity_summary || message.meta?.activity_summary || {};
+
+  switch (event.type) {
+    case "status":
+      return {
+        ...message,
+        progress: event.data?.message || message.progress,
+      };
+
+    case "query_plan":
+      return {
+        ...message,
+        activity_summary: {
+          ...currentSummary,
+          query_plan: event.data,
+          concept: event.data?.primary_concept,
+          intent: event.data?.intent,
+          resolved_question: event.data?.resolved_question,
+        },
+      };
+
+    case "retrieval_started":
+      return {
+        ...message,
+        progress: `Searching indexed passages for '${event.data?.concept || "evidence"}'…`,
+      };
+
+    case "sources_found":
+      return {
+        ...message,
+        progress: `Found ${event.data?.count || 0} relevant evidence passages…`,
+      };
+
+    case "evidence_batch": {
+      const incomingSources = event.data?.sources || [];
+      return {
+        ...message,
+        sources: incomingSources.length > 0 ? incomingSources : message.sources,
+        progress: `Collected ${incomingSources.length} evidence passages…`,
+      };
+    }
+
+    case "retrieval_summary":
+      return {
+        ...message,
+        activity_summary: {
+          ...currentSummary,
+          retrieval_summary: event.data,
+          documents_count: event.data?.documents_count,
+          passages_count: event.data?.passages_count,
+          confidence_tier: event.data?.confidence_tier,
+          confidence_score: event.data?.confidence_score,
+        },
+        progress: `Selected ${event.data?.passages_count || 0} passages across ${event.data?.documents_count || 0} sources…`,
+      };
+
+    case "generation_started":
+      return {
+        ...message,
+        progress: "Synthesizing answer with grounded citations…",
+      };
+
+    case "generation_fallback":
+      return {
+        ...message,
+        progress: "Composing structured evidence-grounded synthesis…",
+      };
+
+    case "section_started":
+      return {
+        ...message,
+        currentSection: event.data?.title || "",
+        progress: `Writing: ${event.data?.title || "section"}…`,
+      };
+
+    case "content_delta":
+    case "token": {
+      const delta = event.data?.text || "";
+      return {
+        ...message,
+        content: (message.content || "") + delta,
+        provisional: true,
+        progress: message.progress || "Drafting research response…",
+      };
+    }
+
+    case "section_completed":
+      return {
+        ...message,
+        progress: "Continuing synthesis…",
+      };
+
+    case "citation_update": {
+      const newCitations = event.data?.citations || [];
+      return {
+        ...message,
+        sources: newCitations.length > 0 ? newCitations : message.sources,
+      };
+    }
+
+    case "completed": {
+      const metadata = event.data?.metadata || {};
+      const researchMeta = metadata.research || metadata.research_intelligence || {};
+      const completedSummary = {
+        ...currentSummary,
+        concept: currentSummary.concept || researchMeta?.intent?.primary_concept,
+        confidence_tier: metadata.confidence_tier || currentSummary.confidence_tier,
+        confidence_score: metadata.confidence_score || currentSummary.confidence_score,
+      };
+      return {
+        ...message,
+        content: event.data?.answer || message.content || "",
+        sources: event.data?.sources || message.sources || [],
+        activity_summary: completedSummary,
+        meta: {
+          research: researchMeta,
+          research_intelligence: metadata.research_intelligence || {},
+          activity_summary: completedSummary,
+          answer_mode: metadata.answer_mode,
+          generation_reason: metadata.generation_reason,
+          generation_provider: metadata.generation_provider,
+          cache_hit: metadata.cache_hit,
+          follow_up_suggestions: metadata.follow_up_suggestions || [],
+          confidence_tier: metadata.confidence_tier,
+          confidence_score: metadata.confidence_score,
+          retrieval_summary: metadata.retrieval_summary,
+          weak_matches: metadata.weak_matches || [],
+          error_kind: metadata.error_kind,
+        },
+        progress: "Research complete",
+        provisional: false,
+        pending: false,
+      };
+    }
+
+    default:
+      return message;
+  }
 }
 
 

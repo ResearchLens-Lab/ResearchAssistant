@@ -1,0 +1,42 @@
+{
+  "skill_id": "document_overview",
+  "name": "Whole Document Structure & Overview",
+  "description": "Synthesizes complete structural outline, major parts, and scope from document metadata.",
+  "supported_intent": "SUMMARIZATION",
+  "trigger_patterns": [
+    "^\\s*overview\\s*$",
+    "\\bdocument\\s+overview\\b",
+    "\\boutline\\s+of\\s+this\\s+book\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "toc_and_front_matter",
+  "evidence_requirements": [
+    "outline_hierarchy"
+  ],
+  "output_schema": {
+    "title": "string",
+    "total_pages": "int",
+    "parts": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.9,
+    "low": 0.5
+  },
+  "abstention_behavior": "metadata_only_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Overview of this book",
+      "expected_intent": "SUMMARIZATION",
+      "expected_slots": {
+        "primary_concept": "this book"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

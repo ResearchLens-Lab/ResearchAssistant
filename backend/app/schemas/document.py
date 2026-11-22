@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, computed_field
 
 
 class DocumentResponse(BaseModel):
@@ -25,8 +25,17 @@ class DocumentResponse(BaseModel):
     processing_started_at: Optional[datetime] = None
     processing_heartbeat_at: Optional[datetime] = None
     chunk_count: Optional[int] = None
+    cleanup_status: Optional[str] = None
+    operation_type: Optional[str] = None
+    index_version: int = 1
+    reindex_required: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        return self.processing_status
 
     @field_serializer(
         "processing_started_at",
@@ -41,6 +50,44 @@ class DocumentResponse(BaseModel):
         if dt.tzinfo is None:
             return dt.isoformat() + "Z"
         return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+class DocumentUploadOutcome(str):
+    """Per-file upload result type."""
+    STORED_NEW = "stored_new"
+    ALREADY_INDEXED = "already_indexed"
+    EXISTING_JOB = "existing_job"
+    RETRY_AVAILABLE = "retry_available"
+    CLEANUP_IN_PROGRESS = "cleanup_in_progress"
+    CLEANUP_FAILED = "cleanup_failed"
+    FAILED = "failed"
+
+
+class DocumentUploadResult(BaseModel):
+    """Per-file upload result."""
+    filename: Optional[str] = None
+    document: Optional[DocumentResponse] = None
+    outcome: str  # DocumentUploadOutcome values
+    success: bool = True
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
+class DocumentBatchUploadResponse(BaseModel):
+    """Batch upload response with per-file results."""
+    results: list[DocumentUploadResult]
+    success_count: int
+    failure_count: int
+
+    @computed_field
+    @property
+    def documents(self) -> list[DocumentResponse]:
+        return [r.document for r in self.results if r.document is not None]
+
+    @computed_field
+    @property
+    def failures(self) -> list[DocumentUploadResult]:
+        return [r for r in self.results if not r.success]
 
 
 class PaperDocumentsRequest(BaseModel):

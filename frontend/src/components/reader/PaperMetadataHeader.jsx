@@ -8,13 +8,13 @@ export function PaperMetadataHeader({ paper, onEdit }) {
   const description = paper.description || paper.abstract;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 font-serif">
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
       <div className="space-y-1 min-w-0">
         <div className="flex items-baseline gap-2.5 flex-wrap">
           <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400 shrink-0">
             Project name:
           </span>
-          <h1 className="text-2xl sm:text-[26px] font-serif font-bold text-slate-900 tracking-tight leading-snug">
+          <h1 className="text-2xl sm:text-[26px] font-bold text-slate-900 tracking-tight leading-snug">
             {paper.title}
           </h1>
         </div>
@@ -23,7 +23,7 @@ export function PaperMetadataHeader({ paper, onEdit }) {
           <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400 shrink-0">
             Project description:
           </span>
-          <p className="italic text-slate-600 font-serif leading-relaxed">
+          <p className="italic text-slate-600 leading-relaxed">
             {description || <span className="text-slate-400 not-italic">No description provided yet</span>}
           </p>
         </div>

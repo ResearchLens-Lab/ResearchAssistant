@@ -12,7 +12,7 @@ export function PaperTableView({ papers, sourceCounts = {}, onDelete, onEdit }) 
   const router = useRouter();
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white font-serif shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xs dark:border-zinc-800 dark:bg-zinc-900">
       <Table>
         <TableHeader className="bg-zinc-50/70 dark:bg-zinc-800/50">
           <TableRow>

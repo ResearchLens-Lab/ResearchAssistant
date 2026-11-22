@@ -1,0 +1,42 @@
+{
+  "skill_id": "topic_counting_ranking",
+  "name": "Topic Counting & Volume Ranking",
+  "description": "Analyzes hierarchical syllabus coverage to count leaf topics and rank sections by volume.",
+  "supported_intent": "COUNT_RANKING",
+  "trigger_patterns": [
+    "\\bwhich\\s+section\\s+(?:has|contains)\\s+the\\s+most\\s+topics\\b",
+    "\\brank\\s+sections\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "topic_coverage_analyzer",
+  "evidence_requirements": [
+    "syllabus_outline",
+    "topic_counts"
+  ],
+  "output_schema": {
+    "rankings": "list",
+    "top_section": "string",
+    "total_topics": "int"
+  },
+  "confidence_thresholds": {
+    "high": 0.9,
+    "low": 0.5
+  },
+  "abstention_behavior": "equal_distribution_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Which section has the most topics?",
+      "expected_intent": "COUNT_RANKING",
+      "expected_slots": {
+        "primary_concept": "sections"
+      },
+      "min_confidence": 0.85,
+      "should_abstain": false
+    }
+  ]
+}

@@ -96,11 +96,16 @@ export function useChat(conversationId = null, searchQuery = "") {
           verification_started: "Checking claims and citations…",
           verification_completed: "Evidence check complete",
         };
-        if (event.type === "token") {
-          setPendingMessages((current) => current.map((m) => m.id === assistantId ? applyChatStreamEvent(m, event) : m));
-        } else if (event.type === "completed") {
-          setPendingMessages((current) => current.map((m) => m.id === assistantId ? applyChatStreamEvent(m, event) : m));
-        } else if (labels[event.type]) setPendingMessages((current) => current.map((m) => m.id === assistantId ? { ...m, progress: labels[event.type] } : m));
+        setPendingMessages((current) =>
+          current.map((m) => {
+            if (m.id !== assistantId) return m;
+            let updated = applyChatStreamEvent(m, event);
+            if (labels[event.type] && (!event.data?.message && event.type !== "content_delta" && event.type !== "token")) {
+              updated = { ...updated, progress: labels[event.type] };
+            }
+            return updated;
+          })
+        );
       }, controller.signal);
       if (data.conversation_id) {
         await queryClient.invalidateQueries({ queryKey: ["messages", data.conversation_id], refetchType: "active" });

@@ -8,12 +8,16 @@ import logging
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+from rag.ingestion.structure_extractor import is_valid_heading_title
+
 logger = logging.getLogger(__name__)
 
 
 class Page(BaseModel):
     page_number: int = Field(..., ge=1, description="1-indexed page number")
     text: str = Field(..., description="Extracted text of the page")
+    is_ocr: bool = Field(default=False, description="Whether text was recovered via OCR fallback")
+    ocr_confidence: Optional[float] = Field(default=None, description="Confidence score if OCR was used")
 
 
 class Section(BaseModel):
@@ -21,6 +25,7 @@ class Section(BaseModel):
     page_start: int = Field(..., ge=1)
     page_end: int = Field(..., ge=1)
     text: str = Field(..., description="Aggregated text content of the section")
+    extra: Dict[str, Any] = Field(default_factory=dict, description="Hierarchical breadcrumbs, section type, provenance")
 
 
 class DocumentMetadata(BaseModel):
@@ -55,6 +60,20 @@ class NormalizedDocument(BaseModel):
     @property
     def total_pages(self) -> int:
         return len(self.pages)
+
+
+LIGATURE_MAP = {
+    "\ufb00": "ff",
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+}
 
 
 class DocumentNormalizer:
@@ -134,11 +153,20 @@ class DocumentNormalizer:
     def _clean_text(self, text: str) -> str:
         if not text:
             return ""
+        # Normalize ligatures (only ligature code points, preserving mathematical symbols)
+        for lig, rep in LIGATURE_MAP.items():
+            text = text.replace(lig, rep)
         # Remove null bytes, normalize whitespace
         text = text.replace("\x00", " ")
         text = re.sub(r"\r\n|\r", "\n", text)
         # Fix hyphenated line breaks in academic text: e.g. trans-\nformer -> transformer
-        text = re.sub(r"(\w+)-\n(\w+)", r"\1\2", text)
+        # Rejoin line-break hyphenation only if suffix starts lowercase and is not in stop words
+        def _rejoin_hyphen(m: re.Match) -> str:
+            p, s = m.group(1), m.group(2)
+            if s and s[0].islower() and s.lower() not in {"and", "or", "of", "to", "the", "in", "for", "with", "by", "on", "a", "an"}:
+                return f"{p}{s}"
+            return f"{p}-{s}"
+        text = re.sub(r"(\b[A-Za-z]+)-\s*\r?\n\s*([A-Za-z]+)\b", _rejoin_hyphen, text)
         # Collapse excessive blank lines
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
@@ -148,29 +176,82 @@ class DocumentNormalizer:
         Scans lines across pages to segment text into known academic sections.
         """
         sections: List[Section] = []
-        current_section_name = "Header / Abstract"
+        current_section_name = "Header / Front Matter"
         current_section_lines: List[str] = []
-        section_start_page = pages[0].page_number
+        section_start_page = pages[0].page_number if pages else 1
         current_page_num = section_start_page
 
         for page in pages:
             current_page_num = page.page_number
             lines = page.text.split("\n")
+            line_idx = 0
 
-            for line in lines:
+            while line_idx < len(lines):
+                line = lines[line_idx]
                 stripped = line.strip()
                 if not stripped:
+                    line_idx += 1
                     continue
 
-                # Check if this line matches a section header (usually short line < 60 chars)
                 matched_name = None
-                if len(stripped) < 60:
-                    if re.match(r"^#{1,6}\s+", stripped):
-                        matched_name = re.sub(r"^#{1,6}\s+", "", stripped).strip()[:59]
+                matched_advance = 1
+
+                # 1. Check markdown heading
+                md_m = re.match(r"^#{1,6}\s+(.+)$", stripped)
+                if md_m:
+                    matched_name = md_m.group(1).strip()[:80]
+
+                # 2. Check "Section \d+[:.]?" or "Section [A-ZIVXLCDM]+[:.]?"
+                if not matched_name:
+                    sec_m = re.match(
+                        r"^(Section|Unit|Module|Chapter|Part)\s+([0-9IVXLCDM]+)(?:\s*[:.\-]\s*(.*)|\s*)$",
+                        stripped,
+                        re.IGNORECASE,
+                    )
+                    if sec_m:
+                        prefix_word = sec_m.group(1).title()
+                        sec_num = sec_m.group(2).upper()
+                        inline_title = (sec_m.group(3) or "").strip()
+                        if inline_title:
+                            if is_valid_heading_title(inline_title):
+                                matched_name = f"{prefix_word} {sec_num}: {inline_title}"
+                            else:
+                                matched_name = None
+                        else:
+                            # Check next line for section title
+                            next_idx = line_idx + 1
+                            while next_idx < len(lines) and not lines[next_idx].strip():
+                                next_idx += 1
+                            if next_idx < len(lines):
+                                next_line = lines[next_idx].strip()
+                                if is_valid_heading_title(next_line) and not re.match(
+                                    r"^(?:Section|Unit|Module|Chapter|Part)\b", next_line, re.IGNORECASE
+                                ):
+                                    matched_name = f"{prefix_word} {sec_num}: {next_line}"
+                                    matched_advance = (next_idx - line_idx) + 1
+                            if not matched_name and len(stripped.split()) <= 4:
+                                matched_name = f"{prefix_word} {sec_num}"
+
+                # 3. Check numbered academic headings: e.g. "1. Introduction" or "2.3 Related Work"
+                if not matched_name and len(stripped) < 90:
+                    num_m = re.match(r"^(\d+(?:\.\d+)*)\.?\s+([A-Z][A-Za-z0-9\s-]{2,70})$", stripped)
+                    if num_m and not re.search(r"[.!?:;,]$", num_m.group(2)):
+                        candidate_title = num_m.group(2).strip()
+                        if is_valid_heading_title(candidate_title):
+                            matched_name = f"{num_m.group(1)} {candidate_title}"
+
+                # 4. Check configured section patterns (Abstract, Introduction, etc.)
+                if not matched_name and len(stripped) < 70:
                     for pattern, name in self.section_patterns:
-                        if matched_name is None and pattern.match(stripped):
+                        if pattern.match(stripped):
                             matched_name = name
                             break
+
+                # 5. Check all-caps academic headings
+                if not matched_name and len(stripped) <= 60 and stripped.isupper() and len(stripped.split()) <= 6:
+                    if not re.search(r"[.!?:;,]$", stripped) and any(c.isalpha() for c in stripped):
+                        if len(stripped) > 3 and not re.match(r"^(?:GATE|IIT|CS|IEEE|ACM|ACM/IEEE|USA|UK)\b", stripped):
+                            matched_name = stripped.title()
 
                 if matched_name and matched_name != current_section_name:
                     # Finalize current section if it has content
@@ -186,8 +267,11 @@ class DocumentNormalizer:
                         current_section_lines = []
                     current_section_name = matched_name
                     section_start_page = current_page_num
+                    line_idx += matched_advance
+                    continue
 
                 current_section_lines.append(stripped)
+                line_idx += 1
 
         # Final section
         if current_section_lines:

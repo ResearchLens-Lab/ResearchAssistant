@@ -11,6 +11,33 @@ export const useCitationStore = create((set) => ({
   activeResearchPlan: null,
   activeTab: "sources", // 'sources' | 'library' | 'notes'
   isDrawerOpen: false,
+  evidenceScope: "answer", // 'answer' | 'conversation'
+  scopedMessageId: null,
+  conversationMessages: [],
+
+  setEvidenceScope: (evidenceScope) =>
+    set((state) => (state.evidenceScope === evidenceScope ? state : { evidenceScope })),
+
+  setScopedMessageId: (scopedMessageId) =>
+    set((state) => (state.scopedMessageId === scopedMessageId ? state : { scopedMessageId })),
+
+  setConversationMessages: (conversationMessages) =>
+    set((state) => ({ conversationMessages: conversationMessages || [] })),
+
+  resetSummaryEvidence: (sources = []) =>
+    set(() => {
+      const nextSources = Array.isArray(sources) ? sources : [];
+      const firstSource = nextSources[0] || null;
+      return {
+        sources: nextSources,
+        conversationMessages: [],
+        scopedMessageId: null,
+        evidenceScope: "answer",
+        activeSourceId: firstSource?.source_id || null,
+        activeSourceKey: firstSource ? getSourceIdentity(firstSource) : null,
+        activeHighlight: null,
+      };
+    }),
 
   setSources: (sources) =>
     set((state) => {
@@ -53,7 +80,7 @@ export const useCitationStore = create((set) => ({
   setActiveTab: (tab) =>
     set((state) => (state.activeTab === tab ? state : { activeTab: tab })),
 
-  openSource: (sourceId, highlight = null, sourceKey = null, question = "", researchPlan = null) =>
+  openSource: (sourceId, highlight = null, sourceKey = null, question = "", researchPlan = null, messageId = null) =>
     set((state) => {
       const sameHighlight = state.activeHighlight === highlight || (
         state.activeHighlight?.headingText === highlight?.headingText &&
@@ -65,7 +92,10 @@ export const useCitationStore = create((set) => ({
         state.activeSourceKey === sourceKey &&
         sameHighlight &&
         state.activeTab === "sources" &&
-        state.isDrawerOpen && state.activeQuestion === question && state.activeResearchPlan === researchPlan
+        state.isDrawerOpen &&
+        state.activeQuestion === question &&
+        state.activeResearchPlan === researchPlan &&
+        (messageId == null || state.scopedMessageId === messageId)
       ) return state;
       return {
         activeSourceId: sourceId,
@@ -73,6 +103,7 @@ export const useCitationStore = create((set) => ({
         activeHighlight: highlight,
         activeQuestion: question || "",
         activeResearchPlan: researchPlan || null,
+        scopedMessageId: messageId != null ? messageId : state.scopedMessageId,
         activeTab: "sources",
         isDrawerOpen: true,
       };

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/store/authStore";
 import { AuthSuccessToast } from "@/components/auth/AuthSuccessToast";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 export function Providers({ children }) {
   const [queryClient] = useState(
@@ -35,7 +36,12 @@ export function Providers({ children }) {
   useEffect(() => {
     if (authCheckStarted.current) return;
     authCheckStarted.current = true;
-    checkAuth();
+    (async () => {
+      try {
+        await tokenStorage.init();
+      } catch {}
+      checkAuth();
+    })();
   }, [checkAuth]);
 
   return (

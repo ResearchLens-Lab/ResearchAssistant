@@ -1,4 +1,6 @@
 import "katex/dist/katex.min.css";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "./globals.css";
 import { Providers } from "./providers";
 

@@ -19,8 +19,22 @@ class IndependentIndexUnavailable(RuntimeError):
     pass
 
 
-def configured_lexical_collection_name() -> str:
+def configured_lexical_collection_name(db_path: Path | None = None) -> str:
     """Mirror collection naming using package metadata only; never load a model."""
+    lexical_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
+    if lexical_path.is_file():
+        try:
+            uri = lexical_path.resolve().as_uri() + "?mode=ro"
+            connection = sqlite3.connect(uri, uri=True, timeout=5)
+            try:
+                names = [row[0] for row in connection.execute("SELECT DISTINCT collection_name FROM lexical_chunks WHERE collection_name IS NOT NULL")]
+                if len(names) == 1:
+                    return names[0]
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            pass
+
     collection_name = settings.chroma_collection_name
     embedding_model = settings.embedding_model
     provider = settings.embedding_provider
@@ -30,7 +44,6 @@ def configured_lexical_collection_name() -> str:
         except PackageNotFoundError:
             # Reuse a uniquely identifiable existing namespace from FTS metadata;
             # this permits reads when the FastEmbed package is not installed.
-            lexical_path = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
             if lexical_path.is_file():
                 try:
                     uri = lexical_path.resolve().as_uri() + "?mode=ro"
@@ -65,19 +78,46 @@ class IndependentRetriever:
 
     def __init__(self, db_path: str | Path | None = None, max_candidates: int = 1000,
                  collection_name: str | None = None):
-        self.db_path = Path(db_path or (Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"))
+        if db_path:
+            self.db_path = Path(db_path)
+        else:
+            desktop_lex = Path.home() / "Documents" / "ResearchLens Library" / "indexes" / "researchlens_lexical.sqlite3"
+            chroma_lex = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
+            if desktop_lex.is_file() and str(settings.chroma_persist_dir) in (".", ".chroma"):
+                self.db_path = desktop_lex
+            elif str(settings.chroma_persist_dir) not in (".", ".chroma"):
+                self.db_path = chroma_lex
+            else:
+                self.db_path = chroma_lex if chroma_lex.is_file() else desktop_lex
         self.max_candidates = max(20, min(max_candidates, 3000))
-        self.collection_name = collection_name or configured_lexical_collection_name()
+        self.collection_name = collection_name or configured_lexical_collection_name(self.db_path)
 
-    def retrieve(self, analysis: QueryAnalysis, paper_ids: list[str] | None = None,
+    def retrieve(self, analysis: Any = None, paper_ids: list[str] | None = None,
                  document_ids: list[str] | None = None, section_names: list[str] | None = None,
-                 top_k: int = 8, owner_id: str | None = None) -> tuple[list[RetrievedSource], dict[str, list[str]]]:
+                 top_k: int = 8, owner_id: str | None = None, query: Any = None, **kwargs) -> tuple[list[RetrievedSource], dict[str, list[str]]]:
+        if analysis is None and query is not None:
+            analysis = query
         if not self.db_path.is_file():
             raise IndependentIndexUnavailable("The local SQLite FTS5 index is not present. Index a document through the current ingestion path first.")
-        terms = list(dict.fromkeys(analysis.expanded_terms))[:32]
+        raw_terms = getattr(analysis, "expanded_terms", None) or getattr(analysis, "expansion_terms", None)
+        if not raw_terms and hasattr(analysis, "primary_concept") and analysis.primary_concept:
+            raw_terms = [analysis.primary_concept]
+        terms = list(dict.fromkeys(raw_terms or []))[:32]
         if not terms:
             terms = ["finding", "method", "result", "conclusion", "table", "summary", "paper"]
-        match_query = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms)
+        primary_phrase = getattr(analysis, "primary_phrase", "") or ""
+        # Build progressive FTS5 query
+        # 1. Try exact phrase match first (highest precision)
+        # 2. Fall back to AND match
+        # 3. Fall back to OR match (current behavior)
+        def _build_fts_query(phrase: str, term_list: list[str]) -> str:
+            if phrase and len(phrase.split()) >= 2:
+                # Quote the multi-word phrase for FTS5 phrase search
+                safe_phrase = phrase.replace('"', '""')
+                return f'"{safe_phrase}"'
+            return " OR ".join('"' + t.replace('"', '""') + '"' for t in term_list)
+
+        match_query = _build_fts_query(primary_phrase, terms)
         constraints: list[str] = ["collection_name = ?"]
         values: list[Any] = [match_query, self.collection_name]
         if owner_id:
@@ -103,6 +143,29 @@ class IndependentRetriever:
             try:
                 connection.row_factory = sqlite3.Row
                 rows = connection.execute(sql, values).fetchall()
+                # Progressive fallback: if phrase query returned too few results, try AND then OR
+                if len(rows) < 3 and primary_phrase and len(primary_phrase.split()) >= 2:
+                    # Try AND matching
+                    and_terms = ['"' + t.replace('"', '""') + '"' for t in _tokens(primary_phrase)]
+                    if len(and_terms) >= 2:
+                        and_query = " AND ".join(and_terms)
+                        and_values = [and_query] + values[1:]
+                        try:
+                            and_rows = connection.execute(sql, and_values).fetchall()
+                            if len(and_rows) > len(rows):
+                                rows = and_rows
+                        except sqlite3.OperationalError:
+                            pass
+                if len(rows) < 3:
+                    # Fall back to OR of all terms
+                    or_query = " OR ".join('"' + t.replace('"', '""') + '"' for t in terms)
+                    or_values = [or_query] + values[1:]
+                    try:
+                        or_rows = connection.execute(sql, or_values).fetchall()
+                        if len(or_rows) > len(rows):
+                            rows = or_rows
+                    except sqlite3.OperationalError:
+                        pass
                 if analysis.intent == QuestionIntent.AUTHOR_LOOKUP:
                     # Author questions often target a title page whose text has
                     # names but no literal "author" keyword. Inspect only early
@@ -127,9 +190,19 @@ class IndependentRetriever:
                         " ORDER BY CAST(page_start AS INTEGER), chunk_id LIMIT 200"
                     )
                     rows.extend(connection.execute(extra_sql, author_values).fetchall())
-                if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS, QuestionIntent.CHART_SYNTHESIS, QuestionIntent.DIAGRAM_SYNTHESIS}:
+                if analysis.intent in {
+                    QuestionIntent.SUMMARY,
+                    QuestionIntent.DOCUMENT_SUMMARY,
+                    QuestionIntent.TOPIC_COUNT_RANKING,
+                    QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+                    QuestionIntent.TOPIC_EXTRACTION,
+                    QuestionIntent.SECTION_COMPARISON,
+                    QuestionIntent.TABLE_SYNTHESIS,
+                    QuestionIntent.CHART_SYNTHESIS,
+                    QuestionIntent.DIAGRAM_SYNTHESIS,
+                }:
                     # These modes need the full selected scope to build a complete
-                    # outline or visualization. Merge all in-scope chunks with
+                    # outline, topic ranking, or visualization. Merge all in-scope chunks with
                     # lexical hits instead of limiting synthesis to top matches.
                     scope_constraints = ["collection_name = ?"]
                     scope_values: list[Any] = [self.collection_name]
@@ -204,6 +277,28 @@ class IndependentRetriever:
                     score += 0.04
                     reasons.append("passage contains explicit research methodology / review design")
 
+            # Boost direct definition copula sentences for definition queries
+            if analysis.intent in {QuestionIntent.DEFINITION, QuestionIntent.DIRECT_DEFINITION}:
+                for q_term in analysis.important_terms[:2]:
+                    is_ex_passage = bool(re.search(r"^\s*(?:as\s+an?\s+example|for\s+example|for\s+instance|e\.g\.|example[:\s])", str(row[9]), re.I))
+                    if not is_ex_passage and re.search(rf"\b(?:an?|the)?\s*{re.escape(q_term)}\s+(?:is|are)\s+(?:an?|the|any|defined|a\s+|basically|used\s+to|a\s+way)\b", str(row[9]), re.I):
+                        if not re.search(rf"\b(?:left|right|this|that|such\s+a)\s+{re.escape(q_term)}\b", str(row[9]), re.I):
+                            score += 0.04
+                            reasons.append("passage contains explicit definition copula for target concept")
+                            break
+                    elif len(_tokens(q_term)) >= 2 and re.search(rf"\b{re.escape(q_term)}\b", str(row[9]), re.I):
+                        score += 0.015
+                        reasons.append(f"passage contains exact phrase '{q_term}'")
+
+            # Exact phrase match bonus for multi-word primary concepts
+            if primary_phrase and len(primary_phrase.split()) >= 2:
+                if re.search(re.escape(primary_phrase), str(row[9]), re.I):
+                    score += 0.03
+                    reasons.append(f"exact phrase '{primary_phrase}' found in passage")
+                if primary_phrase.casefold() in section.casefold():
+                    score += 0.035
+                    reasons.append(f"section title matched target concept '{primary_phrase}'")
+
             # Boost results and findings for summary or table synthesis
             if analysis.intent in {QuestionIntent.SUMMARY, QuestionIntent.TABLE_SYNTHESIS}:
                 if re.search(r"\b(?:results and discussion|findings|key results|threat detection)\b", str(row[9]), re.I):
@@ -216,6 +311,16 @@ class IndependentRetriever:
                 score *= 0.1
                 reasons.append("downweighted bibliographic reference chunk")
 
+            # Downweight pseudocode/syntax convention chunks unless specifically queried
+            is_syntax_conv = (
+                bool(re.search(r"\b(?:pseudocode conventions|syntax conventions|coding conventions)\b", section, re.I))
+                or bool(re.search(r"^\s*(?:\d+(?:\.\d+)*\s+)?Pseudocode Conventions\b", str(row[9]), re.I))
+            )
+            query_wants_syntax = any(t in {"pseudocode", "syntax", "convention", "conventions", "notation"} for t in getattr(analysis, "important_terms", []))
+            if is_syntax_conv and not query_wants_syntax:
+                score *= 0.1
+                reasons.append("downweighted pseudocode syntax convention chunk")
+
             if analysis.intent == QuestionIntent.AUTHOR_LOOKUP and row[4] is not None and int(row[4]) <= 8:
                 score += 0.02
                 reasons.append("early-page title/front-matter candidate for author lookup")
@@ -227,10 +332,27 @@ class IndependentRetriever:
         fused.sort(key=lambda item: (-item[0], item[2][0]))
         whole_scope_intent = analysis.intent in {
             QuestionIntent.SUMMARY,
+            QuestionIntent.DOCUMENT_SUMMARY,
+            QuestionIntent.TOPIC_COUNT_RANKING,
+            QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+            QuestionIntent.TOPIC_EXTRACTION,
+            QuestionIntent.SECTION_COMPARISON,
             QuestionIntent.TABLE_SYNTHESIS,
             QuestionIntent.CHART_SYNTHESIS,
             QuestionIntent.DIAGRAM_SYNTHESIS,
         }
+        # Per-document diversification: prevent one large document monopolizing pool
+        if not whole_scope_intent:
+            per_doc_limit = max(top_k * 2, 15)  # At least 15 per doc, min top_k*2
+            by_doc: dict[str, list] = {}
+            for item in fused:
+                doc_id = str(item[2][2])  # document_id column
+                by_doc.setdefault(doc_id, []).append(item)
+            diversified = []
+            for doc_items in by_doc.values():
+                diversified.extend(doc_items[:per_doc_limit])
+            # Re-sort by score after diversification
+            fused = sorted(diversified, key=lambda item: (-item[0], item[2][0]))
         if whole_scope_intent:
             fused.sort(key=lambda item: (
                 str(item[2][2]),
@@ -283,6 +405,8 @@ class IndependentRetriever:
             QuestionIntent.DATASET_EXTRACTION: ("data", "corpus", "experiment", "evaluation"),
             QuestionIntent.METRIC_EXTRACTION: ("result", "evaluation", "experiment"),
             QuestionIntent.AUTHOR_LOOKUP: ("title", "front matter", "publication", "metadata"),
+            QuestionIntent.DEFINITION: ("introduction", "definition", "overview", "basics", "background", "concept"),
+            QuestionIntent.DIRECT_DEFINITION: ("introduction", "definition", "overview", "basics", "background", "concept"),
         }.get(intent, ())
         return any(signal in value for signal in signals)
 

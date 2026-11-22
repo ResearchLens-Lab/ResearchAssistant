@@ -1,21 +1,26 @@
-import { apiClient, refreshAccessToken, AppApiError } from "./api.client";
+import { apiClient, refreshAccessToken, AppApiError, resolveDesktopConfig } from "./api.client";
+import { tokenStorage } from "@/utils/tokenStorage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 export async function openAuthenticatedPdfSource(source, highlightedText = "") {
-  if (!source?.document_id || !/\.pdf$/i.test(source.filename || "")) return false;
+  const docId = source?.document_id || source?.source_id;
+  if (!docId || !/\.pdf$/i.test(source.filename || "")) return false;
   const params = new URLSearchParams({
-    document_id: source.document_id,
+    document_id: docId,
+    source_id: docId,
     filename: source.filename || "Research source.pdf",
     page: String(source.page_start || source.page || 1),
     end_page: String(source.page_end || source.page_start || source.page || 1),
   });
   const text = (highlightedText || source.evidence_excerpt || "").replace(/\s+/g, " ").trim();
   if (text) params.set("highlight", text);
-  const tab = window.open(`/pdf-viewer?${params.toString()}`, "_blank");
-  if (!tab) return false;
-  tab.opener = null;
-  return true;
+  const targetUrl = `/pdf-viewer?${params.toString()}`;
+  if (typeof window !== "undefined") {
+    window.location.assign(targetUrl);
+    return true;
+  }
+  return false;
 }
 
 export const documentsService = {
@@ -33,12 +38,17 @@ export const documentsService = {
   },
 
   async uploadBatch(files, paperId, onUploadProgress, abortSignal = null) {
+    const desktop = await resolveDesktopConfig();
+    const targetUrl = `${desktop?.apiBaseUrl || API_BASE}/documents/upload/batch`;
+    const desktopKey = desktop?.requestKey;
+
     const formData = new FormData();
     for (const file of files) formData.append("files", file);
     formData.append("paper_id", paperId);
     const send = (token) => new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${API_BASE}/documents/upload/batch`);
+      xhr.open("POST", targetUrl);
+      if (desktopKey) xhr.setRequestHeader("X-ResearchLens-Desktop-Key", desktopKey);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       if (abortSignal) {
         if (abortSignal.aborted) {
@@ -85,8 +95,16 @@ export const documentsService = {
     return apiClient(`/documents/${encodeURIComponent(id)}/retry`, { method: "POST" });
   },
 
+  async reindex(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}/reindex`, { method: "POST" });
+  },
+
   async cancel(id) {
     return apiClient(`/documents/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  },
+
+  async delete(id) {
+    return apiClient(`/documents/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
   async getSystemOverview() {

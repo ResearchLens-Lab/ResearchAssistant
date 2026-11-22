@@ -67,6 +67,16 @@ class SourceVerificationService:
         self.client = client
 
     async def verify(self, paper: Paper) -> dict[str, Any]:
+        from backend.app.core.config import get_settings
+        if self.client is None and not get_settings().external_lookups_enabled:
+            return {
+                "status": "DISABLED",
+                "doi": paper.doi,
+                "external_checks_performed": False,
+                "message": "Online verification is off. ResearchLens keeps everything on this computer.",
+                "privacy": "Nothing was sent.",
+            }
+
         doi = normalize_doi(paper.doi)
         if not doi:
             return {

@@ -2,21 +2,43 @@ import { tokenStorage } from "@/utils/tokenStorage";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+let _cachedDesktopConfig = null;
+
+export async function resolveDesktopConfig() {
+  if (typeof window === "undefined" || !window["researchLensDesktop"]) return null;
+  if (_cachedDesktopConfig) return _cachedDesktopConfig;
+  try {
+    _cachedDesktopConfig = await window["researchLensDesktop"].getRuntimeConfig();
+    return _cachedDesktopConfig;
+  } catch {
+    return null;
+  }
+}
+
 export async function refreshAccessToken() {
   const refreshToken = tokenStorage.getRefreshToken();
   if (!refreshToken) return null;
-  const response = await fetch(`${BASE_URL}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!response.ok) {
-    tokenStorage.clear();
+  const desktop = await resolveDesktopConfig();
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (desktop?.requestKey) headers.set("X-ResearchLens-Desktop-Key", desktop.requestKey);
+  try {
+    const response = await fetch(`${desktop?.apiBaseUrl || BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        tokenStorage.clear();
+      }
+      return null;
+    }
+    const values = await response.json();
+    tokenStorage.setTokens(values.access_token, values.refresh_token);
+    return values.access_token;
+  } catch {
     return null;
   }
-  const values = await response.json();
-  tokenStorage.setTokens(values.access_token, values.refresh_token);
-  return values.access_token;
 }
 
 export class AppApiError extends Error {
@@ -45,18 +67,22 @@ const processQueue = (error, token = null) => {
 };
 
 export async function apiClient(endpoint, options = {}) {
+  const desktop = await resolveDesktopConfig();
+  const apiBase = desktop?.apiBaseUrl || BASE_URL;
   const url = endpoint.startsWith("http")
     ? endpoint
-    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+    : `${apiBase}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const headers = new Headers(options.headers || {});
+  if (desktop?.requestKey) headers.set("X-ResearchLens-Desktop-Key", desktop.requestKey);
 
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
+  const isAuthEndpoint = endpoint.includes("/auth/login") || endpoint.includes("/auth/register");
   const token = tokenStorage.getAccessToken();
-  if (token && !headers.has("Authorization")) {
+  if (token && !headers.has("Authorization") && !isAuthEndpoint) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
@@ -100,9 +126,9 @@ export async function apiClient(endpoint, options = {}) {
       isRefreshing = true;
 
       try {
-        const refreshResp = await fetch(`${BASE_URL}/auth/refresh`, {
+        const refreshResp = await fetch(`${apiBase}/auth/refresh`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(desktop?.requestKey ? { "X-ResearchLens-Desktop-Key": desktop.requestKey } : {}) },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });
 
@@ -114,16 +140,22 @@ export async function apiClient(endpoint, options = {}) {
           headers.set("Authorization", `Bearer ${tokenData.access_token}`);
           const retryResp = await fetch(url, { ...options, headers });
           return handleResponse(retryResp);
-        } else {
+        } else if (refreshResp.status === 400 || refreshResp.status === 401 || refreshResp.status === 403) {
           tokenStorage.clear();
-          processQueue(new Error("Refresh failed"), null);
+          const authError = new AppApiError("Session expired. Please sign in again.", "AUTH_EXPIRED", refreshResp.status);
+          processQueue(authError, null);
           if (typeof window !== "undefined") {
             window.location.href = "/login";
           }
+          throw authError;
+        } else {
+          const unavailableError = new AppApiError("Service temporarily unavailable.", "REFRESH_UNAVAILABLE", refreshResp.status);
+          processQueue(unavailableError, null);
+          throw unavailableError;
         }
       } catch (err) {
-        tokenStorage.clear();
         processQueue(err, null);
+        throw err;
       } finally {
         isRefreshing = false;
       }
@@ -143,14 +175,43 @@ async function handleResponse(response) {
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const errorDetail = data?.error;
+    let message = "";
+    let details = null;
+    let code = "API_ERROR";
+    let requestId = null;
+
+    if (data && typeof data === "object") {
+      if (data.error) {
+        message = data.error.message;
+        code = data.error.code || "API_ERROR";
+        requestId = data.error.request_id;
+        details = data.error.details;
+      } else if (Array.isArray(data.detail)) {
+        // FastAPI 422 validation errors: [{ loc, msg, type }]
+        message = data.detail
+          .map((err) => {
+            const field = Array.isArray(err.loc) ? err.loc.filter((part) => part !== "body").join(".") : "field";
+            return `${field}: ${err.msg}`;
+          })
+          .join("; ");
+        code = "VALIDATION_ERROR";
+        details = data.detail;
+      } else if (typeof data.detail === "string") {
+        message = data.detail;
+        code = "API_ERROR";
+      }
+    }
+
+    if (!message) {
+      message = typeof data === "string" ? data : response.statusText || "Request failed";
+    }
 
     throw new AppApiError(
-      errorDetail?.message || (typeof data === "string" ? data : response.statusText || "Request failed"),
-      errorDetail?.code || "API_ERROR",
+      message,
+      code,
       response.status,
-      errorDetail?.request_id,
-      errorDetail?.details
+      requestId,
+      details
     );
   }
 

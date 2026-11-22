@@ -1,0 +1,716 @@
+{
+  "version": "1.0",
+  "description": "Gold benchmark dataset: 60 in-corpus algorithm questions and 12 out-of-corpus controls.",
+  "in_corpus_count": 60,
+  "out_of_corpus_count": 12,
+  "questions": [
+    {
+      "id": "def_01",
+      "intent": "DEFINITION",
+      "question": "What is an algorithm according to Horowitz and Sahni?",
+      "doc": "horowitz",
+      "must_match": "An algorithm is a finite set of instructions",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0086_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p23-24",
+      "verified_page": 23,
+      "split": "tune"
+    },
+    {
+      "id": "def_02",
+      "intent": "DEFINITION",
+      "question": "What is an algorithm according to Cormen?",
+      "doc": "cormen",
+      "must_match": "algorithm is any well-de[f\ufb01]ned computational procedure",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0127_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p25-26",
+      "verified_page": 25,
+      "split": "tune"
+    },
+    {
+      "id": "def_03",
+      "intent": "DEFINITION",
+      "question": "What is a red-black tree?",
+      "doc": "cormen",
+      "must_match": "A red-black tree is a binary search tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0469_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p329-330",
+      "verified_page": 329,
+      "split": "tune"
+    },
+    {
+      "id": "def_04",
+      "intent": "DEFINITION",
+      "question": "What is a binary search tree according to Horowitz?",
+      "doc": "horowitz",
+      "must_match": "A binary search tree is a binary tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0166_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p103-104",
+      "verified_page": 103,
+      "split": "tune"
+    },
+    {
+      "id": "def_05",
+      "intent": "DEFINITION",
+      "question": "What is dynamic programming?",
+      "doc": "cormen",
+      "must_match": "Dynamic programming.*solves problems by combining the solutions to subproblems",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0520_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p379-380",
+      "verified_page": 379,
+      "split": "tune"
+    },
+    {
+      "id": "def_06",
+      "intent": "DEFINITION",
+      "question": "What is the divide-and-conquer design paradigm?",
+      "doc": "cormen",
+      "must_match": "divide-and-conquer approach|divide the problem into.*subproblems",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0140_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p37-38",
+      "verified_page": 37,
+      "split": "tune"
+    },
+    {
+      "id": "def_07",
+      "intent": "DEFINITION",
+      "question": "What is a minimum spanning tree?",
+      "doc": "cormen",
+      "must_match": "minimum-spanning-tree|minimum spanning tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0058_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p9-9",
+      "verified_page": 9,
+      "split": "tune"
+    },
+    {
+      "id": "def_08",
+      "intent": "DEFINITION",
+      "question": "What is the greedy method?",
+      "doc": "cormen",
+      "must_match": "A greedy algorithm always makes the choice that looks best at the moment",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0575_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p434-435",
+      "verified_page": 434,
+      "split": "held_out"
+    },
+    {
+      "id": "def_09",
+      "intent": "DEFINITION",
+      "question": "What is the definition of asymptotic Theta-notation?",
+      "doc": "cormen",
+      "must_match": "\\b\\u0398-notation|Theta-notation|tight bound",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0173_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p66-67",
+      "verified_page": 66,
+      "split": "held_out"
+    },
+    {
+      "id": "def_10",
+      "intent": "DEFINITION",
+      "question": "What is an NP-complete problem?",
+      "doc": "cormen",
+      "must_match": "NP-complete|class NP",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0100_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p11-11",
+      "verified_page": 11,
+      "split": "held_out"
+    },
+    {
+      "id": "proc_01",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for insertion into a red-black tree?",
+      "doc": "cormen",
+      "must_match": "RB-INSERT|inserts a node.*into a red-black tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0474_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p335-336",
+      "verified_page": 335,
+      "split": "tune"
+    },
+    {
+      "id": "proc_02",
+      "intent": "PROCEDURE",
+      "question": "What are the steps of merge sort?",
+      "doc": "cormen",
+      "must_match": "MERGE-SORT|MERGE\\(A|Merge sort",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0123_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p24-24",
+      "verified_page": 24,
+      "split": "tune"
+    },
+    {
+      "id": "proc_03",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for Dijkstra's shortest path algorithm?",
+      "doc": "cormen",
+      "must_match": "DIJKSTRA|Dijkstra.*algorithm solves the single-source shortest-paths",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0062_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p10-10",
+      "verified_page": 10,
+      "split": "tune"
+    },
+    {
+      "id": "proc_04",
+      "intent": "PROCEDURE",
+      "question": "How does quicksort partition an array?",
+      "doc": "cormen",
+      "must_match": "PARTITION\\(A|Partitioning the array",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0326_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p191-192",
+      "verified_page": 191,
+      "split": "tune"
+    },
+    {
+      "id": "proc_05",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for breadth-first search?",
+      "doc": "cormen",
+      "must_match": "breadth-first search|BFS",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0787_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p615-616",
+      "verified_page": 615,
+      "split": "tune"
+    },
+    {
+      "id": "proc_06",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for depth-first search?",
+      "doc": "cormen",
+      "must_match": "depth-first search|DFS",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0796_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p624-625",
+      "verified_page": 624,
+      "split": "tune"
+    },
+    {
+      "id": "proc_07",
+      "intent": "PROCEDURE",
+      "question": "What are the steps of Kruskal's algorithm for minimum spanning trees?",
+      "doc": "cormen",
+      "must_match": "MST-KRUSKAL|Kruskal",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0817_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p644-646",
+      "verified_page": 644,
+      "split": "tune"
+    },
+    {
+      "id": "proc_08",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for binary search in Horowitz?",
+      "doc": "horowitz",
+      "must_match": "BinarySearch|binary search",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0009_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p7-8",
+      "verified_page": 7,
+      "split": "held_out"
+    },
+    {
+      "id": "proc_09",
+      "intent": "PROCEDURE",
+      "question": "How does heapsort build a max-heap?",
+      "doc": "cormen",
+      "must_match": "BUILD-MAX-HEAP|builds a max-heap",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0306_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p174-175",
+      "verified_page": 174,
+      "split": "held_out"
+    },
+    {
+      "id": "proc_10",
+      "intent": "PROCEDURE",
+      "question": "What is the procedure for topological sort?",
+      "doc": "cormen",
+      "must_match": "TOPOLOGICAL-SORT|topological sort of a dag",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0805_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p632-633",
+      "verified_page": 632,
+      "split": "held_out"
+    },
+    {
+      "id": "prop_01",
+      "intent": "PROPERTY",
+      "question": "What are the five essential criteria of an algorithm in Horowitz?",
+      "doc": "horowitz",
+      "must_match": "satisfy the following criteria:\\s*1\\.\\s*Input|satisfy the following criteria",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0086_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p23-24",
+      "verified_page": 23,
+      "split": "tune"
+    },
+    {
+      "id": "prop_02",
+      "intent": "PROPERTY",
+      "question": "What are the red-black tree properties?",
+      "doc": "cormen",
+      "must_match": "red-black properties|Every node is either red or black",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0469_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p329-330",
+      "verified_page": 329,
+      "split": "tune"
+    },
+    {
+      "id": "prop_03",
+      "intent": "PROPERTY",
+      "question": "What is the optimal substructure property in dynamic programming?",
+      "doc": "cormen",
+      "must_match": "optimal substructure",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0523_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p383-384",
+      "verified_page": 383,
+      "split": "tune"
+    },
+    {
+      "id": "prop_04",
+      "intent": "PROPERTY",
+      "question": "What are the properties of asymptotic Big-O notation?",
+      "doc": "cormen",
+      "must_match": "O-notation|asymptotic upper bound",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0173_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p66-67",
+      "verified_page": 66,
+      "split": "tune"
+    },
+    {
+      "id": "prop_05",
+      "intent": "PROPERTY",
+      "question": "What is the greedy-choice property?",
+      "doc": "cormen",
+      "must_match": "greedy-choice property",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0584_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p444-445",
+      "verified_page": 444,
+      "split": "tune"
+    },
+    {
+      "id": "prop_06",
+      "intent": "PROPERTY",
+      "question": "What are the properties of a min-heap?",
+      "doc": "cormen",
+      "must_match": "min-heap property",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0305_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p173-174",
+      "verified_page": 173,
+      "split": "tune"
+    },
+    {
+      "id": "prop_07",
+      "intent": "PROPERTY",
+      "question": "What are the properties of a max-heap?",
+      "doc": "cormen",
+      "must_match": "max-heap property",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0305_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p173-174",
+      "verified_page": 173,
+      "split": "tune"
+    },
+    {
+      "id": "prop_08",
+      "intent": "PROPERTY",
+      "question": "What are the properties of a binary search tree in Cormen?",
+      "doc": "cormen",
+      "must_match": "binary-search-tree property",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0449_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p307-308",
+      "verified_page": 307,
+      "split": "held_out"
+    },
+    {
+      "id": "prop_09",
+      "intent": "PROPERTY",
+      "question": "What are the properties of a directed acyclic graph (DAG)?",
+      "doc": "cormen",
+      "must_match": "directed acyclic graph",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0566_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p424-426",
+      "verified_page": 424,
+      "split": "held_out"
+    },
+    {
+      "id": "prop_10",
+      "intent": "PROPERTY",
+      "question": "What are the properties of flow networks in Cormen?",
+      "doc": "cormen",
+      "must_match": "flow network|capacity constraint|skew symmetry|flow conservation",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0947_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p728-730",
+      "verified_page": 728,
+      "split": "held_out"
+    },
+    {
+      "id": "comp_01",
+      "intent": "COMPARISON",
+      "question": "Compare divide-and-conquer and dynamic programming.",
+      "doc": "any",
+      "must_match": "divide-and-conquer|dynamic programming",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "tune"
+    },
+    {
+      "id": "comp_02",
+      "intent": "COMPARISON",
+      "question": "What is the difference between greedy algorithms and dynamic programming?",
+      "doc": "any",
+      "must_match": "greedy|dynamic programming",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0026_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "comp_03",
+      "intent": "COMPARISON",
+      "question": "Compare merge sort and quicksort.",
+      "doc": "any",
+      "must_match": "merge sort|quicksort",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "tune"
+    },
+    {
+      "id": "comp_04",
+      "intent": "COMPARISON",
+      "question": "What is the difference between BFS and DFS in graph traversal?",
+      "doc": "cormen",
+      "must_match": "breadth-[f\ufb01]rst search|depth-[f\ufb01]rst search|BFS|DFS",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0056_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p9-9",
+      "verified_page": 9,
+      "split": "tune"
+    },
+    {
+      "id": "comp_05",
+      "intent": "COMPARISON",
+      "question": "Compare Kruskal's and Prim's algorithms for minimum spanning trees.",
+      "doc": "cormen",
+      "must_match": "Kruskal|Prim",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0112_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p12-15",
+      "verified_page": 12,
+      "split": "tune"
+    },
+    {
+      "id": "comp_06",
+      "intent": "COMPARISON",
+      "question": "What is the difference between Big-O and Big-Omega notation?",
+      "doc": "cormen",
+      "must_match": "O-notation|\\u03a9-notation|Omega-notation",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0173_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p66-67",
+      "verified_page": 66,
+      "split": "tune"
+    },
+    {
+      "id": "comp_07",
+      "intent": "COMPARISON",
+      "question": "Compare binary search trees and red-black trees.",
+      "doc": "cormen",
+      "must_match": "binary search tree|red-black tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0015_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "comp_08",
+      "intent": "COMPARISON",
+      "question": "What is the difference between worst-case and average-case analysis?",
+      "doc": "cormen",
+      "must_match": "worst-case|average-case",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0005_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p7-7",
+      "verified_page": 7,
+      "split": "held_out"
+    },
+    {
+      "id": "comp_09",
+      "intent": "COMPARISON",
+      "question": "Compare adjacency list and adjacency matrix representations of graphs.",
+      "doc": "cormen",
+      "must_match": "adjacency-list|adjacency-matrix",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0782_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p610-610",
+      "verified_page": 610,
+      "split": "held_out"
+    },
+    {
+      "id": "comp_10",
+      "intent": "COMPARISON",
+      "question": "What is the difference between P and NP?",
+      "doc": "cormen",
+      "must_match": "\\bclass P\\b|\\bclass NP\\b|polynomial-time",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0101_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p11-11",
+      "verified_page": 11,
+      "split": "held_out"
+    },
+    {
+      "id": "ex_01",
+      "intent": "EXAMPLE",
+      "question": "Give an example of an activity selection problem solved by greedy algorithm.",
+      "doc": "cormen",
+      "must_match": "activity-selection problem|An activity-selection problem",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0115_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p17-18",
+      "verified_page": 17,
+      "split": "tune"
+    },
+    {
+      "id": "ex_02",
+      "intent": "EXAMPLE",
+      "question": "What is the matrix-chain multiplication example in dynamic programming?",
+      "doc": "cormen",
+      "must_match": "matrix-chain multiplication",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0530_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p391-392",
+      "verified_page": 391,
+      "split": "tune"
+    },
+    {
+      "id": "ex_03",
+      "intent": "EXAMPLE",
+      "question": "Show an example of 0-1 knapsack problem.",
+      "doc": "horowitz",
+      "must_match": "knapsack problem|0/1 knapsack",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0017_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p8-9",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "ex_04",
+      "intent": "EXAMPLE",
+      "question": "Give an example of longest common subsequence problem.",
+      "doc": "cormen",
+      "must_match": "longest common subsequence|LCS",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0129_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p28-28",
+      "verified_page": 28,
+      "split": "tune"
+    },
+    {
+      "id": "ex_05",
+      "intent": "EXAMPLE",
+      "question": "What is an example of Huffman codes construction?",
+      "doc": "cormen",
+      "must_match": "Huffman code|Huffman",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0576_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p435-436",
+      "verified_page": 435,
+      "split": "tune"
+    },
+    {
+      "id": "ex_06",
+      "intent": "EXAMPLE",
+      "question": "Show an example of Strassen's matrix multiplication.",
+      "doc": "cormen",
+      "must_match": "Strassen",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "held_out"
+    },
+    {
+      "id": "ex_07",
+      "intent": "EXAMPLE",
+      "question": "What is the 8-queens problem example in Horowitz?",
+      "doc": "horowitz",
+      "must_match": "8-queens|n-queens",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0023_dbe61583c-74c9-4681-bfd6-bf5a62ed719f_p9-9",
+      "verified_page": 9,
+      "split": "held_out"
+    },
+    {
+      "id": "ex_08",
+      "intent": "EXAMPLE",
+      "question": "Show an example of rod cutting in dynamic programming.",
+      "doc": "cormen",
+      "must_match": "rod cutting|cut-rod",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0115_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p17-18",
+      "verified_page": 17,
+      "split": "held_out"
+    },
+    {
+      "id": "cross_01",
+      "intent": "CROSS_DOC",
+      "question": "What is an algorithm according to Horowitz vs Cormen?",
+      "doc": "any",
+      "must_match": "finite set of instructions|well-de[f\ufb01]ned computational procedure",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0127_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p25-26",
+      "verified_page": 25,
+      "split": "tune"
+    },
+    {
+      "id": "cross_02",
+      "intent": "CROSS_DOC",
+      "question": "How is divide and conquer described in Horowitz compared to Cormen?",
+      "doc": "any",
+      "must_match": "divide-and-conquer",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "tune"
+    },
+    {
+      "id": "cross_03",
+      "intent": "CROSS_DOC",
+      "question": "How do Horowitz and Cormen describe the greedy method?",
+      "doc": "any",
+      "must_match": "greedy",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0031_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "cross_04",
+      "intent": "CROSS_DOC",
+      "question": "How is dynamic programming presented in Horowitz vs Cormen?",
+      "doc": "any",
+      "must_match": "dynamic programming",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0026_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "cross_05",
+      "intent": "CROSS_DOC",
+      "question": "Compare how binary search is formulated in Horowitz and Cormen.",
+      "doc": "any",
+      "must_match": "binary search|BinarySearch",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0015_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "held_out"
+    },
+    {
+      "id": "cross_06",
+      "intent": "CROSS_DOC",
+      "question": "Compare how minimum spanning trees are introduced in Horowitz and Cormen.",
+      "doc": "any",
+      "must_match": "spanning tree|minimum spanning tree",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0058_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p9-9",
+      "verified_page": 9,
+      "split": "held_out"
+    },
+    {
+      "id": "oth_01",
+      "intent": "OTHER",
+      "question": "Does merge sort support in-place sorting without auxiliary memory?",
+      "doc": "cormen",
+      "must_match": "MERGE|Merge sort|in place",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0123_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p24-24",
+      "verified_page": 24,
+      "split": "tune"
+    },
+    {
+      "id": "oth_02",
+      "intent": "OTHER",
+      "question": "What is the running time of heapsort in the worst case?",
+      "doc": "cormen",
+      "must_match": "heapsort|runs in O\\.lg n/|runs in O\\(n lg n\\)",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "tune"
+    },
+    {
+      "id": "oth_03",
+      "intent": "OTHER",
+      "question": "Does a red-black tree allow two consecutive red nodes?",
+      "doc": "cormen",
+      "must_match": "red-black|If a node is red, then both its children are black",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0018_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p8-8",
+      "verified_page": 8,
+      "split": "tune"
+    },
+    {
+      "id": "oth_04",
+      "intent": "OTHER",
+      "question": "What is the time complexity of searching in a red-black tree?",
+      "doc": "cormen",
+      "must_match": "height of a red-black tree|take O\\.lg n/ time",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0305_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p173-174",
+      "verified_page": 173,
+      "split": "held_out"
+    },
+    {
+      "id": "oth_05",
+      "intent": "OTHER",
+      "question": "Does Dijkstra's algorithm work with negative edge weights?",
+      "doc": "cormen",
+      "must_match": "negative-weight edges|weights are nonnegative",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0847_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p666-666",
+      "verified_page": 666,
+      "split": "held_out"
+    },
+    {
+      "id": "oth_06",
+      "intent": "OTHER",
+      "question": "What is the master method for solving recurrences?",
+      "doc": "cormen",
+      "must_match": "master method|master theorem",
+      "verified_chunk_id": "72e78a90-9a78-4f9a-ba61-90a887ff6fc5_c0004_dca86fa5f-3baa-4c68-9abb-294a6d8f832f_p6-7",
+      "verified_page": 6,
+      "split": "held_out"
+    },
+    {
+      "id": "ooc_01",
+      "intent": "EXPLANATION",
+      "question": "Explain the transformer attention mechanism with Query Key Value matrices.",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_02",
+      "intent": "EXPLANATION",
+      "question": "How does FlashAttention optimize GPU SRAM memory bandwidth?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_03",
+      "intent": "EXPLANATION",
+      "question": "What is the formulation for residual skip connections in ResNet-50?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_04",
+      "intent": "PROCEDURE",
+      "question": "Describe Shor's quantum factoring algorithm and modular exponentiation.",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_05",
+      "intent": "EXPLANATION",
+      "question": "How does the CRISPR-Cas9 endonuclease recognize the PAM sequence?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_06",
+      "intent": "PROCEDURE",
+      "question": "How does Raft leader election handle split votes with randomized timeouts?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_07",
+      "intent": "PROCEDURE",
+      "question": "How do SQLite WAL checkpoints transfer write-ahead frames to the main DB?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_08",
+      "intent": "EXPLANATION",
+      "question": "Explain Kafka consumer group rebalancing protocols and join-group requests.",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_09",
+      "intent": "PROPERTY",
+      "question": "What is the optimal number of hash functions k for a Bloom filter?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_10",
+      "intent": "PROCEDURE",
+      "question": "Explain Paxos Synod phase 2a accept requests and consensus quorums.",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_11",
+      "intent": "PROPERTY",
+      "question": "How does BGP loop prevention operate via the AS-PATH attribute?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    },
+    {
+      "id": "ooc_12",
+      "intent": "PROCEDURE",
+      "question": "How does Kubernetes Horizontal Pod Autoscaler compute desired replicas?",
+      "doc": "none",
+      "must_match": "",
+      "expected_abstention": true,
+      "split": "control"
+    }
+  ]
+}

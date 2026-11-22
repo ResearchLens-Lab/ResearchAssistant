@@ -1,6 +1,10 @@
 import logging
+import os
+import time
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +29,16 @@ from backend.app.schemas.auth import LoginRequest, LoginResponse, RegisterReques
 from backend.app.schemas.user import UserResponse
 
 logger = logging.getLogger("backend.auth")
+
+# In-memory grace window for rotated refresh tokens (30s TTL)
+_ROTATED_TOKEN_GRACE: Dict[str, Tuple[TokenResponse, float]] = {}
+
+
+def _cleanup_grace_window() -> None:
+    now = time.time()
+    expired = [k for k, (_, exp) in _ROTATED_TOKEN_GRACE.items() if exp < now]
+    for k in expired:
+        _ROTATED_TOKEN_GRACE.pop(k, None)
 
 
 def _as_naive_utc(value: datetime) -> datetime:
@@ -83,11 +97,22 @@ class AuthService:
         if row is None or row.user_id != user_id:
             raise UnauthorizedError("Invalid refresh token.")
         if row.revoked:
-            # Reuse of a rotated token suggests theft: revoke the whole family.
-            await self.refresh_tokens.revoke_all_for_user(user_id)
-            await self.db.commit()
-            logger.warning("refresh token reuse detected user_id=%s", user_id)
+            is_desktop = os.environ.get("DESKTOP_RUNTIME", "").lower() in ("true", "1")
+            if is_desktop:
+                _cleanup_grace_window()
+                if jti and jti in _ROTATED_TOKEN_GRACE:
+                    cached_tokens, exp = _ROTATED_TOKEN_GRACE[jti]
+                    if time.time() < exp:
+                        logger.info("Serving refresh token from 30s grace window user_id=%s jti=%s", user_id, jti)
+                        return cached_tokens
+                logger.warning("Revoked token presented in desktop runtime; skipping blanket family revocation user_id=%s", user_id)
+            else:
+                # Reuse outside grace window suggests theft: revoke the whole family.
+                await self.refresh_tokens.revoke_all_for_user(user_id)
+                await self.db.commit()
+                logger.warning("refresh token reuse detected user_id=%s", user_id)
             raise UnauthorizedError("Refresh token has been revoked.")
+
         if _as_naive_utc(row.expires_at) < datetime.utcnow():
             raise UnauthorizedError("Refresh token has expired.")
         user = await self.users.get_by_id(user_id)
@@ -95,6 +120,8 @@ class AuthService:
             raise UnauthorizedError("User is not active.")
         await self.refresh_tokens.revoke(row)  # rotation
         tokens = await self._issue_tokens(user_id)
+        if jti:
+            _ROTATED_TOKEN_GRACE[jti] = (tokens, time.time() + 30.0)
         await self.db.commit()
         return tokens
 
@@ -108,6 +135,43 @@ class AuthService:
         if row and not row.revoked:
             await self.refresh_tokens.revoke(row)
             await self.db.commit()
+
+    async def create_local_session(
+        self, request_key: str, response: Optional[Any] = None
+    ) -> LoginResponse:
+        settings = get_settings()
+        expected_key = settings.desktop_request_key
+        if expected_key and request_key != expected_key:
+            raise UnauthorizedError("Invalid desktop request key.")
+
+        result = await self.db.execute(
+            select(User).where(User.is_active == True).order_by(User.created_at.asc())
+        )
+        user = result.scalars().first()
+
+        if not user:
+            import secrets
+            user = await self.users.create(
+                email="researcher@local.researchlens",
+                username="researcher",
+                full_name="Researcher",
+                hashed_password=hash_password(secrets.token_urlsafe(24)),
+            )
+
+        tokens = await self._issue_tokens(user.id)
+        await self.db.commit()
+
+        if response is not None and hasattr(response, "set_cookie"):
+            response.set_cookie(
+                key="access_token",
+                value=tokens.access_token,
+                httponly=True,
+                samesite="lax",
+                max_age=settings.access_token_expire_minutes * 60,
+            )
+
+        logger.info("local session established user_id=%s", user.id)
+        return LoginResponse(**tokens.model_dump(), user=UserResponse.model_validate(user))
 
     async def _issue_tokens(self, user_id: str) -> TokenResponse:
         access = create_access_token(user_id)

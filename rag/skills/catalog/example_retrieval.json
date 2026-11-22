@@ -1,0 +1,41 @@
+{
+  "skill_id": "example_retrieval",
+  "name": "Textbook Example Retrieval",
+  "description": "Extracts concrete worked examples, walkthrough scenarios, and sample input instances.",
+  "supported_intent": "EXAMPLE",
+  "trigger_patterns": [
+    "\\bexample\\s+of\\b",
+    "\\bgive\\s+an?\\s+example\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_example_section_boost",
+  "evidence_requirements": [
+    "example_marker"
+  ],
+  "output_schema": {
+    "concept": "string",
+    "example_text": "string",
+    "source_passage": "string"
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "low": 0.4
+  },
+  "abstention_behavior": "context_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Give an example of dynamic programming",
+      "expected_intent": "EXAMPLE",
+      "expected_slots": {
+        "primary_concept": "dynamic programming"
+      },
+      "min_confidence": 0.75,
+      "should_abstain": false
+    }
+  ]
+}

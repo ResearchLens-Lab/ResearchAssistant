@@ -294,7 +294,9 @@ class KnowledgeGraphService:
         return edge
 
     async def search_nodes(self, owner_id: str, query: str = "", node_type: str | None = None,
-                           identifiers: str | None = None, limit: int = 50, offset: int = 0) -> list[KGNode]:
+                           identifiers: str | None = None, limit: int = 50, offset: int = 0,
+                           paper_id: str | None = None) -> list[KGNode]:
+        await self.sync_offline_concepts_if_empty(owner_id)
         limit = min(max(limit, 1), MAX_RESULTS)
         stmt = select(KGNode).where(KGNode.owner_id == owner_id, KGNode.review_status == "approved", KGNode.merged_into_id.is_(None))
         if query:
@@ -302,6 +304,19 @@ class KnowledgeGraphService:
             stmt = stmt.where(or_(KGNode.canonical_name.ilike(like), KGNode.identity_key.ilike(like)))
         if node_type: stmt = stmt.where(KGNode.node_type == node_type.upper())
         if identifiers: stmt = stmt.where(cast(KGNode.identifiers, String).ilike(f"%{identifiers}%"))
+        if paper_id and paper_id != "all":
+            doc_subq = select(Document.id).where(Document.paper_id == paper_id)
+            ev_subq = select(KGGraphEvidence.node_id).where(
+                KGGraphEvidence.owner_id == owner_id,
+                or_(
+                    KGGraphEvidence.source_paper_id == paper_id,
+                    KGGraphEvidence.source_document_id.in_(doc_subq),
+                )
+            )
+            stmt = stmt.where(or_(
+                KGNode.id.in_(ev_subq),
+                KGNode.first_document_id.in_(doc_subq),
+            ))
         result = await self.db.execute(stmt.order_by(KGNode.canonical_name, KGNode.id).offset(max(0, offset)).limit(limit))
         rows = list(result.scalars().all())
         visible = []
@@ -309,6 +324,73 @@ class KnowledgeGraphService:
             try: visible.append(await self.node_detail(owner_id, node.id))
             except GraphValidationError: continue
         return visible
+
+    async def sync_offline_concepts_if_empty(self, owner_id: str) -> int:
+        from sqlalchemy import func
+        count = await self.db.scalar(select(func.count(KGNode.id)).where(KGNode.owner_id == owner_id))
+        if count and count > 0:
+            return count
+
+        import os
+        from pathlib import Path
+        import sqlite3
+        from rag.config.settings import settings
+        from rag.intelligence.concept_graph_extractor import ConceptGraphExtractor
+
+        db_bind = self.db.bind
+        db_url = str(db_bind.url if db_bind else "")
+        db_path = None
+        if "sqlite" in db_url:
+            db_path = Path(db_url.split("///")[-1].replace("/", os.sep))
+        if not db_path or not db_path.exists():
+            db_path = Path(os.environ.get("LOCALAPPDATA", "")) / "ResearchLens" / "Library" / "library.sqlite3"
+
+        lex_candidates = [
+            (db_path.parent / "indexes" / "researchlens_lexical.sqlite3") if db_path else None,
+            Path(os.environ.get("CHROMA_PERSIST_DIR", "")) / "researchlens_lexical.sqlite3",
+            Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "ResearchLens" / "Library" / "indexes" / "researchlens_lexical.sqlite3",
+            Path(".chroma") / "researchlens_lexical.sqlite3",
+        ]
+        lex_path = next((p for p in lex_candidates if p and p.is_file()), None)
+        if not lex_path:
+            return 0
+
+        class SimpleChunk:
+            def __init__(self, text, section, page_start):
+                self.text = text
+                self.name = section
+                self.page_start = page_start
+
+        try:
+            conn = sqlite3.connect(str(lex_path))
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT chunk_id, owner_id, paper_id, document_id, section, page_start, text FROM lexical_chunks"
+            )
+            rows = cur.fetchall()
+            conn.close()
+            if not rows:
+                return 0
+
+            grouped: dict[tuple, list] = {}
+            for r in rows:
+                key = (r[1] or owner_id, r[2] or "", r[3] or "")
+                grouped.setdefault(key, []).append(SimpleChunk(r[6], r[4], r[5]))
+
+            if db_path and db_path.exists():
+                extractor = ConceptGraphExtractor(db_path=db_path)
+                for (doc_owner, paper_id, doc_id), chunk_list in grouped.items():
+                    extractor.ingest_document_kg(
+                        owner_id=owner_id,
+                        paper_id=paper_id,
+                        document_id=doc_id,
+                        chunks_or_sections=chunk_list,
+                        db_path=db_path,
+                    )
+        except Exception as exc:
+            logger.debug("Failed to auto-sync concepts: %s", exc)
+        return await self.db.scalar(select(func.count(KGNode.id)).where(KGNode.owner_id == owner_id)) or 0
 
     async def node_detail(self, owner_id: str, node_id: str) -> KGNode:
         node = await self.db.scalar(select(KGNode).where(KGNode.owner_id == owner_id, KGNode.id == node_id,
@@ -340,8 +422,7 @@ class KnowledgeGraphService:
         output = []
         for edge in result.scalars().all():
             evidence = await self.edge_evidence(owner_id, edge.id, allow_private)
-            if not evidence: continue
-            output.append({"relationship": edge, "evidence": evidence})
+            output.append({"relationship": edge, "evidence": evidence or []})
         return output
 
     async def edge_evidence(self, owner_id: str, edge_id: str, allow_private: bool = False) -> list[KGGraphEvidence]:
@@ -359,6 +440,11 @@ class KnowledgeGraphService:
             await self._owned_document(owner_id, evidence.source_document_id)
         except GraphValidationError:
             return False
+        if (
+            evidence.extraction_method == "regex_offline"
+            or getattr(evidence, "extraction_run_id", "").startswith("run_offline")
+        ):
+            return True
         return self._evidence_current(evidence)
 
     def _evidence_current(self, evidence: KGGraphEvidence, store: ExtractionStore | None = None) -> bool:

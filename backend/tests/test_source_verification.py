@@ -72,3 +72,30 @@ async def test_verification_reports_mismatches_and_never_calls_source_fake():
 def test_doi_normalization_rejects_non_doi_and_strips_resolver():
     assert normalize_doi(" https://doi.org/10.1234/AbC. ") == "10.1234/abc"
     assert normalize_doi("not a DOI") is None
+
+
+@pytest.mark.asyncio
+async def test_verification_disabled_flag_blocks_all_network(monkeypatch):
+    import os
+    from backend.app.core.config import get_settings
+
+    # Ensure external lookups are disabled
+    monkeypatch.setenv("EXTERNAL_LOOKUPS_ENABLED", "false")
+    get_settings.cache_clear()
+
+    paper = Paper(
+        id="p1",
+        owner_id="u1",
+        title="Test Paper",
+        authors=["Author One"],
+        publication_year=2024,
+        doi="10.1000/12345",
+    )
+    svc = SourceVerificationService()  # client is None
+    result = await svc.verify(paper)
+
+    assert result["status"] == "DISABLED"
+    assert result["external_checks_performed"] is False
+    assert result["privacy"] == "Nothing was sent."
+    get_settings.cache_clear()
+

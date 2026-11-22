@@ -31,7 +31,7 @@ export default function HomePage() {
             </span>
             <div className="flex flex-col leading-tight">
               <span className="text-base font-semibold tracking-tight">ResearchLens</span>
-              <span className="text-[10px] text-[var(--rl-muted)]">Find the evidence. Understand the research.</span>
+              <span className="text-[11px] text-[var(--rl-muted)]">Find the evidence. Understand the research.</span>
             </div>
           </Link>
           <nav aria-label="Main navigation" className="flex items-center gap-2">
@@ -47,7 +47,7 @@ export default function HomePage() {
             <h1 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight tracking-tight text-[var(--rl-ink)] sm:text-5xl lg:text-6xl">Turn a library of papers into a clear line of evidence.</h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-[var(--rl-muted)] sm:text-lg sm:leading-8">Ask focused questions across your indexed sources. Read the answer alongside its citations, inspect the passages, and compare what selected papers report.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/register" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#1f659c]">Start a research project <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+              <Link href="/register" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--rl-primary)] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#185ea8]">Start a research project <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               <Link href="/login" className="inline-flex min-h-11 items-center rounded-lg border border-[var(--rl-border)] bg-white px-5 text-sm font-semibold text-[var(--rl-ink)] hover:bg-[var(--rl-tint)]">Sign in</Link>
             </div>
             <p className="mt-4 text-xs leading-5 text-[var(--rl-muted)]">Begin with your own indexed documents. Answers depend on the passages the system can retrieve.</p>

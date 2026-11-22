@@ -13,6 +13,7 @@ import {
   Sparkles,
   Layers,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { useChatScopeStore } from "@/store/chatScopeStore";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -73,7 +74,7 @@ export function ChatInputBar({
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
   const textareaRef = useRef(null);
   const slashMenuRef = useRef(null);
-  const { selectedPaperIds } = useChatScopeStore();
+  const { selectedPaperIds, selectedDocumentIds } = useChatScopeStore();
 
   // Detect slash command typing
   useEffect(() => {
@@ -109,10 +110,77 @@ export function ChatInputBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleRephrase = (e) => {
+      const q = e.detail?.question;
+      if (q) {
+        setInput(q);
+        setTimeout(() => textareaRef.current?.focus(), 50);
+      }
+    };
+    window.addEventListener("researchlens:rephrase", handleRephrase);
+    return () => window.removeEventListener("researchlens:rephrase", handleRephrase);
+  }, []);
+
+  const activeSlash = SLASH_COMMANDS.find((item) =>
+    input.trim().toLowerCase().startsWith(item.cmd.toLowerCase())
+  );
+
   const handleApplySlash = (slashItem) => {
-    setInput(slashItem.prompt);
+    const raw = (textareaRef.current ? textareaRef.current.value : input) || "";
+    const trimmed = raw.trim();
+    // Check if input already starts with an existing slash command (e.g. /table, /pie, /flowchart, /compare, /summary)
+    const existingSlashMatch = trimmed.match(/^\/[a-z0-9_-]+\s*/i);
+    let remainingQuestion = trimmed;
+    if (existingSlashMatch) {
+      remainingQuestion = trimmed.slice(existingSlashMatch[0].length).trim();
+    }
+
+    let nextValue = "";
+    if (remainingQuestion.length > 0) {
+      nextValue = `${slashItem.cmd} ${remainingQuestion}`;
+    } else {
+      nextValue = slashItem.prompt;
+    }
+
+    setInput(nextValue);
     setShowSlashMenu(false);
-    textareaRef.current?.focus();
+
+    if (textareaRef.current) {
+      textareaRef.current.value = nextValue;
+      textareaRef.current.focus();
+      const len = nextValue.length;
+      textareaRef.current.selectionStart = len;
+      textareaRef.current.selectionEnd = len;
+    }
+
+    setTimeout(() => {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.focus();
+        const len = textarea.value.length;
+        textarea.selectionStart = len;
+        textarea.selectionEnd = len;
+      }
+    }, 10);
+  };
+
+  const handleRemoveSlash = (cmdPrefix) => {
+    const raw = input || "";
+    const trimmed = raw.trim();
+    if (trimmed.toLowerCase().startsWith(cmdPrefix.toLowerCase())) {
+      const remaining = trimmed.slice(cmdPrefix.length).trim();
+      setInput(remaining);
+      setTimeout(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.focus();
+          const len = textarea.value.length;
+          textarea.selectionStart = len;
+          textarea.selectionEnd = len;
+        }
+      }, 10);
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -141,7 +209,7 @@ export function ChatInputBar({
       }
     }
 
-    if (event.key === "Enter" && !event.shiftKey) {
+    if ((event.key === "Enter" && !event.shiftKey) || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
       event.preventDefault();
       handleSubmit();
     }
@@ -149,7 +217,8 @@ export function ChatInputBar({
 
   const handleSubmit = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading || selectedPaperIds.length === 0) return;
+    const hasScope = selectedPaperIds.length > 0 || (selectedDocumentIds && selectedDocumentIds.length > 0);
+    if (!trimmed || isLoading || !hasScope) return;
     setInput("");
     setShowSlashMenu(false);
     try {
@@ -159,7 +228,9 @@ export function ChatInputBar({
     }
   };
 
-  const docCount = selectedPaperIds.length;
+  const docCount = (selectedDocumentIds && selectedDocumentIds.length > 0)
+    ? selectedDocumentIds.length
+    : selectedPaperIds.length;
 
   return (
     <div className="relative border-t border-slate-200/90 bg-white/95 backdrop-blur-xs px-3 py-2 sm:px-6 shrink-0 z-20">
@@ -167,9 +238,9 @@ export function ChatInputBar({
       {showSlashMenu && (
         <div
           ref={slashMenuRef}
-          className="absolute bottom-full left-4 sm:left-8 mb-2 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl font-serif animate-in fade-in slide-in-from-bottom-2 duration-150"
+          className="absolute bottom-full left-4 sm:left-8 mb-2 z-50 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-150"
         >
-          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-400 uppercase tracking-wider font-bold">
             <span>Research Presentation Modes</span>
             <span>Tab / Enter to select</span>
           </div>
@@ -250,17 +321,47 @@ export function ChatInputBar({
                 <DropdownMenuContent align="start" className="w-64 bg-white">
                   {SLASH_COMMANDS.map((item) => {
                     const Icon = item.icon;
-                    return <DropdownMenuItem key={item.cmd} onSelect={() => handleApplySlash(item)} className="gap-2.5 py-2">
-                      <Icon className="h-4 w-4 text-[var(--rl-primary)]" />
-                      <span className="min-w-0"><span className="block font-medium">{item.title}</span><span className="block truncate text-[10px] text-slate-500">{item.desc}</span></span>
-                    </DropdownMenuItem>;
+                    return (
+                      <DropdownMenuItem
+                        key={item.cmd}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          handleApplySlash(item);
+                        }}
+                        className="gap-2.5 py-2 cursor-pointer"
+                      >
+                        <Icon className="h-4 w-4 text-[var(--rl-primary)]" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">{item.title}</span>
+                          <span className="block truncate text-[11px] text-slate-500">{item.desc}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200/70 px-2 py-0.5 text-[10px] font-semibold text-[#1d6fc4]">
+
+              {activeSlash && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 animate-in fade-in duration-150 shrink-0">
+                  <activeSlash.icon className="h-3 w-3 text-indigo-600" />
+                  <span>{activeSlash.title}</span>
+                  <button
+                    type="button"
+                    title="Remove research tool"
+                    onClick={() => handleRemoveSlash(activeSlash.cmd)}
+                    className="ml-0.5 rounded-full hover:bg-indigo-200/70 p-0.5 text-indigo-500 hover:text-indigo-800 focus:outline-none"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              )}
+
+              <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200/70 px-2 py-0.5 text-[11px] font-semibold text-[#1d6fc4]">
                 <Layers className="h-3 w-3" />
                 <span className="truncate max-w-[160px] sm:max-w-[220px]">
-                  {activeProjectName || `${docCount} document${docCount === 1 ? "" : "s"}`}
+                  {selectedDocumentIds && selectedDocumentIds.length > 0
+                    ? `${activeProjectName ? `${activeProjectName} · ` : ""}${selectedDocumentIds.length} source${selectedDocumentIds.length === 1 ? "" : "s"}`
+                    : (activeProjectName || `${docCount} document${docCount === 1 ? "" : "s"}`)}
                 </span>
               </span>
 
@@ -268,7 +369,7 @@ export function ChatInputBar({
 
             {/* Right Action: Send Button / Stop Button */}
             <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden md:inline text-[10px] text-slate-400">
+              <span className="hidden md:inline text-[11px] text-slate-400">
                 Press Enter ↵
               </span>
 
@@ -301,7 +402,7 @@ export function ChatInputBar({
 
         {/* Warning if no document selected */}
         {docCount === 0 && (
-          <p className="mt-1.5 text-center text-xs text-amber-800 font-serif">
+          <p className="mt-1.5 text-center text-xs text-amber-800">
             Select a project with indexed documents in the left sidebar to start asking questions.
           </p>
         )}

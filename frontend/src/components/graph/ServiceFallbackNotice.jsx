@@ -17,7 +17,7 @@ export function ServiceFallbackNotice({
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
             {title}
           </h3>
-          <Badge variant="warning" className="text-[10px] font-mono">
+          <Badge variant="warning" className="text-[11px] font-mono">
             503 Boundary Stub
           </Badge>
         </div>
@@ -31,7 +31,7 @@ export function ServiceFallbackNotice({
           <Layers className="h-3.5 w-3.5 text-indigo-500" />
           <span>Active Architecture Capabilities</span>
         </div>
-        <ul className="space-y-1 pl-4 list-disc text-[10px] text-zinc-500">
+        <ul className="space-y-1 pl-4 list-disc text-[11px] text-zinc-500">
           <li>PostgreSQL document & conversation persistence (Active)</li>
           <li>Section-aware chunking with start/end page provenance (Active)</li>
           <li>ChromaDB dense vector indexing & grounded generation (Active)</li>

@@ -1,6 +1,19 @@
+import pytest
 from rag.pipelines.ingest_pipeline import IngestionPipeline
 from rag.ingestion.document_loader import TextDocumentLoader
 from rag.chunking.chunker import DocumentChunker
+from rag.ingestion.metadata_mapper import MetadataMapper
+
+
+@pytest.fixture(autouse=True)
+def default_owner_id_in_metadata(monkeypatch):
+    orig_map = MetadataMapper.map_metadata
+    def map_with_owner(raw_metadata=None, *args, **kwargs):
+        data = dict(raw_metadata or {})
+        if "owner_id" not in data:
+            data["owner_id"] = "test_user_fixture"
+        return orig_map(raw_metadata=data, *args, **kwargs)
+    monkeypatch.setattr(MetadataMapper, "map_metadata", staticmethod(map_with_owner))
 
 
 def test_very_long_unpunctuated_pdf_text_is_split_below_embedding_limits():

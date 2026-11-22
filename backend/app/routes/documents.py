@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, Form, UploadFile, status
 from fastapi.responses import FileResponse
 
 from backend.app.core.dependencies import CurrentUser, DBSession, RAGGatewayDep
-from backend.app.schemas.document import DocumentResponse, PaperDocumentsRequest
+from backend.app.schemas.document import DocumentResponse, PaperDocumentsRequest, DocumentBatchUploadResponse
 from backend.app.services.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -31,7 +31,7 @@ async def upload_document(
     return await DocumentService(db, rag).upload(current_user, paper_id, file)
 
 
-@router.post("/upload/batch", status_code=status.HTTP_201_CREATED, summary="Upload multiple supported documents or ZIP archives into one project (500 MB total batch limit)")
+@router.post("/upload/batch", response_model=DocumentBatchUploadResponse, status_code=status.HTTP_201_CREATED, summary="Upload multiple supported documents or ZIP archives into one project (500 MB total batch limit)")
 async def upload_documents_batch(
     current_user: CurrentUser,
     db: DBSession,
@@ -65,9 +65,14 @@ async def cancel_document(document_id: str, current_user: CurrentUser, db: DBSes
     return await DocumentService(db, rag).cancel(current_user, document_id)
 
 
-@router.post("/{document_id}/retry", response_model=DocumentResponse, summary="Retry a failed source using its stored original file")
+@router.post("/{document_id}/retry", response_model=DocumentResponse, summary="Retry a failed source or re-index an existing source using its stored original file")
 async def retry_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
     return await DocumentService(db, rag).retry(current_user, document_id)
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentResponse, summary="Re-index an existing document with the latest section-aware research engine")
+async def reindex_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
+    return await DocumentService(db, rag).reindex(current_user, document_id)
 
 
 @router.get("/{document_id}/file", summary="Download an owned source document")
@@ -79,3 +84,8 @@ async def get_document_file(document_id: str, current_user: CurrentUser, db: DBS
         raise DocumentNotFoundError()
     media_type = mimetypes.guess_type(document.filename)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type, filename=Path(document.filename).name)
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete an owned source document")
+async def delete_document(document_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep):
+    await DocumentService(db, rag).delete(current_user, document_id)

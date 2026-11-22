@@ -1,0 +1,42 @@
+{
+  "skill_id": "report_pdf_generation",
+  "name": "Local Grounded Research Report Generator",
+  "description": "Compiles multi-source evidence into structured research reports formatted for export.",
+  "supported_intent": "SUMMARIZATION",
+  "trigger_patterns": [
+    "\\bgenerate\\s+report\\b",
+    "\\bresearch\\s+report\\b",
+    "\\bexport\\s+summary\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "multi_section_aggregation",
+  "evidence_requirements": [
+    "multi_source_citations"
+  ],
+  "output_schema": {
+    "report_title": "string",
+    "sections": "list",
+    "citations": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.85,
+    "low": 0.4
+  },
+  "abstention_behavior": "partial_report_export",
+  "regression_test_cases": [
+    {
+      "query": "Generate report on sorting algorithms",
+      "expected_intent": "SUMMARIZATION",
+      "expected_slots": {
+        "primary_concept": "sorting algorithms"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

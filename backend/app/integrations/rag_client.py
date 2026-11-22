@@ -10,11 +10,9 @@ import threading
 from typing import Callable
 from typing import List, Optional, Dict, Any
 
-from rag.pipelines.ingest_pipeline import IngestionPipeline, IngestResult
 from rag.pipelines.query_pipeline import QueryPipeline
 from rag.retrieval.query import QueryFilters
 from rag.citations.citation_formatter import RAGResult
-from rag.vectorstore.vector_repository import VectorRepository
 from rag.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -28,19 +26,27 @@ class RAGClient:
 
     def __init__(
         self,
-        ingest_pipeline: Optional[IngestionPipeline] = None,
+        ingest_pipeline: Optional[Any] = None,
         query_pipeline: Optional[QueryPipeline] = None,
-        vector_repo: Optional[VectorRepository] = None,
+        vector_repo: Optional[Any] = None,
     ):
-        # Keep model-backed ingestion lazy so an independent-mode API process
-        # can answer from SQLite FTS5 without constructing FastEmbedder.
+        # Keep model-backed ingestion and vector storage lazy so an independent-mode API process
+        # can answer and ingest from SQLite FTS5 without constructing FastEmbedder or ChromaDB.
         self._ingest_pipeline = ingest_pipeline
         self._query_pipeline = query_pipeline or QueryPipeline()
-        self._vector_repo = vector_repo or VectorRepository()
+        self._vector_repo = vector_repo
         self._ingest_locks: dict[str, threading.Lock] = {}
         self._ingest_locks_guard = threading.Lock()
         self._active_ingests: dict[str, str] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+
+    @property
+    def vector_repo(self) -> Any:
+        if self._vector_repo is None:
+            if settings.rag_engine_mode != "independent":
+                from rag.vectorstore.vector_repository import VectorRepository
+                self._vector_repo = VectorRepository()
+        return self._vector_repo
 
     @property
     def _ingest(self) -> Any:
@@ -100,12 +106,18 @@ class RAGClient:
                 progress_callback=progress_callback,
                 cancel_event=cancel_event,
             )
+            # Milestone 1: Fix cleanup for cancelled jobs
             if cancel_event is not None and cancel_event.is_set() and result.success:
                 # Close the last race between the pipeline's final safe-boundary
                 # check and a gateway timeout. The per-document lock remains held
                 # until this cleanup completes, so an immediate retry cannot race it.
                 try:
-                    self._vector_repo.delete_document_chunks(document_id)
+                    # Milestone 1 FIX: Use index_writer directly in independent mode
+                    if settings.rag_engine_mode == "independent":
+                        self._ingest.index_writer.delete_document(document_id)
+                    else:
+                        if self._vector_repo:
+                            self._vector_repo.delete_document_chunks(document_id)
                     result = result.model_copy(update={
                         "success": False, "status": "failed", "chunk_count": 0,
                         "error": "Ingestion cancelled after the request timed out.",
@@ -121,6 +133,7 @@ class RAGClient:
             with self._ingest_locks_guard:
                 lock.release()
                 self._active_ingests.pop(document_id, None)
+                self._cancel_events.pop(document_id, None)
                 if self._ingest_locks.get(document_id) is lock:
                     self._ingest_locks.pop(document_id, None)
 
@@ -155,6 +168,7 @@ class RAGClient:
         question: str,
         user_id: str,  # SEC-001: Made REQUIRED
         paper_ids: Optional[List[str]] = None,
+        document_ids: Optional[List[str]] = None,
         sections: Optional[List[str]] = None,
         top_k: Optional[int] = None,
         conversation_context: Optional[str] = None,
@@ -169,6 +183,7 @@ class RAGClient:
             question: Research question to answer
             user_id: REQUIRED - User ID for multi-tenant isolation (SEC-001)
             paper_ids: Optional paper IDs to search within user's scope
+            document_ids: Optional document IDs to search within user's scope
             sections: Optional sections to filter
             top_k: Number of sources to retrieve
             conversation_context: Optional conversation history
@@ -203,7 +218,7 @@ class RAGClient:
         if not user_id:
             raise ValueError("user_id is required for secure query execution (SEC-001 compliance)")
             
-        filters = QueryFilters(sections=sections) if sections else None
+        filters = QueryFilters(sections=sections, document_ids=document_ids) if (sections or document_ids) else None
         result: RAGResult = self._query_pipeline.answer_question(
             question=question,
             user_id=user_id,  # SEC-001: Pass as required positional arg
@@ -288,16 +303,24 @@ class RAGClient:
             if paper_id in self._active_ingests.values():
                 raise RuntimeError("Cannot delete a paper while one of its sources is being indexed.")
         count = self._ingest.delete_paper(paper_id)
-        if settings.rag_engine_mode == "independent":
-            count = max(count, self._vector_repo.delete_paper_chunks(paper_id))
+        if settings.rag_engine_mode != "independent" and self.vector_repo:
+            count = max(count, self.vector_repo.delete_paper_chunks(paper_id))
         return count
 
     def delete_document_chunks(self, document_id: str) -> int:
         """Remove a document's records from the active vector and lexical indexes."""
         with self._ingest_locks_guard:
             if document_id in self._active_ingests:
-                raise RuntimeError("Cannot delete source chunks while its ingestion is still active.")
-        return self._vector_repo.delete_document_chunks(document_id)
+                cancel_evt = self._cancel_events.get(document_id)
+                if cancel_evt and not cancel_evt.is_set():
+                    cancel_evt.set()
+                logger.warning("delete_document_chunks requested while document_id=%s has active ingestion record", document_id)
+        if settings.rag_engine_mode == "independent":
+            from rag.independent.index_writer import IndependentIndexWriter
+            return IndependentIndexWriter().delete_document(document_id)
+        if self.vector_repo:
+            return self.vector_repo.delete_document_chunks(document_id)
+        return 0
 
     def get_document_index_counts(self, document_id: str) -> Dict[str, Any]:
         """Return verifiable active-collection counts for both backing indexes."""
@@ -314,6 +337,13 @@ class RAGClient:
                 "ids_match": counts["lexical_count"] == counts["lexical_unique_count"],
             }
         return self._vector_repo.document_index_counts(document_id)
+
+    def get_document_index_status(self, document_id: str) -> Dict[str, Any]:
+        """Inspect chunk records in lexical_chunks to determine index version and staleness."""
+        if settings.rag_engine_mode == "independent":
+            from rag.independent.index_writer import IndependentIndexWriter
+            return IndependentIndexWriter().get_document_index_status(document_id)
+        return {"exists": True, "chunk_count": 0, "is_stale": False, "index_version": 2}
 
     def health_check(self) -> Dict[str, Any]:
         """

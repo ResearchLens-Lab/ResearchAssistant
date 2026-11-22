@@ -1,0 +1,44 @@
+{
+  "skill_id": "comparison",
+  "name": "Side-by-Side Algorithm & Concept Comparison",
+  "description": "Constructs grounded comparative matrices contrasting complexity, mechanics, and design paradigms.",
+  "supported_intent": "COMPARISON",
+  "trigger_patterns": [
+    "\\bcompare\\s+[\\w\\s-]+\\s+(?:and|with|vs\\.?)\\s+[\\w\\s-]+\\b",
+    "\\bdifference\\s+between\\s+[\\w\\s-]+\\s+and\\s+[\\w\\s-]+\\b"
+  ],
+  "input_slots": [
+    "primary_concept",
+    "secondary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "dual_concept_retrieval",
+  "evidence_requirements": [
+    "entity_contrast_passages"
+  ],
+  "output_schema": {
+    "dimensions": "list",
+    "comparison_table": "list",
+    "similarities": "list",
+    "differences": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "low": 0.4
+  },
+  "abstention_behavior": "unpaired_entity_warning",
+  "regression_test_cases": [
+    {
+      "query": "Compare merge sort and quicksort",
+      "expected_intent": "COMPARISON",
+      "expected_slots": {
+        "primary_concept": "merge sort",
+        "secondary_concept": "quicksort"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

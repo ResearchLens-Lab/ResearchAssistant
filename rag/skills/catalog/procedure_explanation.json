@@ -1,0 +1,43 @@
+{
+  "skill_id": "procedure_explanation",
+  "name": "Step-by-Step Procedure Explanation",
+  "description": "Extracts sequential execution steps, prerequisites, and loop invariants for algorithms.",
+  "supported_intent": "PROCEDURE",
+  "trigger_patterns": [
+    "\\bexplain\\s+how\\s+[\\w\\s-]+\\s+works\\b",
+    "\\bsteps\\s+of\\b",
+    "\\bhow\\s+to\\s+[\\w\\s-]+\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_procedure_priors",
+  "evidence_requirements": [
+    "sequential_steps",
+    "imperative_verbs"
+  ],
+  "output_schema": {
+    "steps": "list",
+    "prerequisites": "list",
+    "loop_invariants": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "low": 0.4
+  },
+  "abstention_behavior": "general_passage_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Explain how binary search works",
+      "expected_intent": "PROCEDURE",
+      "expected_slots": {
+        "primary_concept": "binary search"
+      },
+      "min_confidence": 0.8,
+      "should_abstain": false
+    }
+  ]
+}

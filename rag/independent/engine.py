@@ -1,5 +1,7 @@
 """End-to-end deterministic document question answering, isolated from all model providers."""
 
+import logging
+from pathlib import Path
 import re
 import time
 from typing import Callable, Any
@@ -14,6 +16,8 @@ from rag.independent.intent_classifier import QuestionIntentClassifier
 from rag.independent.models import EvidenceDecision, IndependentAnswer, QuestionIntent
 from rag.independent.retriever import IndependentIndexUnavailable, IndependentRetriever
 
+logger = logging.getLogger(__name__)
+
 
 class IndependentResearchEngine:
     """BM25 + TF-IDF retrieval, rule extraction and structured evidence-only answers."""
@@ -22,8 +26,10 @@ class IndependentResearchEngine:
                  classifier: QuestionIntentClassifier | None = None,
                  fact_extractor: FactExtractor | None = None,
                  composer: StructuredAnswerComposer | None = None,
-                 validator: EvidenceValidator | None = None):
-        self.retriever = retriever or IndependentRetriever()
+                 validator: EvidenceValidator | None = None,
+                 db_path: str | Path | None = None,
+                 **kwargs):
+        self.retriever = retriever or IndependentRetriever(db_path=db_path)
         self.classifier = classifier or QuestionIntentClassifier()
         self.fact_extractor = fact_extractor or FactExtractor()
         self.composer = composer or StructuredAnswerComposer()
@@ -44,8 +50,77 @@ class IndependentResearchEngine:
         selected_papers = list(dict.fromkeys(paper_ids or []))
         selected_documents = list(dict.fromkeys(document_ids or []))
         effective_owner = user_id or owner_id
+
+        # Check for compound questions (bypass for comparison tasks)
+        sub_questions = self.classifier.decompose_compound_question(question) if output_format not in ("table", "side_by_side", "detailed_report") else [question]
+        if len(sub_questions) > 1:
+            emit({"type": "planning_completed", "intent": "COMPOUND_QUESTION", "sub_questions": len(sub_questions), "engine": "independent"})
+            all_sources = []
+            all_facts = []
+            all_explanations = {}
+            sub_sections = []
+            seen_chunk_ids = set()
+
+            for idx, sub_q in enumerate(sub_questions, start=1):
+                sub_analysis = self.classifier.classify(sub_q, selected_papers, selected_documents, conversation_context)
+                if output_format: sub_analysis.document_filters["output_format"] = output_format
+                if document_labels: sub_analysis.document_filters["document_labels"] = document_labels
+                
+                try:
+                    sub_sources, sub_expl = self.retriever.retrieve(
+                        sub_analysis, paper_ids=selected_papers or None,
+                        document_ids=selected_documents or None, section_names=section_names,
+                        top_k=top_k, owner_id=effective_owner,
+                    )
+                except IndependentIndexUnavailable as exc:
+                    sub_sources, sub_expl = [], {}
+
+                # Map source IDs sequentially
+                source_id_map = {}
+                renamed_sources = []
+                for s in sub_sources:
+                    if s.chunk_id in seen_chunk_ids:
+                        continue
+                    seen_chunk_ids.add(s.chunk_id)
+                    new_id = f"S{len(all_sources) + 1}"
+                    source_id_map[s.source_id] = new_id
+                    s_new = s.model_copy(update={"source_id": new_id})
+                    all_sources.append(s_new)
+                    renamed_sources.append(s_new)
+                    all_explanations[new_id] = sub_expl.get(s.source_id, [])
+
+                sub_facts = self.fact_extractor.extract(renamed_sources, sub_analysis.important_terms, query_analysis=sub_analysis)
+                all_facts.extend(sub_facts)
+                sub_ans = self.composer.compose(sub_analysis, renamed_sources, sub_facts)
+                for old_id, new_id in source_id_map.items():
+                    if old_id != new_id:
+                        sub_ans = re.sub(rf"\[{old_id}\]", f"[{new_id}]", sub_ans)
+
+                # Format section title
+                sub_title = sub_q.strip().rstrip("?")
+                if sub_title.lower().startswith("what is an "):
+                    sub_title = f"Definition of {sub_title[11:].title()}"
+                elif sub_title.lower().startswith("what is a "):
+                    sub_title = f"Definition of {sub_title[10:].title()}"
+                elif sub_title.lower().startswith("what is "):
+                    sub_title = f"Definition of {sub_title[8:].title()}"
+                elif sub_title.lower().startswith("tell me "):
+                    sub_title = sub_title[8:].title()
+
+                sub_sections.append(f"### {idx}. {sub_title}\n{sub_ans}")
+
+            combined_answer = "\n\n---\n\n".join(sub_sections)
+            primary_analysis = self.classifier.classify(question, selected_papers, selected_documents, conversation_context)
+            decision = self.validator.validate(combined_answer, all_sources, all_facts, primary_analysis.important_terms, intent=primary_analysis.intent)
+            reasons = "; ".join(decision.reasons)
+            combined_answer += f"\n\nEvidence state: **{decision.status}** — {reasons}"
+            return self._result(combined_answer, primary_analysis, all_facts, all_sources, all_explanations, decision, selected_papers, started, paper_metadata)
+
         analysis = self.classifier.classify(question, selected_papers, selected_documents, conversation_context)
-        if output_format:
+        if output_format in ("table", "side_by_side", "detailed_report"):
+            analysis.intent = QuestionIntent.COMPARISON
+            analysis.document_filters["output_format"] = output_format
+        elif output_format:
             analysis.document_filters["output_format"] = output_format
         if document_labels:
             analysis.document_filters["document_labels"] = document_labels
@@ -53,21 +128,31 @@ class IndependentResearchEngine:
         emit({"type": "retrieval_started", "strategy": "fts5_bm25_tfidf"})
         try:
             if analysis.intent == QuestionIntent.COMPARISON and selected_documents:
-                # Give each explicitly selected document its own bounded retrieval
-                # pass so a larger file cannot consume the entire comparison budget.
+                # Aspect-aware stratified retrieval per document across decomposed dimensions
+                aspects = self.classifier.decompose_comparison_aspects(question)
                 sources = []
                 explanations = {}
-                per_document_k = max(1, min(top_k, 4))
-                for document_id in selected_documents:
-                    document_sources, document_explanations = self.retriever.retrieve(
-                        analysis, paper_ids=selected_papers or None,
-                        document_ids=[document_id], section_names=section_names,
-                        top_k=per_document_k, owner_id=effective_owner,
+                seen_chunk_ids = set()
+                per_doc_aspect_k = max(1, min(2, top_k // len(aspects) if len(aspects) else 2))
+
+                for aspect in aspects:
+                    aspect_analysis = self.classifier.classify(
+                        aspect["query"], selected_papers, selected_documents, conversation_context
                     )
-                    for source in document_sources:
-                        source_id = f"S{len(sources) + 1}"
-                        sources.append(source.model_copy(update={"source_id": source_id}))
-                        explanations[source_id] = document_explanations.get(source.source_id, [])
+                    aspect_analysis.important_terms = aspect.get("terms", [])
+                    for document_id in selected_documents:
+                        doc_sources, doc_explanations = self.retriever.retrieve(
+                            aspect_analysis, paper_ids=selected_papers or None,
+                            document_ids=[document_id], section_names=section_names,
+                            top_k=per_doc_aspect_k, owner_id=effective_owner,
+                        )
+                        for source in doc_sources:
+                            if source.chunk_id in seen_chunk_ids:
+                                continue
+                            seen_chunk_ids.add(source.chunk_id)
+                            source_id = f"S{len(sources) + 1}"
+                            sources.append(source.model_copy(update={"source_id": source_id}))
+                            explanations[source_id] = doc_explanations.get(source.source_id, [])
             else:
                 sources, explanations = self.retriever.retrieve(
                     analysis, paper_ids=selected_papers or None,
@@ -79,12 +164,44 @@ class IndependentResearchEngine:
             answer = "Not found in your selected documents. The independent local text index is unavailable; no model or embedding fallback was attempted."
             decision = EvidenceDecision(status="NOT FOUND", reasons=[str(exc)])
             emit({"type": "generation_skipped", "reason": "independent_index_unavailable"})
-            return self._result(answer, analysis, [], [], {}, decision, selected_papers, started, paper_metadata)
+            return self._result(answer, analysis, [], sources=[], explanations={}, decision=decision, selected_papers=selected_papers, started=started, paper_metadata=paper_metadata)
 
         emit({"type": "sources_found", "count": len(sources), "engine": "independent"})
-        facts = self.fact_extractor.extract(sources, analysis.important_terms)
+        facts = self.fact_extractor.extract(sources, analysis.important_terms, query_analysis=analysis)
         answer = self.composer.compose(analysis, sources, facts)
-        decision = self.validator.validate(answer, sources, facts, analysis.important_terms)
+
+        # Consecutively renumber citations in answer, format projections, and sources
+        cited_ids_order = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", answer, re.I)))
+        if cited_ids_order:
+            id_map = {old_id.upper(): f"S{i + 1}" for i, old_id in enumerate(cited_ids_order)}
+            for old_id, new_id in id_map.items():
+                if old_id != new_id:
+                    answer = re.sub(rf"\[{old_id}\]", f"[{new_id}]", answer, flags=re.I)
+            by_old_id = {s.source_id.upper(): s for s in sources}
+            renamed_sources = []
+            for old_id in cited_ids_order:
+                src = by_old_id.get(old_id.upper())
+                if src:
+                    renamed_sources.append(src.model_copy(update={"source_id": id_map[old_id.upper()]}))
+            if renamed_sources:
+                sources = renamed_sources
+            facts = [
+                f.model_copy(update={"source_id": id_map[f.source_id.upper()]})
+                for f in facts
+                if f.source_id.upper() in id_map
+            ]
+
+            projections = getattr(analysis, "document_filters", {}).get("_comparison_projections")
+            if projections:
+                renamed_proj = {}
+                for p_fmt, p_text in projections.items():
+                    for old_id, new_id in id_map.items():
+                        if old_id != new_id:
+                            p_text = re.sub(rf"\[{old_id}\]", f"[{new_id}]", p_text, flags=re.I)
+                    renamed_proj[p_fmt] = p_text
+                analysis.document_filters["_comparison_projections"] = renamed_proj
+
+        decision = self.validator.validate(answer, sources, facts, analysis.important_terms, intent=analysis.intent)
         if answer.startswith("### Direct answer\nNot found in your selected documents.") and sources:
             decision = EvidenceDecision(status="NOT FOUND", reasons=["A target fact or explicitly labeled evidence was not present in the retrieved passages."])
         if decision.status == "CONFLICTING EVIDENCE" and decision.conflicts:
@@ -101,17 +218,35 @@ class IndependentResearchEngine:
         return self._result(answer, analysis, facts, sources, explanations, decision, selected_papers, started, paper_metadata)
 
     @staticmethod
-    def _result(answer, analysis, facts, sources, explanations, decision, selected_papers, started, paper_metadata=None):
-        document_filters = analysis.document_filters or {}
+    def _result(
+        answer: str,
+        analysis: Any,
+        facts: list,
+        sources: list,
+        explanations: dict,
+        decision: Any,
+        selected_papers: list,
+        started: float,
+        paper_metadata: dict | None = None,
+    ) -> RAGResult:
+        document_filters = getattr(analysis, "document_filters", {}) or {}
         cited_ids = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", answer, re.I)))
         mapper = CitationMapper(SourceTracker(sources), paper_metadata=paper_metadata)
         citations = mapper.map_citations(cited_ids, fallback_all_retrieved=False)
         structured = IndependentAnswer(
-            answer=answer, intent=analysis.intent, analysis=analysis, facts=facts,
-            evidence_decision=decision, sources=sources,
+            answer=answer,
+            intent=getattr(analysis, "intent", QuestionIntent.UNKNOWN),
+            analysis=analysis,
+            facts=facts,
+            evidence_decision=decision,
+            sources=sources,
             retrieval_explanations=explanations,
-            metadata={"engine": "independent", "pretrained_embeddings_used": False,
-                      "generative_llm_used": False, "external_inference_used": False},
+            metadata={
+                "engine": "independent",
+                "pretrained_embeddings_used": False,
+                "generative_llm_used": False,
+                "external_inference_used": False,
+            },
         )
         follow_ups = [
             "Present the relevant findings in a concise table with citations",
@@ -121,28 +256,33 @@ class IndependentResearchEngine:
             "Explain in simple language",
             "Give a practical example",
         ]
+        result_metadata = {
+            "answer_mode": "independent_documents_only",
+            "generation_provider": "none",
+            "llm_provider": "none",
+            "llm_enabled": False,
+            "embedding_provider": "none",
+            "model_calls": 0,
+            "pretrained_embeddings_used": False,
+            "external_inference_used": False,
+            "output_format": document_filters.get("output_format", "table"),
+            "selected_document_ids": document_filters.get("document_ids", []),
+            "execution_time_seconds": round(time.perf_counter() - started, 4),
+            "follow_up_suggestions": follow_ups,
+            "independent_research": {
+                "intent": analysis.model_dump(mode="json") if hasattr(analysis, "model_dump") else {},
+                "facts": [fact.model_dump(mode="json") if hasattr(fact, "model_dump") else fact for fact in facts],
+                "evidence_decision": decision.model_dump(mode="json") if hasattr(decision, "model_dump") else {},
+                "retrieval_explanations": explanations,
+            },
+        }
+        if "_comparison_projections" in document_filters:
+            result_metadata["comparison_formats"] = document_filters["_comparison_projections"]
+
         return RAGResult(
             answer=structured.answer,
             sources=citations,
             paper_ids=selected_papers or list(dict.fromkeys(source.paper_id for source in sources)),
-            metadata={
-                "answer_mode": "independent_documents_only",
-                "generation_provider": "none",
-                "llm_provider": "none",
-                "llm_enabled": False,
-                "embedding_provider": "none",
-                "model_calls": 0,
-                "pretrained_embeddings_used": False,
-                "external_inference_used": False,
-                "output_format": document_filters.get("output_format", "table"),
-                "selected_document_ids": document_filters.get("document_ids", []),
-                "execution_time_seconds": round(time.perf_counter() - started, 4),
-                "follow_up_suggestions": follow_ups,
-                "independent_research": {
-                    "intent": analysis.model_dump(mode="json"),
-                    "facts": [fact.model_dump(mode="json") for fact in facts],
-                    "evidence_decision": decision.model_dump(mode="json"),
-                    "retrieval_explanations": explanations,
-                },
-            },
+            metadata=result_metadata,
         )
+

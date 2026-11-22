@@ -32,9 +32,15 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000"
 
+    # Desktop-only request guard. Web deployments leave this disabled; the
+    # Electron main process supplies an ephemeral key and exact UI origin.
+    desktop_runtime: bool = False
+    desktop_request_key: str = ""
+    desktop_ui_origin: str = ""
+
     rag_service_url: str = ""
     rag_timeout_seconds: float = 240
-    rag_ingest_timeout_seconds: float = 600
+    rag_ingest_timeout_seconds: float = 7200
 
     knowledge_graph_url: str = ""
 
@@ -63,6 +69,7 @@ class Settings(BaseSettings):
     research_max_comparison_papers: int = 4
     research_graph_max_depth: int = 2
     research_external_timeout_seconds: float = 8.0
+    external_lookups_enabled: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

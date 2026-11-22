@@ -185,3 +185,134 @@ async def test_logout_revokes_refresh_token(client):
 
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert resp.status_code == 401
+
+
+async def test_refresh_grace_window_desktop(client, monkeypatch):
+    monkeypatch.setenv("DESKTOP_RUNTIME", "true")
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": USER_CREDENTIALS["email"],
+            "password": USER_CREDENTIALS["password"],
+        },
+    )
+    old_refresh = login.json()["refresh_token"]
+
+    resp1 = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": old_refresh}
+    )
+    assert resp1.status_code == 200
+    issued_tokens = resp1.json()
+
+    # In desktop mode within grace window, reuse returns the already issued tokens (race tolerance)
+    resp2 = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": old_refresh}
+    )
+    assert resp2.status_code == 200
+    grace_tokens = resp2.json()
+    assert grace_tokens["access_token"] == issued_tokens["access_token"]
+    assert grace_tokens["refresh_token"] == issued_tokens["refresh_token"]
+
+
+async def test_refresh_grace_window_expiry_31s(client, monkeypatch):
+    import time
+    monkeypatch.setenv("DESKTOP_RUNTIME", "true")
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": USER_CREDENTIALS["email"], "password": USER_CREDENTIALS["password"]},
+    )
+    token_a = login.json()["refresh_token"]
+
+    resp1 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert resp1.status_code == 200
+
+    # Advance time by 31 seconds
+    real_time = time.time
+    monkeypatch.setattr(time, "time", lambda: real_time() + 31.0)
+
+    # Replaying token_a after 31s must fail with 401
+    resp2 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert resp2.status_code == 401
+
+
+async def test_refresh_non_desktop_revokes_family(client, monkeypatch):
+    monkeypatch.delenv("DESKTOP_RUNTIME", raising=False)
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": USER_CREDENTIALS["email"], "password": USER_CREDENTIALS["password"]},
+    )
+    token_a = login.json()["refresh_token"]
+
+    resp1 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert resp1.status_code == 200
+    token_b = resp1.json()["refresh_token"]
+
+    # In non-desktop mode, replay of token_a revokes the family
+    resp2 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert resp2.status_code == 401
+
+    # Token B is now revoked as part of family theft protection
+    resp3 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_b})
+    assert resp3.status_code == 401
+
+
+async def test_refresh_two_sequential_windows(client, monkeypatch):
+    monkeypatch.setenv("DESKTOP_RUNTIME", "true")
+    await client.post("/api/v1/auth/register", json=USER_CREDENTIALS)
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": USER_CREDENTIALS["email"], "password": USER_CREDENTIALS["password"]},
+    )
+    token_a = login.json()["refresh_token"]
+
+    # Window 1 refreshes token A -> receives token B
+    w1_resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert w1_resp.status_code == 200
+    token_b = w1_resp.json()["refresh_token"]
+
+    # Window 2 races with token A -> receives same token B via grace window
+    w2_resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_a})
+    assert w2_resp.status_code == 200
+    assert w2_resp.json()["refresh_token"] == token_b
+
+    # Window 1 subsequently rotates token B -> receives token C
+    w1_resp2 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_b})
+    assert w1_resp2.status_code == 200
+    token_c = w1_resp2.json()["refresh_token"]
+
+    # Window 2 presents token B within grace -> receives token C
+    w2_resp2 = await client.post("/api/v1/auth/refresh", json={"refresh_token": token_b})
+    assert w2_resp2.status_code == 200
+    assert w2_resp2.json()["refresh_token"] == token_c
+
+
+async def test_local_session_desktop(client, monkeypatch):
+    from backend.app.core.config import get_settings
+    monkeypatch.setenv("DESKTOP_REQUEST_KEY", "secret-desktop-key-123")
+    get_settings.cache_clear()
+
+    # Valid key -> returns 200 with tokens, cookies, and user
+    res = await client.post(
+        "/api/v1/auth/local-session",
+        headers={"X-ResearchLens-Desktop-Key": "secret-desktop-key-123"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "access_token" in data
+    assert "user" in data
+    assert "@" in data["user"]["email"]
+    assert "access_token" in res.cookies
+
+    # Invalid key -> returns 401
+    bad_res = await client.post(
+        "/api/v1/auth/local-session",
+        headers={"X-ResearchLens-Desktop-Key": "wrong-key"},
+    )
+    assert bad_res.status_code == 401
+    get_settings.cache_clear()
+
+
+

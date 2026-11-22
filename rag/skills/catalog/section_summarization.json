@@ -1,0 +1,41 @@
+{
+  "skill_id": "section_summarization",
+  "name": "Section & Chapter Summarization",
+  "description": "Generates structured summaries of specific chapters, sections, or syllabus modules.",
+  "supported_intent": "SUMMARIZATION",
+  "trigger_patterns": [
+    "\\bsummarize\\s+[\\w\\s-]+\\b",
+    "\\bsummary\\s+of\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_section_scope",
+  "evidence_requirements": [
+    "multi_chunk_coverage"
+  ],
+  "output_schema": {
+    "target": "string",
+    "main_topics": "list",
+    "summary_points": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.75,
+    "low": 0.4
+  },
+  "abstention_behavior": "overview_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Summarize chapter 2",
+      "expected_intent": "SUMMARIZATION",
+      "expected_slots": {
+        "primary_concept": "chapter 2"
+      },
+      "min_confidence": 0.75,
+      "should_abstain": false
+    }
+  ]
+}

@@ -6,9 +6,17 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v
 export const chatService = {
   async streamQuestion(payload, onEvent, signal) {
     const token = tokenStorage.getAccessToken();
-    const makeRequest = (accessToken) => fetch(`${BASE_URL}/chat/stream`, {
+    const desktop = typeof window !== "undefined" && window["researchLensDesktop"]
+      ? await window["researchLensDesktop"].getRuntimeConfig()
+      : null;
+    const apiBase = desktop?.apiBaseUrl || BASE_URL;
+    const makeRequest = (accessToken) => fetch(`${apiBase}/chat/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(desktop?.requestKey ? { "X-ResearchLens-Desktop-Key": desktop.requestKey } : {}),
+      },
       body: JSON.stringify(payload),
       signal,
     });

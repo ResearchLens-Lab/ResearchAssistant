@@ -1,0 +1,40 @@
+{
+  "skill_id": "concept_explanation",
+  "name": "In-Depth Concept Explanation",
+  "description": "Explains underlying mechanisms and foundational theory of a research concept.",
+  "supported_intent": "EXPLANATION",
+  "trigger_patterns": [
+    "\\bexplain\\s+[\\w\\s-]+\\b",
+    "\\bdescribe\\s+[\\w\\s-]+\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_explanation_priors",
+  "evidence_requirements": [
+    "explanatory_sentences"
+  ],
+  "output_schema": {
+    "concept": "string",
+    "explanation_points": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.8,
+    "low": 0.4
+  },
+  "abstention_behavior": "general_prose_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Explain divide and conquer",
+      "expected_intent": "EXPLANATION",
+      "expected_slots": {
+        "primary_concept": "divide and conquer"
+      },
+      "min_confidence": 0.75,
+      "should_abstain": false
+    }
+  ]
+}

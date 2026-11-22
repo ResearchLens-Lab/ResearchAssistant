@@ -1,0 +1,41 @@
+{
+  "skill_id": "locate_topic",
+  "name": "Topic Location & Index Navigator",
+  "description": "Pinpoints exact chapter numbers, section headings, and physical page ranges covering a subject.",
+  "supported_intent": "LOCATE",
+  "trigger_patterns": [
+    "\\bwhere\\s+is\\s+[\\w\\s-]+\\s+(?:discussed|covered|located)\\b",
+    "\\bwhich\\s+chapter\\s+covers?\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_index_and_headings_priority",
+  "evidence_requirements": [
+    "section_locators",
+    "page_ranges"
+  ],
+  "output_schema": {
+    "concept": "string",
+    "locations": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.85,
+    "low": 0.4
+  },
+  "abstention_behavior": "report_closest_heading",
+  "regression_test_cases": [
+    {
+      "query": "Where is dynamic programming discussed?",
+      "expected_intent": "LOCATE",
+      "expected_slots": {
+        "primary_concept": "dynamic programming"
+      },
+      "min_confidence": 0.85,
+      "should_abstain": false
+    }
+  ]
+}

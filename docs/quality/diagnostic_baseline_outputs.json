@@ -1,0 +1,177 @@
+[
+  {
+    "question": "What is cyber security?",
+    "intent": "FACT_LOOKUP",
+    "answer": "### Direct answer from the selected documents\n> security Research Cyber threat intelligence (CTI) has emerged as a critical area for proactive cybersecurity defense. [S1]\n\n### Supporting evidence\n- Sun et al., (2023) explore how CTI mining uncovers valuable insights into cyber threats, enabling organizations to improve their security postures. [S1]\n- How digital transformation and cyber security affect companies\u2019 performance? [S3]\n- Akhtar & Rawol, (2024) explore the dual-edged impact of AI in cybersecurity, emphasizing both its potential in enhancing defense mechanisms and its vulnerability to exploitation by cyber adversaries. [S1]\n- Furthermore, (Prathyush & Kumar, 2022) provide insights into the latest Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 114 cybersecurity techniques, focusing on AI-driven solutions to address challenges in IoT security. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** \u2014 Displayed facts are extracted from retrieved passages and each citation resolves to its chunk.",
+    "sources_count": 2,
+    "sources": [
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", pp. 2-3]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "security Research Cyber threat intelligence (CTI) has emerged as a critical area for proactive cybersecurity defense. Su"
+      },
+      {
+        "source_id": "S3",
+        "citation_label": "[\"cyber\", p. 4]",
+        "page": 4,
+        "section": "References",
+        "text_snippet": ", Morris, E., Smith, M., Moss, B., & Smutz, C. (2022). Explainable AI in Cybersecurity Operations: Lessons Learned from "
+      }
+    ]
+  },
+  {
+    "question": "What are the main cybersecurity challenges discussed in this paper?",
+    "intent": "DEFINITION",
+    "answer": "### Definition evidence\nThe retrieved text does not contain a clear definition; these passages are related evidence:\n\n> The increasing reliance on IoT devices has introduced new cybersecurity challenges. [S1]\n> 3.3 Cybersecurity in IoT and Industrial Systems IoT devices have significantly expanded the attack surface, leading to novel cybersecurity challenges. [S1]\n> Metta et al., (2024) underscore the importance of generative AI in both enhancing cybersecurity capabilities and introducing new challenges for threat detection. [S1]\n\nEvidence state: **STRONGLY SUPPORTED** \u2014 Displayed facts are extracted from retrieved passages and each citation resolves to its chunk.",
+    "sources_count": 1,
+    "sources": [
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", p. 2]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "Metta et al., (2024) underscore the importance of generative AI in both enhancing cybersecurity capabilities and introdu"
+      }
+    ]
+  },
+  {
+    "question": "How does the paper describe the role of AI in cybersecurity?",
+    "intent": "PROCEDURAL_QUESTION",
+    "answer": "### Steps explicitly listed in the documents\n1. INTRODUCTION Cybersecurity has become an increasingly crucial area of research and practice, especially given the rapid growth in digital infrastructures, cloud computing, IoT, and artificial intelligence (AI). Between 2020 and 2024, cybersecurity research has addressed challenges such as data breaches, ransomware attacks, AI-driven cyberattacks, and the risks posed by the Internet of Things (IoT). This review examines thirty academic studies published during this period, analyzing key contributions related to machine learning, AI, generative AI, IoT, and cybersecurity frameworks. The rapid advancement of digital technologies such as cloud computing, the Internet of Things (IoT), and artificial intelligence (AI) has significantly increased the complexity of cybersecurity threats. Despite ongoing improvements in cybersecurity measures, the evolution of cyberattacks, including AI-driven threats and vulnerabilities in IoT systems, continues to outpace traditional security protocols. This growing gap between security measures and emerging threats poses a serious risk to individuals, businesses, and critical infrastructures. Thus, there is a pressing need to explore advanced methods, including the integration of AI and machine learning, to bolster cybersecurity frameworks effectively. 2. RESEARCH OBJECTIVES The primary objective of this research is to critically review recent advancements in cybersecurity, focusing on the integration of AI and machine learning to enhance security protocols. The study aims to: 1. Assess the role of AI and machine learning in threat detection and mitigation. 2. Explore the risks and opportunities presented by generative AI in cybersecurity. 3. Analyze security challenges related to IoT devices and industrial systems. To guide the investigation, the following research questions are posed: 1. How do AI and machine learning contribute to improving cybersecurity measures, particularly in threat detection? 2. What are the security risks posed by generative AI technologies, and how can these be mitigated? 3. What vulnerabilities exist in IoT systems, and how can AIbased solutions enhance IoT cybersecurity? 3. LITERATURE REVIEW 3.1 The Role of AI and Machine Learning in Cybersecurity The use of machine learning and deep learning techniques in cybersecurity has gained significant attention. Mijwil (2023) highlights the potential of AI in safeguarding systems against unauthorized access by predicting the behavior of malicious software. The introduction of AI-driven automation in threat intelligence processes [S4]\n\nEvidence state: **STRONGLY SUPPORTED** \u2014 Displayed facts are extracted from retrieved passages and each citation resolves to its chunk.",
+    "sources_count": 1,
+    "sources": [
+      {
+        "source_id": "S4",
+        "citation_label": "[\"cyber\", p. 1]",
+        "page": 1,
+        "section": "Introduction",
+        "text_snippet": "1. INTRODUCTION Cybersecurity has become an increasingly crucial area of research and practice, especially given the rap"
+      }
+    ]
+  },
+  {
+    "question": "What research methodology did the authors use?",
+    "intent": "AUTHOR_LOOKUP",
+    "answer": "### Direct answer\nNot found in your selected documents.\n\n### What is missing\nNo explicit author label or title-page byline was found in the retrieved passages. Names elsewhere in the text are not treated as authors.\n\nEvidence state: **NOT FOUND** \u2014 A target fact or explicitly labeled evidence was not present in the retrieved passages.",
+    "sources_count": 0,
+    "sources": []
+  },
+  {
+    "question": "Which datasets are discussed?",
+    "intent": "DATASET_EXTRACTION",
+    "answer": "### Datasets and data sources\n- In addition, the Edge-IIoTset dataset introduced by (Ferrag et al., 2022) has become a critical resource for intrusion detection systems utilizing centralized and federated learning modes [S1]\n- Edge-IIoTset: A New Comprehensive Realistic Cyber Security Dataset of IoT and IIoT Applications for Centralized and Federated Learning [S3]\n\nEvidence state: **STRONGLY SUPPORTED** \u2014 Displayed facts are extracted from retrieved passages and each citation resolves to its chunk.",
+    "sources_count": 2,
+    "sources": [
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", p. 2]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "connectivity and management protocols. The integration of IoT in industrial environments, combined with AI, has provided"
+      },
+      {
+        "source_id": "S3",
+        "citation_label": "[\"cyber\", p. 3]",
+        "page": 3,
+        "section": "References",
+        "text_snippet": "7. REFERENCES [1] Akhtar, Z. B., & Rawol, A. T. (2024). Harnessing artificial intelligence (AI) for cybersecurity: Chall"
+      }
+    ]
+  },
+  {
+    "question": "What findings are actually reported?",
+    "intent": "FACT_LOOKUP",
+    "answer": "### Direct answer from the selected documents\n> The findings of this review emphasize the critical role of AI in shaping the future of cybersecurity while highlighting the importance of robust ethical standards and regulatory frameworks to mitigate the risks associated with advanced technologies like AI and IoT. [S1]\n\n### Supporting evidence\n- By evaluating the findings of these studies, the research aims to provide a comprehensive understanding of how AI and related technologies are shaping the future of cybersecurity. [S2]\n\nEvidence state: **STRONGLY SUPPORTED** \u2014 Displayed facts are extracted from retrieved passages and each citation resolves to its chunk.",
+    "sources_count": 2,
+    "sources": [
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", p. 1]",
+        "page": 1,
+        "section": "Header / Abstract",
+        "text_snippet": "Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 112 Advances in Cybersecu"
+      },
+      {
+        "source_id": "S2",
+        "citation_label": "[\"cyber\", pp. 2-3]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "in cybersecurity, emphasizing both its potential in enhancing defense mechanisms and its vulnerability to exploitation b"
+      }
+    ]
+  },
+  {
+    "question": "What limitations do the authors explicitly identify?",
+    "intent": "LIMITATIONS_EXTRACTION",
+    "answer": "### Reported Limitations\nNot explicitly detailed in the retrieved passages.\n\nEvidence state: **INSUFFICIENT EVIDENCE** \u2014 At least one factual statement or citation did not pass source-to-chunk validation.",
+    "sources_count": 0,
+    "sources": []
+  },
+  {
+    "question": "Who are the authors of this paper?",
+    "intent": "AUTHOR_LOOKUP",
+    "answer": "### Direct answer\nNot found in your selected documents.\n\n### What is missing\nNo explicit author label or title-page byline was found in the retrieved passages. Names elsewhere in the text are not treated as authors.\n\nEvidence state: **NOT FOUND** \u2014 A target fact or explicitly labeled evidence was not present in the retrieved passages.",
+    "sources_count": 0,
+    "sources": []
+  },
+  {
+    "question": "Summarize this paper.",
+    "intent": "SUMMARY",
+    "answer": "### Structured Research Paper Summary\n\n#### Problem / Motivation\n- Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 112 Advances in Cybersecurity: A Literature Review Amrani Hassan Technical University of Mombasa Mombasa, Kenya Kennedy Hadullo Technical University of Mombasa Mombasa, Kenya Kelvin Tole Technical University of Mombasa Mombasa, Kenya Abstract: The rapid proliferation of digital infrastructures, including cloud computing, the Internet of Things (IoT), and artificial intelligence (AI), has transformed the landscape of cybersecurity, introducing both new opportunities and heightened risks. [S4]\n- Furthermore, (Prathyush & Kumar, 2022) provide insights into the latest Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 114 cybersecurity techniques, focusing on AI-driven solutions to address challenges in IoT security. [S1]\n\n#### Research Objective\n- Similarly, the growing reliance on IoT devices, especially in industrial systems, has introduced vulnerabilities in communication and management protocols, which AI-driven solutions like federated learning aim to address by providing decentralized cybersecurity without compromising privacy. [S4]\n- Future research should focus on improving AI-based security measures, enhancing IoT security, and addressing the evolving nature of cyber threats. [S2]\n\n#### Background / Related Work\n- RESEARCH METHODOLOGY This study employs a systematic literature review to assess current advancements in cybersecurity research between 2020 This study, adopted the systematic literature review techniques developed by (Kitchenham et al., 2003) and (Torres-Carri\u00f3n et al., 2018).The systematic approach encompassing the following key steps: Research questions, definition, design of search strategy, selection of studies, evaluation of quality, extraction and synthesis of data. [S1]\n- This paper presents a comprehensive literature review of cybersecurity advancements between 2020 and 2024, focusing on the integration of AI and machine learning to address evolving threats. [S4]\n\n#### Proposed Methodology / Architecture\n- Federated learning, as discussed by (Ghimire & Rawat, 2022), is a promising decentralized model to enhance IoT cybersecurity, enabling better threat detection without compromising privacy. [S3]\n\n#### Experimental Setup & Datasets\n- In addition, the Edge-IIoTset dataset introduced by (Ferrag et al., 2022) has become a critical resource for intrusion detection systems utilizing centralized and federated learning modes. [S3]\n- Zhu et al., (2023) emphasize the integration of federated learning and blockchain to enhance the security of IoT networks without compromising data privacy. [S3]\n\n#### Key Findings & Performance Metrics\n*Not explicitly detailed in the retrieved passages.*\n\n#### Reported Limitations & Threats to Validity\n- Furthermore, the deployment of machine learning techniques, such as support vector machines (SVMs) and neural networks, has shown promising results in reducing false positives and improving the overall accuracy of threat detection systems. [S3]\n- AI and machine learning have demonstrated remarkable potential in improving cybersecurity frameworks, particularly through predictive models that enhance threat detection and reduce false positives. [S4]\n\n#### Conclusion & Future Directions\n- CONCLUSION The period from 2020 to 2024 witnessed significant advancements in cybersecurity, driven largely by innovations in AI, machine learning, and IoT security. [S2]\n- The findings of this review emphasize the critical role of AI in shaping the future of cybersecurity while highlighting the importance of robust ethical standards and regulatory frameworks to mitigate the risks associated with advanced technologies like AI and IoT. [S4]\n\n### Scope note\nThis structured summary is derived deterministically from the retrieved passages of your selected documents without generative extrapolation.\n\nEvidence state: **INSUFFICIENT EVIDENCE** \u2014 At least one factual statement or citation did not pass source-to-chunk validation.",
+    "sources_count": 4,
+    "sources": [
+      {
+        "source_id": "S4",
+        "citation_label": "[\"cyber\", p. 1]",
+        "page": 1,
+        "section": "Header / Abstract",
+        "text_snippet": "Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 112 Advances in Cybersecu"
+      },
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", pp. 2-3]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "in cybersecurity, emphasizing both its potential in enhancing defense mechanisms and its vulnerability to exploitation b"
+      },
+      {
+        "source_id": "S2",
+        "citation_label": "[\"cyber\", p. 3]",
+        "page": 3,
+        "section": "Conclusion",
+        "text_snippet": "6. CONCLUSION The period from 2020 to 2024 witnessed significant advancements in cybersecurity, driven largely by innova"
+      }
+    ]
+  },
+  {
+    "question": "Present the relevant findings in a concise table with citations.",
+    "intent": "TABLE_SYNTHESIS",
+    "answer": "### Summary of Findings in Tabular Format\n\n| Topic / Aspect | Key Finding / Evidence | Source & Location |\n|---|---|---|\n| Numerical value | Furthermore, (Prathyush & Kumar, 2022) provide insights into the latest Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 114 cybersecurity techniques, focusing on AI-driven solutions to address challenges in IoT security | [S1] (Introduction, p.2) |\n| Numerical value | 4 | [S1] (Introduction, p.2) |\n| Method | RESEARCH METHODOLOGY This study employs a systematic literature review to assess current advancements in cybersecurity research between 2020 This study, adopted the systematic literature review techniques developed by (Kitchenham et al., 2003) and (Torres-Carri\u00f3n et al., 2018).The systematic approach encompassing the following key steps: Research questions, definition, design of search strategy, selection of studies, evaluation of quality, extraction and synthesis of data | [S1] (Introduction, p.2) |\n| Numerical value | Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 112 Advances in Cybersecurity: A Literature Review Amrani Hassan Technical University of Mombasa Mombasa, Kenya Kennedy Hadullo Technical University of Mombasa Mombasa, Kenya Kelvin Tole Technical University of Mombasa Mombasa, Kenya Abstract: The rapid proliferation of digital infrastructures, including cloud computing, the Internet of Things (IoT), and artificial intelligence (AI), has transformed the landscape of cybersecurity, introducing both new opportunities and heightened risks | [S2] (Header / Abstract, p.1) |\n| Numerical value | 3 | [S3] (Introduction, p.1) |\n| Numerical value | LITERATURE REVIEW 3.1 The Role of AI and Machine Learning in Cybersecurity The use of machine learning and deep learning techniques in cybersecurity has gained significant attention | [S3] (Introduction, p.1) |\n\n### Verification Note\nAll table entries are direct excerpts from the retrieved document passages with full source provenance.\n\nEvidence state: **INSUFFICIENT EVIDENCE** \u2014 At least one factual statement or citation did not pass source-to-chunk validation.",
+    "sources_count": 3,
+    "sources": [
+      {
+        "source_id": "S1",
+        "citation_label": "[\"cyber\", pp. 2-3]",
+        "page": 2,
+        "section": "Introduction",
+        "text_snippet": "in cybersecurity, emphasizing both its potential in enhancing defense mechanisms and its vulnerability to exploitation b"
+      },
+      {
+        "source_id": "S2",
+        "citation_label": "[\"cyber\", p. 1]",
+        "page": 1,
+        "section": "Header / Abstract",
+        "text_snippet": "Volume 14\u2013Issue 01, 112 \u2013 115, 2025, ISSN:-2319\u20138656 DOI:10.7753/IJCATR1401.1009 www.ijcat.com 112 Advances in Cybersecu"
+      },
+      {
+        "source_id": "S3",
+        "citation_label": "[\"cyber\", pp. 1-2]",
+        "page": 1,
+        "section": "Introduction",
+        "text_snippet": "security? 3. LITERATURE REVIEW 3.1 The Role of AI and Machine Learning in Cybersecurity The use of machine learning and "
+      }
+    ]
+  }
+]

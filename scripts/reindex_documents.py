@@ -41,7 +41,7 @@ def build_selection(document_ids: list[str] | None, include_all: bool, resume_st
     """Return a SQL predicate and cutoff for a caller-selected, bounded scope."""
     if stale_after_seconds < 60:
         raise ValueError("stale-after-seconds must be at least 60.")
-    statuses = [DocumentStatus.INDEXED.value, DocumentStatus.FAILED.value]
+    statuses = [DocumentStatus.INDEXED.value, DocumentStatus.FAILED.value, DocumentStatus.PARTIAL.value]
     if resume_stale:
         statuses.append(DocumentStatus.PROCESSING.value)
     clauses = []
@@ -98,7 +98,7 @@ async def reindex_documents(document_ids: list[str] | None, include_all: bool,
                 if not resume_stale or (heartbeat and heartbeat > cutoff_now):
                     print(f"Skipped active processing document: {document.id}")
                     continue
-            elif document.processing_status not in {DocumentStatus.INDEXED.value, DocumentStatus.FAILED.value}:
+            elif document.processing_status not in {DocumentStatus.INDEXED.value, DocumentStatus.FAILED.value, DocumentStatus.PARTIAL.value}:
                 print(f"Skipped ineligible document: {document.id}")
                 continue
             if not Path(document.storage_path).is_file():
@@ -149,20 +149,27 @@ async def reindex_documents(document_ids: list[str] | None, include_all: bool,
                 )
                 reported_count = int(result.get("chunk_count") or 0)
                 index_state = await rag.get_document_index_counts(document.id)
-                consistent = (
-                    index_state.get("ids_match") is True
-                    and index_state.get("chroma_count") == reported_count
-                    and index_state.get("fts_count") == reported_count
-                )
-                if result.get("success") and result.get("status") == "indexed" and reported_count > 0 and consistent:
-                    document.processing_status = DocumentStatus.INDEXED.value
+                if index_state.get("storage_mode") == "sqlite_fts5_only":
+                    consistent = (
+                        index_state.get("ids_match") is True
+                        and index_state.get("fts_count") == reported_count
+                    )
+                else:
+                    consistent = (
+                        index_state.get("ids_match") is True
+                        and index_state.get("chroma_count") == reported_count
+                        and index_state.get("fts_count") == reported_count
+                    )
+                reported_status = str(result.get("status") or "")
+                if result.get("success") and reported_status in {"indexed", "partial", "needs_review"} and reported_count > 0 and consistent:
+                    document.processing_status = DocumentStatus.INDEXED.value if reported_status == "indexed" else (DocumentStatus.PARTIAL.value if reported_status == "partial" else DocumentStatus.NEEDS_REVIEW.value)
                     document.processing_stage = "ready"
                     document.chunk_count = reported_count
                     document.processing_error = None
                     succeeded += 1
                 else:
                     failure_message = str(result.get("error") or "Re-indexing did not complete.")
-                    if result.get("success") and result.get("status") == "indexed":
+                    if result.get("success") and reported_status in {"indexed", "partial", "needs_review"}:
                         failure_message = (
                             "Re-indexing completed but stored indexes are inconsistent: "
                             f"reported={reported_count}, Chroma={index_state.get('chroma_count')}, "

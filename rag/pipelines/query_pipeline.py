@@ -13,11 +13,8 @@ from typing import Optional, List, Dict, Any
 
 from rag.config.settings import settings
 from rag.retrieval.query import QueryRequest, QueryFilters, RetrievedSource
-from rag.retrieval.retriever import ResearchRetriever
 from rag.context.context_builder import ContextBuilder, AssembledContext
-from rag.generation.generator import GroundedGenerator, GenerationResult
 from rag.generation.extractive_engine import ExtractiveAnswerEngine
-from rag.generation.llm_client import OllamaLLMClient
 from rag.citations.source_tracker import SourceTracker
 from rag.citations.citation_mapper import CitationMapper, SourceCitation
 from rag.citations.citation_formatter import RAGResult
@@ -25,6 +22,7 @@ from rag.research.orchestrator import QueryPlanner, EvidenceSufficiencyChecker, 
 from rag.research.claim_verifier import ClaimEvidenceVerifier, LLMClaimJudge
 from rag.generation.local_state import SQLiteLLMState, LLMUsageBudgetExceeded
 from rag.generation.provider_errors import LLMProviderError
+from rag.generation.llm_client import OllamaLLMClient
 from rag.generation.budgeted_client import start_call_tracking, stop_call_tracking
 
 logger = logging.getLogger(__name__)
@@ -78,11 +76,11 @@ class QueryPipeline:
 
     def __init__(
         self,
-        retriever: Optional[ResearchRetriever] = None,
+        retriever: Optional[Any] = None,
         context_builder: Optional[ContextBuilder] = None,
-        generator: Optional[GroundedGenerator] = None,
-        planner: Optional[QueryPlanner] = None,
-        sufficiency_checker: Optional[EvidenceSufficiencyChecker] = None,
+        generator: Optional[Any] = None,
+        planner: Optional[Any] = None,
+        sufficiency_checker: Optional[Any] = None,
     ):
         self._independent_engine = None
         if settings.rag_engine_mode == "independent":
@@ -92,19 +90,34 @@ class QueryPipeline:
             self._independent_engine = IndependentResearchEngine()
             self.retriever = retriever
         else:
-            self.retriever = retriever or ResearchRetriever()
+            if retriever is None:
+                from rag.retrieval.retriever import ResearchRetriever
+                retriever = ResearchRetriever()
+            self.retriever = retriever
         self.context_builder = context_builder or ContextBuilder()
-        # Generation is only needed after retrieval has established that the
-        # selected evidence is sufficient. Keep ingestion/local retrieval usable
-        # even when no generation provider is configured.
         self._generator = generator
-        self.planner = planner or QueryPlanner()
-        self.sufficiency_checker = sufficiency_checker or EvidenceSufficiencyChecker()
+        self._planner = planner
+        self._sufficiency_checker = sufficiency_checker
         self.extractive_engine = ExtractiveAnswerEngine()
 
     @property
-    def generator(self) -> GroundedGenerator:
+    def planner(self) -> Any:
+        if self._planner is None:
+            from rag.research.orchestrator import QueryPlanner
+            self._planner = QueryPlanner()
+        return self._planner
+
+    @property
+    def sufficiency_checker(self) -> Any:
+        if self._sufficiency_checker is None:
+            from rag.research.orchestrator import EvidenceSufficiencyChecker
+            self._sufficiency_checker = EvidenceSufficiencyChecker()
+        return self._sufficiency_checker
+
+    @property
+    def generator(self) -> Any:
         if self._generator is None:
+            from rag.generation.generator import GroundedGenerator
             self._generator = GroundedGenerator()
         return self._generator
 
@@ -160,7 +173,7 @@ class QueryPipeline:
                              sources=[], paper_ids=[], metadata={"error": "scope_conflict", "total_retrieved": 0})
         use_independent = (
             settings.rag_engine_mode == "independent"
-            or answer_mode in ("EVIDENCE_FIRST", "DOCUMENTS_ONLY", "INDEPENDENT")
+            or (settings.rag_engine_mode != "legacy" and answer_mode in ("EVIDENCE_FIRST", "DOCUMENTS_ONLY", "INDEPENDENT"))
         ) and answer_mode not in ("OPTIONAL_LOCAL_AI", "LOCAL_QWEN")
 
         if use_independent:
@@ -754,14 +767,39 @@ class QueryPipeline:
         """
         if not user_id:
             raise ValueError("user_id is required (SEC-001 compliance)")
-            
-        result = self.answer_question(
-            question="Summarize the main topics, sections, core concepts, and findings.",
-            user_id=user_id,  # SEC-001: Pass user_id
-            paper_ids=[paper_id], top_k=top_k,
+
+        from rag.intelligence.summarizer import build_paper_summary
+        from rag.citations.citation_mapper import SourceCitation
+        summary_dict = build_paper_summary(paper_id=paper_id, user_id=user_id)
+
+        sources = []
+        for s in summary_dict.get("sources", []):
+            sources.append(SourceCitation(
+                source_id=s.get("source_id", ""),
+                paper_id=paper_id,
+                document_id=s.get("document_id", paper_id),
+                chunk_id=s.get("chunk_id", ""),
+                page_start=s.get("page", 1),
+                page_end=s.get("page", 1),
+                locator=s.get("locator", f"p. {s.get('page', 1)}"),
+                section=s.get("section", "Main Content"),
+                text=s.get("text", ""),
+                title=s.get("title", ""),
+                filename=s.get("filename", ""),
+                paper_title=s.get("title", ""),
+                citation_label=f"[{s.get('source_id', '')}]",
+            ))
+
+        return RAGResult(
+            answer=summary_dict.get("answer", ""),
+            sources=sources,
+            metadata={
+                "task": "summarize",
+                "paper_id": paper_id,
+                "chapters_count": summary_dict.get("chapters_count", 0),
+                "citations_count": summary_dict.get("citations_count", 0),
+            },
         )
-        result.metadata.update({"task": "summarize", "paper_id": paper_id})
-        return result
 
     def compare_papers(
         self,

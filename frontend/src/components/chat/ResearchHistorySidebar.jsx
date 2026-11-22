@@ -123,7 +123,7 @@ export function ResearchHistorySidebar({
               onChange={(e) => setLocalSearch(e.target.value)}
               placeholder="Search previous chats..."
               aria-label="Search conversation history"
-              className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-7 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-400/30 font-serif"
+              className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-7 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-400/30"
             />
             {localSearch && (
               <button
@@ -142,7 +142,7 @@ export function ResearchHistorySidebar({
         {papers.length > 0 && (
           <div className="shrink-0 border-b border-slate-100 px-3 py-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <Folder className="h-3.5 w-3.5 text-[var(--rl-primary)]" />
                 <span>Projects</span>
               </span>
@@ -151,12 +151,12 @@ export function ResearchHistorySidebar({
               {papers.map((p) => {
                 const isSelected = selectedPaperIds.includes(p.id);
                 const docs = documentsByPaper[p.id] || [];
-                const indexedCount = docs.filter((doc) => doc.processing_status === "indexed").length;
+                const indexedCount = docs.filter((doc) => doc.processing_status === "indexed" || ((doc.processing_status === "needs_review" || doc.processing_status === "partial") && (doc.chunk_count || 0) > 0)).length;
                 return <div key={p.id} className={`group flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 ${isSelected ? "bg-sky-50 text-[var(--rl-primary)]" : "text-slate-700 hover:bg-slate-50"}`}>
                   <button type="button" onClick={() => onSelectPaper?.(p.id)} title={p.title} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs">
                     <Folder className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 flex-1 truncate font-medium">{p.title}</span>
-                    <span className="shrink-0 text-[10px] text-slate-400">{indexedCount}</span>
+                    <span className="shrink-0 text-[11px] text-slate-400">{indexedCount}</span>
                   </button>
                   <DropdownMenu>
                   <DropdownMenuTrigger asChild><button type="button" aria-label={`Actions for ${p.title}`} title="Project actions" onClick={(event) => event.stopPropagation()} className="rounded p-1 text-slate-400 opacity-70 hover:bg-white hover:text-slate-700 hover:opacity-100 focus:opacity-100 focus-visible:opacity-100"><MoreHorizontal className="h-4 w-4" /></button></DropdownMenuTrigger>
@@ -178,7 +178,7 @@ export function ResearchHistorySidebar({
 
         {/* Conversation List Scroll Area (ChatGPT / Perplexity Style) */}
         <ScrollArea className="flex-1 p-2">
-          <h2 className="mb-2 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Recent sessions</h2>
+          <h2 className="mb-2 px-2 pt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Recent sessions</h2>
           {isLoading ? (
             <div className="space-y-2 p-2" aria-label="Loading research history">
               {[1, 2, 3, 4].map((i) => (
@@ -209,7 +209,7 @@ export function ResearchHistorySidebar({
             <div className="space-y-3 pb-4">
               {groups.map((group) => (
                 <div key={group.label} className="space-y-1">
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     <Calendar className="h-3 w-3" />
                     <span>{group.label}</span>
                   </div>
@@ -274,13 +274,13 @@ export function ResearchHistorySidebar({
                           </div>
 
                           {/* Footer: Date & Timing + Message Turns */}
-                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <div className="flex items-center justify-between text-[11px] text-slate-400">
                             <span className="truncate flex items-center gap-1">
                               <Layers className="h-2.5 w-2.5 text-slate-400" />
                               <span>{messageCount ? `${messageCount} turns` : "1 turn"}</span>
                             </span>
                             {timeDisplay && (
-                              <span className="shrink-0 font-mono text-[10px] text-slate-400">
+                              <span className="shrink-0 font-mono text-[11px] text-slate-400">
                                 {timeDisplay}
                               </span>
                             )}
@@ -298,7 +298,7 @@ export function ResearchHistorySidebar({
 
       {/* Rename Dialog */}
       <Dialog open={!!renamingConv} onOpenChange={(open) => !open && setRenamingConv(null)}>
-        <DialogContent className="sm:max-w-md font-serif">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Rename Research Session</DialogTitle>
             <DialogDescription>
@@ -324,7 +324,7 @@ export function ResearchHistorySidebar({
               type="button"
               variant="outline"
               onClick={() => setRenamingConv(null)}
-              className="rounded-xl font-serif"
+              className="rounded-xl"
             >
               Cancel
             </Button>
@@ -333,7 +333,7 @@ export function ResearchHistorySidebar({
               variant="default"
               onClick={handleConfirmRename}
               disabled={isUpdating || !newTitle.trim()}
-              className="bg-[#1d6fc4] hover:bg-[#185ea8] text-white rounded-xl font-serif"
+              className="bg-[#1d6fc4] hover:bg-[#185ea8] text-white rounded-xl"
             >
               {isUpdating ? "Saving..." : "Save"}
             </Button>
@@ -343,7 +343,7 @@ export function ResearchHistorySidebar({
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deletingConv} onOpenChange={(open) => !open && setDeletingConv(null)}>
-        <DialogContent className="sm:max-w-md font-serif">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete Research Session?</DialogTitle>
             <DialogDescription>
@@ -355,7 +355,7 @@ export function ResearchHistorySidebar({
               type="button"
               variant="outline"
               onClick={() => setDeletingConv(null)}
-              className="rounded-xl font-serif"
+              className="rounded-xl"
             >
               Cancel
             </Button>
@@ -364,7 +364,7 @@ export function ResearchHistorySidebar({
               variant="destructive"
               onClick={handleConfirmDelete}
               disabled={isDeleting}
-              className="rounded-xl font-serif"
+              className="rounded-xl"
             >
               {isDeleting ? "Deleting..." : "Delete session"}
             </Button>

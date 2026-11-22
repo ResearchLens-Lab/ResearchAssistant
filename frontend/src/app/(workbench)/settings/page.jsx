@@ -2,19 +2,38 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { researchService } from "@/services/research.service";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Settings, ShieldCheck, User, LogOut, Check, Cpu, RefreshCw } from "lucide-react";
+import { Settings, ShieldCheck, User, LogOut, Check, Cpu, FolderArchive, RefreshCw, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/utils/formatters";
+import { papersService } from "@/services/papers.service";
+import { documentsService } from "@/services/documents.service";
 
 export default function SettingsPage() {
   const { user, updateProfile, isUpdatingProfile, logout } = useAuth();
+  const queryClient = useQueryClient();
   const [fullName, setFullName] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Desktop diagnostics & permissions
+  const [desktopStatus, setDesktopStatus] = useState(null);
+  const [externalLookups, setExternalLookups] = useState(false);
+  const [needsRestart, setNeedsRestart] = useState(false);
+
+  // Library backup state
+  const [backupRunning, setBackupRunning] = useState(false);
+  const [backupNotice, setBackupNotice] = useState(null);
+
+  // Reindex state
+  const [reindexConfirmOpen, setReindexConfirmOpen] = useState(false);
+  const [reindexRunning, setReindexRunning] = useState(false);
+  const [reindexNotice, setReindexNotice] = useState(null);
+
+  // Local AI status
+  const [localAiStatus, setLocalAiStatus] = useState(null);
 
   useEffect(() => {
     if (user?.full_name) {
@@ -22,29 +41,97 @@ export default function SettingsPage() {
     }
   }, [user]);
 
-  const { data: healthData } = useQuery({
-    queryKey: ["healthCheck"],
-    queryFn: () => researchService.getHealth(),
-  });
+  useEffect(() => {
+    const bridge = typeof window !== "undefined" ? window["researchLensDesktop"] : null;
+    if (!bridge) return;
 
-  const { data: readyData } = useQuery({
-    queryKey: ["readinessCheck"],
-    queryFn: () => researchService.getReadiness(),
-  });
+    if (bridge.getDiagnostics) {
+      bridge.getDiagnostics().then(setDesktopStatus).catch(() => setDesktopStatus(null));
+    }
+    if (bridge.getExternalLookups) {
+      bridge.getExternalLookups().then(setExternalLookups).catch(() => setExternalLookups(false));
+    }
+    if (bridge.getIntelligenceStatus) {
+      bridge.getIntelligenceStatus().then(setLocalAiStatus).catch(() => setLocalAiStatus(null));
+    }
+  }, []);
 
-  const { data: modelData, isFetching: modelRefreshing, refetch: refreshModel } = useQuery({
-    queryKey: ["localModelStatus"],
-    queryFn: () => researchService.getLocalModelStatus(),
-    refetchInterval: 15000,
-    retry: 1,
-  });
+  const handleToggleLookups = async (e) => {
+    const nextVal = e.target.checked;
+    setExternalLookups(nextVal);
+    const bridge = typeof window !== "undefined" ? window["researchLensDesktop"] : null;
+    if (bridge?.setExternalLookups) {
+      await bridge.setExternalLookups(nextVal);
+      setNeedsRestart(true);
+    }
+  };
 
-  const modelState = modelData?.state;
-  const modelBadge = modelState === "ready_loaded" ? ["Loaded and ready", "grounded"]
-    : modelState === "inference_active" ? ["Generating locally", "grounded"]
-    : modelState === "ready_not_loaded" ? ["Installed · not loaded", "secondary"]
-    : modelState === "model_missing" ? ["Model not installed", "warning"]
-    : ["Ollama unavailable", "destructive"];
+  const handleRestartNow = () => {
+    const bridge = typeof window !== "undefined" ? window["researchLensDesktop"] : null;
+    if (bridge?.restartApp) {
+      bridge.restartApp();
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    const bridge = typeof window !== "undefined" ? window["researchLensDesktop"] : null;
+    if (!bridge) return;
+
+    setBackupRunning(true);
+    setBackupNotice(null);
+    try {
+      let chosenFolder = null;
+      if (bridge.chooseLibraryFolder) {
+        chosenFolder = await bridge.chooseLibraryFolder();
+        if (!chosenFolder) {
+          setBackupRunning(false);
+          return;
+        }
+      }
+      const res = await (bridge.createBackup ? bridge.createBackup(chosenFolder) : null);
+      setBackupNotice({
+        type: "success",
+        text: `Verified backup created: ${res?.backupPath || chosenFolder || "Library backup complete"}`,
+      });
+    } catch (err) {
+      setBackupNotice({ type: "error", text: `Backup failed: ${err.message}` });
+    } finally {
+      setBackupRunning(false);
+    }
+  };
+
+  const handleRebuildIndex = async () => {
+    setReindexConfirmOpen(false);
+    setReindexRunning(true);
+    setReindexNotice(null);
+    try {
+      const papers = await papersService.getAll(1, 100);
+      const paperList = papers?.items || papers || [];
+      let totalReindexed = 0;
+
+      for (const p of paperList) {
+        const docs = await papersService.getDocuments(p.id);
+        const docList = docs || [];
+        for (const doc of docList) {
+          await documentsService.reindex(doc.id);
+          totalReindexed++;
+        }
+      }
+
+      setReindexNotice({
+        type: "success",
+        text: `Rebuilt search index for ${totalReindexed} document${totalReindexed === 1 ? "" : "s"} successfully.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["papers"] });
+    } catch (err) {
+      setReindexNotice({
+        type: "error",
+        text: `Rebuilding index failed: ${err.message || "Operation could not be completed."}`,
+      });
+    } finally {
+      setReindexRunning(false);
+    }
+  };
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -54,58 +141,59 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-4xl mx-auto">
-      <div className="border-b border-zinc-200/80 pb-4 dark:border-zinc-800 space-y-1">
-        <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-zinc-900 dark:text-zinc-100" />
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Account & System Settings
-          </h1>
+    <div className="page-shell">
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* Header */}
+        <div className="border-b border-slate-200/80 pb-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-slate-900" />
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              Settings & Privacy
+            </h1>
+          </div>
+          <p className="text-xs text-slate-500">
+            Manage your researcher profile, local storage, and privacy controls.
+          </p>
         </div>
-        <p className="text-xs text-zinc-500 font-mono">
-          Manage your researcher profile and monitor backend architecture integration health.
-        </p>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Profile Settings */}
-        <Card className="border-zinc-200 shadow-2xs dark:border-zinc-800">
-          <CardHeader className="p-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+        {/* Section (a): Researcher Account */}
+        <Card className="border-slate-200 shadow-2xs">
+          <CardHeader className="p-4 pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
-                Researcher Profile
+              <User className="h-4 w-4 text-slate-700" />
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                (a) Researcher Profile
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Update your workspace identity
+              Your local workspace identity
             </CardDescription>
           </CardHeader>
 
           <form onSubmit={handleProfileSave}>
             <CardContent className="p-4 space-y-3">
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-zinc-700">
+                <label className="text-[11px] font-medium text-slate-700">
                   Full Name
                 </label>
                 <Input
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Dr. Jane Doe"
+                  placeholder="Researcher Name"
                   className="text-xs"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-zinc-700">
+                <label className="text-[11px] font-medium text-slate-700">
                   Email Address
                 </label>
                 <Input
                   value={user?.email || ""}
                   disabled
-                  className="text-xs bg-zinc-100 font-mono cursor-not-allowed dark:bg-zinc-800"
+                  className="text-xs bg-slate-50 font-mono cursor-not-allowed"
                 />
-                <p className="text-[10px] text-zinc-400 font-mono">
+                <p className="text-[11px] text-slate-400 font-mono">
                   Registered: {user?.created_at ? formatDate(user.created_at) : "--"}
                 </p>
               </div>
@@ -124,7 +212,7 @@ export default function SettingsPage() {
                 variant="workbench"
                 size="sm"
                 disabled={isUpdatingProfile}
-                className="text-sm"
+                className="text-xs rounded-full"
               >
                 {isUpdatingProfile ? "Saving..." : "Save Changes"}
               </Button>
@@ -134,7 +222,7 @@ export default function SettingsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => logout()}
-                className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                className="text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-full"
               >
                 <LogOut className="mr-1.5 h-3.5 w-3.5" />
                 <span>Sign Out</span>
@@ -143,103 +231,193 @@ export default function SettingsPage() {
           </form>
         </Card>
 
-        {/* Backend & Architecture Status */}
-        <Card className="border-zinc-200 shadow-2xs dark:border-zinc-800">
-          <CardHeader className="p-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+        {/* Section (b): Privacy & Network */}
+        <Card className="border-slate-200 shadow-2xs">
+          <CardHeader className="p-4 pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
-                System Integration Status
+              <ShieldCheck className="h-4 w-4 text-[#1d6fc4]" />
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                (b) Privacy & Network
               </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Live status from FastAPI and storage backends
+              Strict offline boundary by default.
             </CardDescription>
           </CardHeader>
-
-          <CardContent className="p-4 space-y-3 text-xs font-mono">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-2 dark:border-zinc-800">
-              <span className="text-zinc-500">FastAPI Gateway:</span>
-              <Badge
-                variant={healthData?.status === "ok" ? "grounded" : "destructive"}
-                className="text-[10px]"
-              >
-                {healthData?.status === "ok" ? "200 Healthy" : "Offline"}
-              </Badge>
+          <CardContent className="p-4 space-y-4 text-xs">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <label
+                  htmlFor="online-verification-toggle"
+                  className="font-medium text-slate-800 cursor-pointer"
+                >
+                  Online source verification (Crossref, OpenAlex)
+                </label>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Only the DOI is sent. Document text never leaves this computer.
+                </p>
+              </div>
+              <input
+                id="online-verification-toggle"
+                type="checkbox"
+                checked={externalLookups}
+                onChange={handleToggleLookups}
+                className="h-4 w-4 rounded border-slate-300 text-[#1d6fc4] focus:ring-[#1d6fc4] cursor-pointer mt-0.5"
+              />
             </div>
 
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-2 dark:border-zinc-800">
-              <span className="text-zinc-500">PostgreSQL DB:</span>
-              <Badge
-                variant={readyData?.status === "ready" ? "grounded" : "warning"}
-                className="text-[10px]"
-              >
-                {readyData?.status === "ready" ? "Ready" : "Degraded"}
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-2 dark:border-zinc-800">
-              <span className="text-zinc-500">ChromaDB Vector Store:</span>
-              <Badge variant="secondary" className="text-[10px]">
-                In-Process / Docker
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500">Upload Size Limit:</span>
-              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                1 GiB per file · 1 GiB per batch
-              </span>
-            </div>
+            {needsRestart && (
+              <div className="flex items-center justify-between rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+                <span>Restart ResearchLens to apply network changes.</span>
+                <Button
+                  size="sm"
+                  variant="workbench"
+                  onClick={handleRestartNow}
+                  className="h-7 text-xs rounded-full"
+                >
+                  Restart now
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="border-zinc-200 shadow-2xs dark:border-zinc-800">
-          <CardHeader className="p-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-blue-600" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
-                  Local AI Model
-                </CardTitle>
-              </div>
-              <Button type="button" variant="ghost" size="icon" aria-label="Refresh model status"
-                onClick={() => refreshModel()} disabled={modelRefreshing} className="h-7 w-7">
-                <RefreshCw className={`h-3.5 w-3.5 ${modelRefreshing ? "animate-spin" : ""}`} />
-              </Button>
+        {/* Section (c): Library Storage & Backup */}
+        <Card className="border-slate-200 shadow-2xs">
+          <CardHeader className="p-4 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <FolderArchive className="h-4 w-4 text-slate-700" />
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                (c) Library Storage & Backup
+              </CardTitle>
             </div>
             <CardDescription className="text-xs">
-              Read-only Ollama status. ResearchLens will not download or load a model from this screen.
+              Location of your SQLite database and indexed documents
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-zinc-500">Configured model</span>
-              <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-200">{modelData?.model || "qwen3.5:0.8b"}</span>
+            <div>
+              <span className="text-slate-500 font-medium">Library Path:</span>
+              <div className="mt-1 font-mono text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-200/80 break-all">
+                {desktopStatus?.libraryPath || "Documents/ResearchLens Library"}
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-zinc-500">Runtime and model</span>
-              <Badge variant={modelBadge[1]} className="text-[10px]">{modelBadge[0]}</Badge>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-slate-600">Create backup snapshot:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCreateBackup}
+                disabled={backupRunning}
+                className="h-8 text-xs rounded-full"
+              >
+                {backupRunning ? "Creating backup…" : "Back up library"}
+              </Button>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-2 dark:border-zinc-800">
-              <span className="text-zinc-500">Generation limits</span>
-              <span className="text-right font-mono text-zinc-700 dark:text-zinc-300">
-                {modelData?.generation_limits
-                  ? `${modelData.generation_limits.max_output_tokens} output · ${modelData.generation_limits.context_tokens} context tokens`
-                  : "Status unavailable"}
-              </span>
-            </div>
-            <p className="text-[11px] leading-relaxed text-zinc-500">
-              {modelState === "ready_not_loaded"
-                ? "The model loads on its first research request and unloads according to Ollama's keep-alive setting."
-                : modelState === "model_missing"
-                  ? "Install the configured model manually in Ollama. No model download has been started."
-                  : modelState === "runtime_unavailable"
-                    ? "Start Ollama to enable local synthesis. Evidence retrieval remains available."
-                    : "Only the final response content is used; private model thinking is not displayed."}
-            </p>
+
+            {backupNotice && (
+              <div
+                className={`p-2.5 rounded-lg text-xs ${
+                  backupNotice.type === "success"
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-50 text-rose-800 border border-rose-200"
+                }`}
+              >
+                {backupNotice.text}
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Section (e): Rebuild Search Index */}
+        <Card className="border-slate-200 shadow-2xs">
+          <CardHeader className="p-4 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-slate-700" />
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                (e) Search Index
+              </CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Re-index documents using the latest section-aware chunker
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3 text-xs">
+            <p className="text-slate-600 leading-relaxed">
+              Re-parses and re-indexes all attached source documents with section boundaries and clean title detection.
+            </p>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-slate-600">Rebuild index:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setReindexConfirmOpen(true)}
+                disabled={reindexRunning}
+                className="h-8 text-xs rounded-full border-amber-300 text-amber-900 hover:bg-amber-50"
+              >
+                {reindexRunning ? "Rebuilding index…" : "Rebuild search index"}
+              </Button>
+            </div>
+
+            {reindexNotice && (
+              <div
+                className={`p-2.5 rounded-lg text-xs ${
+                  reindexNotice.type === "success"
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-50 text-rose-800 border border-rose-200"
+                }`}
+              >
+                {reindexNotice.text}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Rebuild Confirmation Dialog */}
+        {reindexConfirmOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm search index rebuild"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          >
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
+              <div className="flex items-center gap-2.5 text-amber-600">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Rebuild search index?
+                </h3>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Rebuilding the search index will re-parse and re-index all documents with the latest section-aware chunker. This process may take a few minutes. Continue?
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReindexConfirmOpen(false)}
+                  className="h-8 text-xs rounded-full"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="workbench"
+                  size="sm"
+                  onClick={handleRebuildIndex}
+                  className="h-8 text-xs rounded-full"
+                >
+                  Continue
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

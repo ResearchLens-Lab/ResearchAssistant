@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from rag.tests.conftest import SAMPLE_PAPER_TEXT
 from backend.app.integrations.rag_client import RAGClient
 
+pytestmark = pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
+
 
 def test_end_to_end_rag_flow(full_rag_pipeline):
     ingest_p, query_p = full_rag_pipeline
@@ -62,6 +64,7 @@ def test_backend_rag_client_integration(full_rag_pipeline):
     chat_resp = client.ask_question(
         question="Explain the Scaled Dot-Product Attention equation.",
         paper_ids=["paper_backend_integration"],
+        user_id="test_user_fixture",
     )
 
     assert "answer" in chat_resp

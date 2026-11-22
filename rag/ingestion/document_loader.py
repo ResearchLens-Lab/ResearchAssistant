@@ -14,10 +14,24 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from collections import Counter
 
-from rag.ingestion.document_normalizer import Page, NormalizedDocument, DocumentMetadata, DocumentNormalizer
+from rag.ingestion.document_normalizer import Page, NormalizedDocument, DocumentMetadata, DocumentNormalizer, Section
 from rag.ingestion.metadata_mapper import MetadataMapper
+from rag.ingestion.preflight import PDFPreflightAnalyzer, DocumentCategory
+from rag.ingestion.ocr_engine import LocalOCREngine
+from rag.ingestion.structure_extractor import StructureExtractor
 
 logger = logging.getLogger(__name__)
+
+
+def _parallel_ocr_worker(args: tuple) -> tuple:
+    file_path, page_num, dpi = args
+    import pymupdf
+    from rag.ingestion.ocr_engine import LocalOCREngine
+    engine = LocalOCREngine(default_dpi=dpi)
+    with pymupdf.open(str(file_path)) as doc:
+        p = doc[page_num - 1]
+        res = engine.ocr_page(p, page_num, dpi=dpi)
+        return page_num, res.text or "", res.confidence
 
 
 class BaseDocumentLoader(ABC):
@@ -46,16 +60,16 @@ class PDFDocumentLoader(BaseDocumentLoader):
     @staticmethod
     def _filter_repeated_headers_footers(pages: List[Page]) -> List[Page]:
         """Filter out repeating page headers, running heads, and footers across pages."""
-        if len(pages) < 3:
+        if len(pages) < 2:
             return pages
         first_lines = []
         last_lines = []
         for p in pages:
             lines = [line.strip() for line in p.text.split("\n") if line.strip()]
             if lines:
-                first_lines.append(lines[0])
-                last_lines.append(lines[-1])
-        threshold = max(2, int(len(pages) * 0.45))
+                first_lines.extend(lines[:3])
+                last_lines.extend(lines[-3:])
+        threshold = 2 if len(pages) == 2 else max(2, int(len(pages) * 0.45))
         rep_headers = {l for l, c in Counter(first_lines).items() if c >= threshold and len(l) < 120}
         rep_footers = {l for l, c in Counter(last_lines).items() if c >= threshold and len(l) < 120}
         page_num_pat = re.compile(r"^(?:page\s+)?[-–—]?\s*\d+\s*[-–—]?(?:\s*of\s*\d+)?$", re.IGNORECASE)
@@ -76,7 +90,14 @@ class PDFDocumentLoader(BaseDocumentLoader):
                 if page_num_pat.match(s) and (i < 2 or i >= len(lines) - 2):
                     continue
                 out.append(line)
-            cleaned.append(Page(page_number=p.page_number, text="\n".join(out)))
+            cleaned.append(
+                Page(
+                    page_number=p.page_number,
+                    text="\n".join(out),
+                    is_ocr=getattr(p, "is_ocr", False),
+                    ocr_confidence=getattr(p, "ocr_confidence", None),
+                )
+            )
         return cleaned
 
     def load(self, file_path: str, metadata: Optional[Dict[str, Any]] = None, progress_callback=None, cancel_event=None) -> NormalizedDocument:
@@ -90,8 +111,75 @@ class PDFDocumentLoader(BaseDocumentLoader):
         )
 
         pages: List[Page] = []
+        structured_sections: List[Section] = []
+
         try:
             import pymupdf
+
+            # 1. Preflight Analysis
+            if progress_callback:
+                progress_callback({"stage": "inspecting", "progress": 5, "progress_type": "estimated"})
+
+            preflight_analyzer = PDFPreflightAnalyzer()
+            preflight = preflight_analyzer.analyze(str(path))
+
+            if preflight.category == DocumentCategory.PASSWORD_PROTECTED:
+                raise ValueError("PDF is password-protected and cannot be opened without a password.")
+            if preflight.category == DocumentCategory.CORRUPT:
+                raise ValueError(f"Corrupt or unreadable PDF: {preflight.preflight_error or 'Unknown parsing error'}")
+
+            ocr_engine = LocalOCREngine()
+            ocr_needed_pages = set(preflight.pages_requiring_ocr)
+
+            # Checkpoint file for resilient resumption across application restarts
+            doc_id = (metadata or {}).get("document_id") or path.stem
+            file_hash = (metadata or {}).get("file_hash")
+            if not file_hash and path.is_file():
+                try:
+                    import hashlib
+                    h = hashlib.sha256()
+                    with path.open("rb") as f_in:
+                        h.update(f_in.read(2 * 1024 * 1024))
+                        h.update(str(path.stat().st_size).encode("utf-8"))
+                    file_hash = h.hexdigest()
+                except Exception:
+                    file_hash = None
+
+            checkpoint_file = path.parent / f".ocr-{doc_id}.json"
+            hash_checkpoint_file = path.parent / f".ocr-{file_hash}.json" if file_hash else None
+            saved_ocr_pages: Dict[str, Dict[str, Any]] = {}
+
+            # 1. Check doc_id checkpoint
+            if checkpoint_file.is_file():
+                try:
+                    saved_ocr_pages = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+                    logger.info("Resumed %d cached OCR pages from checkpoint for %s", len(saved_ocr_pages), doc_id)
+                except Exception as exc:
+                    logger.warning("Could not read OCR checkpoint for %s: %s", doc_id, exc)
+
+            # 2. Check file_hash checkpoint
+            if not saved_ocr_pages and hash_checkpoint_file and hash_checkpoint_file.is_file():
+                try:
+                    saved_ocr_pages = json.loads(hash_checkpoint_file.read_text(encoding="utf-8"))
+                    logger.info("Resumed %d cached OCR pages from hash checkpoint for %s", len(saved_ocr_pages), file_hash)
+                except Exception as exc:
+                    logger.warning("Could not read hash OCR checkpoint for %s: %s", file_hash, exc)
+
+            def _save_checkpoint_atomic(data: dict) -> None:
+                tmp_file = checkpoint_file.parent / f"{checkpoint_file.name}.tmp"
+                try:
+                    tmp_file.write_text(json.dumps(data), encoding="utf-8")
+                    os.replace(tmp_file, checkpoint_file)
+                    if hash_checkpoint_file:
+                        try:
+                            hash_checkpoint_file.write_text(json.dumps(data), encoding="utf-8")
+                        except Exception:
+                            pass
+                except Exception as exc:
+                    logger.debug("Checkpoint write notice: %s", exc)
+                    if tmp_file.is_file():
+                        tmp_file.unlink(missing_ok=True)
+
             with pymupdf.open(str(path)) as reader:
                 if reader.is_encrypted and not reader.authenticate(""):
                     raise ValueError("PDF is password-protected and cannot be opened without a password.")
@@ -100,39 +188,158 @@ class PDFDocumentLoader(BaseDocumentLoader):
                     if title:
                         meta.title = str(title)
 
-                # Keep source page numbers intact; empty pages matter to citations.
                 page_count = len(reader)
+
+                # Fast parallel extraction for uncached OCR pages across CPU cores
+                uncached_ocr_indices = [idx for idx in sorted(ocr_needed_pages) if str(idx) not in saved_ocr_pages]
+                if len(uncached_ocr_indices) > 2 and ocr_engine.is_available():
+                    chunk_size = min(12, max(4, len(uncached_ocr_indices)))
+                    max_workers = min(4, os.cpu_count() or 4)
+                    try:
+                        from concurrent.futures import ProcessPoolExecutor, as_completed
+                        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                            tasks = [(str(path), p_idx, ocr_engine.default_dpi) for p_idx in uncached_ocr_indices]
+                            for i in range(0, len(tasks), chunk_size):
+                                if cancel_event is not None and cancel_event.is_set():
+                                    _save_checkpoint_atomic(saved_ocr_pages)
+                                    raise RuntimeError("Ingestion cancelled during extraction.")
+                                batch = tasks[i:i + chunk_size]
+                                futures = [executor.submit(_parallel_ocr_worker, item) for item in batch]
+                                for fut in as_completed(futures):
+                                    p_num, p_text, p_conf = fut.result()
+                                    saved_ocr_pages[str(p_num)] = {"text": p_text, "confidence": p_conf}
+                                _save_checkpoint_atomic(saved_ocr_pages)
+                                if progress_callback:
+                                    completed_count = min(len(saved_ocr_pages), page_count)
+                                    progress_val = min(50, max(10, round(10 + 40 * completed_count / max(page_count, 1))))
+                                    progress_callback({
+                                        "stage": "ocr_processing",
+                                        "progress": progress_val,
+                                        "progress_type": "actual",
+                                        "completed_pages": completed_count,
+                                        "total_pages": page_count,
+                                    })
+                    except Exception as mp_exc:
+                        logger.info("ProcessPool OCR notice (%s); proceeding with serial fallback", mp_exc)
+
                 for idx, pdf_page in enumerate(reader, start=1):
                     if cancel_event is not None and cancel_event.is_set():
+                        # Save current progress to checkpoint atomically before aborting
+                        _save_checkpoint_atomic(saved_ocr_pages)
                         raise RuntimeError("Ingestion cancelled during extraction.")
-                    page_text = pdf_page.get_text("text") or ""
-                    pages.append(Page(page_number=idx, text=page_text))
-                    if progress_callback and (idx == 1 or idx % 10 == 0 or idx == page_count):
-                        progress_callback({
-                            "stage": "extracting_text",
-                            "progress": round(5 + 15 * idx / max(page_count, 1)),
-                            "progress_type": "estimated",
-                            "completed_pages": idx,
-                            "total_pages": page_count,
-                        })
 
+                    # Check if page needs OCR
+                    if idx in ocr_needed_pages and ocr_engine.is_available():
+                        page_key = str(idx)
+                        if page_key in saved_ocr_pages:
+                            cached = saved_ocr_pages[page_key]
+                            pages.append(
+                                Page(
+                                    page_number=idx,
+                                    text=cached.get("text", "") or "",
+                                    is_ocr=True,
+                                    ocr_confidence=cached.get("confidence", 0.9),
+                                )
+                            )
+                        else:
+                            ocr_res = ocr_engine.ocr_page(pdf_page, idx)
+                            pages.append(
+                                Page(
+                                    page_number=idx,
+                                    text=ocr_res.text or "",
+                                    is_ocr=True,
+                                    ocr_confidence=ocr_res.confidence,
+                                )
+                            )
+                            saved_ocr_pages[page_key] = {
+                                "text": ocr_res.text or "",
+                                "confidence": ocr_res.confidence,
+                            }
+                            # Checkpoint every 5 pages or on final page
+                            if idx % 5 == 0 or idx == page_count:
+                                _save_checkpoint_atomic(saved_ocr_pages)
+
+                        if progress_callback and (idx == 1 or idx % 2 == 0 or idx == page_count):
+                            progress_val = min(50, max(10, round(10 + 40 * min(idx, page_count) / max(page_count, 1))))
+                            progress_callback({
+                                "stage": "ocr_processing",
+                                "progress": progress_val,
+                                "progress_type": "actual",
+                                "completed_pages": min(idx, page_count),
+                                "total_pages": page_count,
+                            })
+                    else:
+                        page_text = pdf_page.get_text("text") or ""
+                        pages.append(Page(page_number=idx, text=page_text, is_ocr=False))
+
+                        if progress_callback and (idx == 1 or idx % 10 == 0 or idx == page_count):
+                            progress_val = min(30, max(5, round(5 + 25 * min(idx, page_count) / max(page_count, 1))))
+                            progress_callback({
+                                "stage": "extracting_text",
+                                "progress": progress_val,
+                                "progress_type": "estimated",
+                                "completed_pages": min(idx, page_count),
+                                "total_pages": page_count,
+                            })
+
+                if not any(page.text.strip() for page in pages):
+                    if not ocr_engine.is_available():
+                        raise ValueError("PDF contains no extractable text; scanned PDFs require OCR, which is not enabled.")
+                    raise ValueError("PDF contains no extractable text even after OCR processing.")
+
+                pages = self._filter_repeated_headers_footers(pages)
+
+                # Structure & Outline Extraction
                 if progress_callback:
-                    progress_callback({
-                        "stage": "extracting_text", "progress": 20,
-                        "progress_type": "actual", "completed_pages": page_count,
-                        "total_pages": page_count, "force": True,
-                    })
+                    progress_callback({"stage": "structuring", "progress": 25, "progress_type": "estimated"})
 
-            if not any(page.text.strip() for page in pages):
-                raise ValueError("PDF contains no extractable text; scanned PDFs require OCR, which is not enabled.")
-
-            pages = self._filter_repeated_headers_footers(pages)
+                try:
+                    extractor = StructureExtractor()
+                    sec_nodes = extractor.extract_structure(reader, [(p.page_number, p.text) for p in pages])
+                    for s_node in sec_nodes:
+                        sec_pages = [p for p in pages if s_node.page_start <= p.page_number <= s_node.page_end]
+                        is_sec_ocr = any(getattr(p, "is_ocr", False) for p in sec_pages) if sec_pages else False
+                        sec_conf = (
+                            sum(getattr(p, "ocr_confidence", 1.0) or 1.0 for p in sec_pages) / max(1, len(sec_pages))
+                            if sec_pages and is_sec_ocr else 1.0
+                        )
+                        structured_sections.append(
+                            Section(
+                                name=s_node.title,
+                                page_start=s_node.page_start,
+                                page_end=s_node.page_end,
+                                text=s_node.raw_text,
+                                extra={
+                                    "heading_path": s_node.heading_path,
+                                    "section_type": s_node.section_type.value,
+                                    "page_label_start": s_node.page_label_start,
+                                    "page_label_end": s_node.page_label_end,
+                                    "extraction_method": "ocr" if is_sec_ocr else "native",
+                                    "extraction_confidence": round(sec_conf, 3),
+                                },
+                            )
+                        )
+                except Exception as struct_err:
+                    logger.warning("Structure extraction exception; falling back to normalizer: %s", struct_err)
 
         except Exception as e:
             logger.error("Failed to load PDF exception_type=%s", type(e).__name__)
             if isinstance(e, ValueError):
                 raise
             raise RuntimeError(f"Could not read this PDF ({type(e).__name__}). Check that it is a valid, unencrypted PDF.") from e
+
+        if structured_sections:
+            return NormalizedDocument(
+                document_id=meta.document_id,
+                paper_id=meta.paper_id,
+                owner_id=meta.owner_id,
+                title=meta.title,
+                authors=meta.authors,
+                year=meta.year,
+                pages=pages,
+                sections=structured_sections,
+                metadata=meta,
+            )
 
         return self.normalizer.normalize(pages=pages, metadata=meta)
 

@@ -51,7 +51,7 @@ class RAGSettings(BaseSettings):
     ollama_model: str = "qwen3.5:0.8b"
 
     # LLM Settings
-    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai", "none"] = "none"
+    llm_provider: Literal["local", "mock", "gemini", "ollama", "openai", "local_intelligence", "none"] = "none"
     llm_model: str = "none"
     llm_api_key: str = Field(default="", repr=False)
     llm_temperature: float = 0.1

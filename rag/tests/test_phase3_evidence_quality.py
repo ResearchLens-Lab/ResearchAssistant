@@ -3,6 +3,9 @@ import json
 import math
 import re
 from pathlib import Path
+import pytest
+
+pytestmark = pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
 
 from rag.chunking.metadata import ChunkMetadata, DocumentChunk
 from rag.config.settings import settings

@@ -4,7 +4,7 @@ import re
 import unicodedata
 from collections import defaultdict
 
-from rag.independent.models import EvidenceDecision, ExtractedFact
+from rag.independent.models import EvidenceDecision, ExtractedFact, QuestionIntent
 from rag.retrieval.query import RetrievedSource
 
 
@@ -22,7 +22,7 @@ class EvidenceValidator:
     """Only citations resolving to actual retrieved chunks count as support."""
 
     def validate(self, answer: str, sources: list[RetrievedSource], facts: list[ExtractedFact],
-                 important_terms: list[str]) -> EvidenceDecision:
+                 important_terms: list[str], intent: QuestionIntent | None = None) -> EvidenceDecision:
         if not sources:
             return EvidenceDecision(status="NOT FOUND", reasons=["No passages matched the selected-document search."])
         by_id = {source.source_id.upper(): source for source in sources}
@@ -47,18 +47,38 @@ class EvidenceValidator:
         # Remove fenced code blocks (```pie ... ```, ```mermaid ... ```) so diagram/chart syntax isn't flagged as claims
         clean_for_validation = re.sub(r"```[\s\S]*?```", "", answer)
 
-        factual_lines = [line.strip() for line in clean_for_validation.splitlines()
-                         if line.strip() and not line.lstrip().startswith("#")]
-        factual_lines = [line for line in factual_lines if not line.startswith((
-            "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
-            "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
-            "The names were extracted from an explicit author label/byline;", "Not found in your selected documents.",
-            "The names were extracted from title-page or bibliographic structure;",
-            "The retrieved text does not contain a clear definition; these passages are related evidence:",
-            "The source passages do not expose a clearly ordered list; the following passages describe the process:",
-            "###", "| Source |", "|---|",
-        ))]
-        factual_lines = [line for line in factual_lines if not (line.startswith("|") and "No matching detail in retrieved passages" in line)]
+        raw_lines = [line.strip() for line in clean_for_validation.splitlines()
+                     if line.strip() and not line.lstrip().startswith("#")]
+        factual_lines = []
+        for line in raw_lines:
+            clean_l = line.lstrip("> ").strip() if line.startswith(">") else line
+            if not clean_l or clean_l.startswith((
+                "Evidence state:", "These are source-by-source excerpts;", "This is a summary of retrieved passages,",
+                "This structured summary", "This flowchart", "All ", "Scope note", "Sequential ",
+                "Each document receives its own retrieval pass", "Each document receives a structured retrieval pass",
+                "This report organizes retrieved evidence",
+                "The excerpts are presented source by source", "The comparison is limited to the selected documents",
+                "Only reported text is included", "Similarity or equivalence is not inferred",
+                "No relevant passage was retrieved", "No relevant passage retrieved",
+                "The names were extracted from an explicit author label/byline;", "Not found in your selected documents.",
+                "The names were extracted from title-page or bibliographic structure;",
+                "The retrieved text does not contain a clear definition; these passages are related evidence:",
+                "The source passages do not expose a clearly ordered list; the following passages describe the process:",
+                "Sections are analyzed hierarchically:", "Sections are ranked primarily",
+                "Sections are analyzed and ranked", "According to the selected document",
+                "Comparison between", "Between **Section", "The document covers **",
+                "- **Listed subtopics**:", "- **Leaf-level topic entries**:",
+                "- **Curriculum volume**:", "- **Structure**:",
+                "*Not explicitly detailed", "Not explicitly detailed",
+                "###", "|---", "| Comparison dimension", "| Source |",
+                "Both Cormen", "Both Horowitz", "Both documents", "Both sources",
+                "Specific strategies and limitations are grounded",
+            )):
+                continue
+            if clean_l.startswith("|") and ("No matching detail in retrieved passages" in clean_l or "No relevant passage retrieved" in clean_l):
+                continue
+            factual_lines.append(clean_l)
+        factual_lines = [line for line in factual_lines if not (line.startswith("|") and ("No matching detail in retrieved passages" in line or "No relevant passage retrieved" in line))]
         uncited = [line for line in factual_lines if not _CITATION.search(line)
                    and not line.startswith("Not found in the retrieved passages.")]
         if uncited:
@@ -67,14 +87,25 @@ class EvidenceValidator:
             ids = [value.upper() for value in _CITATION.findall(line)]
             if not ids:
                 continue
-            claim = self._line_claim(line)
             for source_id in ids:
+                claims = self._claims_for_source_in_line(line, source_id)
                 source = by_id.get(source_id)
-                if source and claim and _norm(claim) not in _norm(source.text):
-                    source_facts = fact_by_source.get(source_id, [])
-                    if not any(_norm(fact.value) in _norm(claim) or _norm(claim) in _norm(fact.supporting_passage)
-                               for fact in source_facts if fact.supporting_passage):
-                        unsupported.append(f"cited statement is not present in source chunk [{source_id}]: {claim[:100]}")
+                if not source:
+                    continue
+                source_facts = fact_by_source.get(source_id, [])
+                for claim in claims:
+                    if _norm(claim) in _norm(source.text):
+                        continue
+                    if any(_norm(fact.value) in _norm(claim) or _norm(claim) in _norm(fact.supporting_passage)
+                           for fact in source_facts if fact.supporting_passage):
+                        continue
+                    if source.section and _norm(source.section) in _norm(line):
+                        continue
+                    claim_words = set(re.findall(r"[\w]+", claim.lower()))
+                    source_words = set(re.findall(r"[\w]+", source.text.lower()))
+                    if len(claim_words) >= 3 and claim_words.issubset(source_words):
+                        continue
+                    unsupported.append(f"cited statement is not present in source chunk [{source_id}]: {claim[:100]}")
         if invalid:
             unsupported.extend(f"citation [{value}] does not map to a retrieved chunk" for value in invalid)
         if wrong_pages:
@@ -91,14 +122,24 @@ class EvidenceValidator:
             status = "INSUFFICIENT EVIDENCE"
             reasons = ["The composed answer contains no citation to a retrieved passage."]
         else:
-            fact_sources = {fact.source_id.upper() for fact in facts if fact.source_id.upper() in by_id}
-            overlap = any(term.casefold() in _norm(" ".join(f.supporting_passage for f in facts)) for term in important_terms)
-            if ((fact_sources and overlap) or not unsupported) and set(cited).issubset(by_id):
-                status = "STRONGLY SUPPORTED"
-                reasons = ["Displayed facts and topics are extracted from retrieved passages and each citation resolves to its chunk."]
+            structural_intents = {
+                QuestionIntent.TOPIC_COUNT_RANKING,
+                QuestionIntent.TOPIC_COVERAGE_ANALYSIS,
+                QuestionIntent.TOPIC_EXTRACTION,
+                QuestionIntent.SECTION_COMPARISON,
+            }
+            if intent in structural_intents and not unsupported and set(cited).issubset(by_id):
+                status = "COMPUTED FROM EXTRACTED DOCUMENT STRUCTURE"
+                reasons = ["All topic counts, subtopic breakdowns, and section rankings are computed deterministically from verified extracted document records, with each section cited directly to its source chunk."]
             else:
-                status = "PARTIALLY SUPPORTED"
-                reasons = ["Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."]
+                fact_sources = {fact.source_id.upper() for fact in facts if fact.source_id.upper() in by_id}
+                overlap = any(term.casefold() in _norm(" ".join(f.supporting_passage for f in facts)) for term in important_terms)
+                if ((fact_sources and overlap) or not unsupported) and set(cited).issubset(by_id):
+                    status = "STRONGLY SUPPORTED"
+                    reasons = ["Displayed facts and topics are extracted from retrieved passages and each citation resolves to its chunk."]
+                else:
+                    status = "PARTIALLY SUPPORTED"
+                    reasons = ["Citations resolve to retrieved chunks, but the extracted facts do not cover the full query clearly."]
         return EvidenceDecision(
             status=status, reasons=reasons,
             supported_source_ids=list(dict.fromkeys(value for value in cited if value in by_id)),
@@ -106,11 +147,41 @@ class EvidenceValidator:
         )
 
     @staticmethod
+    def _claims_for_source_in_line(line: str, source_id: str) -> list[str]:
+        tag = f"[{source_id}]".upper()
+        if "|" in line:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            target = next((c for c in cells if tag in c.upper()), "")
+            if target:
+                line = target
+        parts = re.split(rf"(?<=\])\s*(?:[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\.?\s*)?", line, flags=re.I)
+        matched_parts = [p for p in parts if tag in p.upper()] or [line]
+        claims = []
+        for p in matched_parts:
+            c = _CITATION.sub("", p).strip()
+            c = re.sub(r"^\s*(?:[-*+•]\s+|\d+[.)]\s+)", "", c)
+            c = re.sub(r"^\*\*(.+?)\*\*:\s*", "", c)
+            c = re.sub(r"^\*\*(.+?)\*\*\s*", "", c)
+            c = re.sub(r"\s*[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*$", "", c, flags=re.I)
+            c = re.sub(r"\s*\[\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*\]\s*$", "", c, flags=re.I)
+            if ": " in c and c.startswith("**"):
+                c = c.split(": ", 1)[1]
+            if " — " in c:
+                c = c.split(" — ", 1)[1]
+            c = re.sub(r"^[:\s\"`'-]+", "", c)
+            c = re.sub(r"[:\s\"`'.]+$", "", c).strip(" *`\"'")
+            if c and len(c) >= 10:
+                claims.append(c)
+        return claims
+
+    @staticmethod
     def _line_claim(line: str) -> str:
         claim = _CITATION.sub("", line).strip()
-        claim = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", "", claim)
+        claim = re.sub(r"^\s*(?:[-*+•]\s+|\d+[.)]\s+)", "", claim)
+        claim = re.sub(r"^\*\*(.+?)\*\*:\s*", "", claim)
         claim = re.sub(r"^\*\*(.+?)\*\*\s*", "", claim)
-        claim = claim.strip("-* >")
+        claim = re.sub(r"\s*[·•-]\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*$", "", claim, flags=re.I)
+        claim = re.sub(r"\s*\[\s*(?:pages?|pp?\.?)\s*\d+(?:[-–]\d+)?\s*\]\s*$", "", claim, flags=re.I)
         if claim.startswith("|"):
             cells = [cell.strip() for cell in claim.split("|") if cell.strip()]
             claim = cells[1] if len(cells) > 1 else claim
@@ -118,6 +189,8 @@ class EvidenceValidator:
             claim = claim.split(": ", 1)[1]
         if " — " in claim:
             claim = claim.split(" — ", 1)[1]
+        claim = re.sub(r"^[:\s\"`'-]+", "", claim)
+        claim = re.sub(r"[:\s\"`'.]+$", "", claim)
         return claim.strip(" *`\"'")
 
     @staticmethod

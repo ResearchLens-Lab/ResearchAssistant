@@ -1,0 +1,43 @@
+{
+  "skill_id": "theorem_lookup",
+  "name": "Theorem and Lemma Formulation",
+  "description": "Retrieves formal theorem statements, recurrence equations, and case conditions.",
+  "supported_intent": "THEOREM_LOOKUP",
+  "trigger_patterns": [
+    "\\bmaster\\s+theorem\\b",
+    "\\btheorem\\s+[\\d.]+\\b",
+    "\\blemma\\s+[\\d.]+\\b"
+  ],
+  "input_slots": [
+    "primary_concept"
+  ],
+  "preconditions": {
+    "min_indexed_chunks": 1
+  },
+  "retrieval_strategy": "fts5_theorem_heading_boost",
+  "evidence_requirements": [
+    "theorem_heading_match",
+    "formal_statement"
+  ],
+  "output_schema": {
+    "theorem_name": "string",
+    "statement": "string",
+    "cases": "list"
+  },
+  "confidence_thresholds": {
+    "high": 0.85,
+    "low": 0.4
+  },
+  "abstention_behavior": "context_fallback",
+  "regression_test_cases": [
+    {
+      "query": "Master theorem",
+      "expected_intent": "THEOREM_LOOKUP",
+      "expected_slots": {
+        "primary_concept": "master theorem"
+      },
+      "min_confidence": 0.85,
+      "should_abstain": false
+    }
+  ]
+}

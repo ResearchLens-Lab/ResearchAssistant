@@ -1,4 +1,5 @@
-from fastapi import APIRouter, status
+from typing import Optional
+from fastapi import APIRouter, Header, Response, status
 
 from backend.app.core.dependencies import CurrentUser, DBSession
 from backend.app.schemas.auth import (
@@ -8,6 +9,7 @@ from backend.app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
+    LocalSessionRequest,
 )
 from backend.app.schemas.user import UserResponse
 from backend.app.services.auth_service import AuthService
@@ -51,3 +53,18 @@ async def refresh(payload: RefreshRequest, db: DBSession):
 )
 async def logout(payload: LogoutRequest, db: DBSession):
     await AuthService(db).logout(payload.refresh_token)
+
+
+@router.post(
+    "/local-session",
+    response_model=LoginResponse,
+    summary="Establish local session for desktop runtime without credentials",
+)
+async def local_session(
+    response: Response,
+    db: DBSession,
+    payload: Optional[LocalSessionRequest] = None,
+    desktop_key: Optional[str] = Header(None, alias="X-ResearchLens-Desktop-Key"),
+):
+    key = (payload.request_key if payload else None) or desktop_key or ""
+    return await AuthService(db).create_local_session(key, response)

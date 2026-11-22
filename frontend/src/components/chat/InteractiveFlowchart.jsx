@@ -43,14 +43,14 @@ export function InteractiveFlowchart({ code }) {
 
   if (!nodes.length) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500 font-serif">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
         No flowchart nodes parsed from diagram specification.
       </div>
     );
   }
 
   return (
-    <div className="my-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm font-serif">
+    <div className="my-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm">
       {/* Flowchart Header */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-4">
         <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export function InteractiveFlowchart({ code }) {
             Process & Curriculum Flow ({nodes.length} stages)
           </span>
         </div>
-        <span className="text-[10px] text-slate-400">Deterministic Flow Progression</span>
+        <span className="text-[11px] text-slate-400">Deterministic Flow Progression</span>
       </div>
 
       {/* Vertical Step Flow with Connecting Lines */}
@@ -74,18 +74,18 @@ export function InteractiveFlowchart({ code }) {
           return (
             <div key={node.id} className="relative group">
               {/* Step indicator node icon */}
-              <div className="absolute -left-6 sm:-left-8 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-white border-2 border-[#1d6fc4] text-[9px] font-bold text-[#1d6fc4] shadow-xs group-hover:bg-[#1d6fc4] group-hover:text-white transition-colors">
+              <div className="absolute -left-6 sm:-left-8 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-white border-2 border-[#1d6fc4] text-[11px] font-bold text-[#1d6fc4] shadow-xs group-hover:bg-[#1d6fc4] group-hover:text-white transition-colors">
                 {node.step}
               </div>
 
               {/* Node content card */}
               <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-sky-50/60 hover:border-sky-300 p-3 transition-all duration-200 shadow-2xs">
                 <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-700">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-700">
                     Stage {node.step}
                   </span>
                   {!isLast && (
-                    <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                    <span className="text-[11px] text-slate-400 flex items-center gap-0.5">
                       <span>Next</span>
                       <ArrowDown className="h-2.5 w-2.5 text-sky-500" />
                     </span>

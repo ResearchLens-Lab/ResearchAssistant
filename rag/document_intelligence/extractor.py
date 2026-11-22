@@ -55,7 +55,7 @@ class DocumentIntelligenceExtractor:
     extraction_version = EXTRACTION_VERSION
 
     def extract_file(self, path: str | Path, document_id: str, paper_id: str | None = None,
-                     private: bool = False) -> DocumentIntelligence:
+                     private: bool = False, owner_id: str | None = None) -> DocumentIntelligence:
         started = time.perf_counter()
         path = Path(path)
         digest = hashlib.sha256()
@@ -63,14 +63,20 @@ class DocumentIntelligenceExtractor:
             for batch in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(batch)
         content_hash = digest.hexdigest()
-        metadata = {"document_id": document_id, "paper_id": paper_id or f"paper_{document_id}", "filename": path.name}
+        metadata = {
+            "document_id": document_id,
+            "paper_id": paper_id or f"paper_{document_id}",
+            "filename": path.name,
+            "owner_id": owner_id or "system_extractor",
+        }
         try:
             normalized = DocumentLoaderFactory.get_loader(str(path)).load(str(path), metadata=metadata)
         except ValueError as exc:
             # The shared PDF loader correctly rejects image-only inputs for normal
             # indexing. For this opt-in extractor, turn only that known condition
             # into an explicit needs_ocr artifact without changing ingestion behavior.
-            if path.suffix.lower() != ".pdf" or "scanned PDFs require OCR" not in str(exc):
+            err_str = str(exc)
+            if path.suffix.lower() != ".pdf" or ("scanned PDFs require OCR" not in err_str and "no extractable text" not in err_str):
                 raise
             import pymupdf
             with pymupdf.open(str(path)) as pdf:
@@ -217,6 +223,10 @@ class DocumentIntelligenceExtractor:
     def _heading(line: str) -> tuple[str, int] | None:
         m = re.match(r"^(#{1,6})\s+(.+?)\s*#*\s*$", line)
         if m: return m.group(2), len(m.group(1))
+        sec_m = re.match(r"^(?:Section|Unit|Module|Chapter|Part)\s+([0-9IVXLCDM]+)\s*[:.]?\s*(.*)$", line, re.I)
+        if sec_m:
+            title = sec_m.group(2).strip()
+            return f"Section {sec_m.group(1)}: {title}" if title else f"Section {sec_m.group(1)}", 1
         m = re.match(r"^(\d+(?:\.\d+)*)(?:[.)])?\s+(.{2,100})$", line)
         if m and len(line) < 110: return m.group(2).strip(), m.group(1).count(".") + 1
         if len(line) <= 80 and line.isupper() and re.search(r"[A-Z]", line) and len(line.split()) <= 10:

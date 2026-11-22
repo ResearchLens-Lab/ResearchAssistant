@@ -33,14 +33,9 @@ class PaperCreate(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
     @model_validator(mode="after")
-    def ensure_description_present(self) -> "PaperCreate":
-        # New project creation strictly requires a description.
-        # Fall back to abstract for legacy tests that populate abstract.
-        if not self.description:
-            if self.abstract and self.abstract.strip():
-                self.description = self.abstract.strip()
-            else:
-                raise ValueError("Project description is required and cannot be empty.")
+    def sync_description(self) -> "PaperCreate":
+        if not self.description and self.abstract:
+            self.description = self.abstract.strip()
         return self
 
 
@@ -61,12 +56,14 @@ class PaperResponse(BaseModel):
     id: str
     title: str
     description: Optional[str] = None
+    folder_name: Optional[str] = None
     abstract: Optional[str] = None
     authors: Optional[list[str]] = None
     publication_year: Optional[int] = None
     doi: Optional[str] = None
     source_url: Optional[str] = None
     venue: Optional[str] = None
+    summary_json: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -75,11 +72,13 @@ class PaperSummaryResponse(BaseModel):
     paper_id: str
     answer: str
     sources: list[Source]
+    generated_at: Optional[str] = None
+    is_stale: Optional[bool] = False
 
 
 class PaperCompareRequest(BaseModel):
-    paper_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
-    document_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=4)
+    paper_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=10)
+    document_ids: Optional[list[str]] = Field(default=None, min_length=2, max_length=10)
     focus_area: Optional[str] = Field(default=None, max_length=500)
     output_format: Literal["table", "side_by_side", "detailed_report"] = "table"
 
@@ -99,3 +98,4 @@ class PaperCompareResponse(BaseModel):
     answer: str
     sources: list[Source]
     metadata: dict[str, Any] = Field(default_factory=dict)
+    comparison_id: Optional[str] = None

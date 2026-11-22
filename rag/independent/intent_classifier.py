@@ -3,7 +3,7 @@
 import re
 import unicodedata
 from collections import OrderedDict
-from typing import Iterable
+from typing import Iterable, Any
 
 from rag.independent.models import QueryAnalysis, QuestionIntent
 
@@ -44,10 +44,82 @@ TERM_SYNONYMS: dict[str, tuple[str, ...]] = {
     "stated": ("reported", "described"),
     "shown": ("reported", "measured"),
     "table": ("findings", "results", "methods", "summary"),
+    "strategy": ("technique", "design technique", "paradigm", "classification", "method"),
+    "strategies": ("techniques", "design techniques", "paradigms", "classifications", "methods", "divide and conquer", "greedy", "dynamic programming", "backtracking"),
 }
 
 
 INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...] = (
+    (QuestionIntent.TOPIC_COUNT_RANKING, (
+        r"\bwhich\s+section\b.{0,40}\b(?:more|most|highest|greatest|largest|fewer|fewest|least|lowest)\b.{0,40}\b(?:syllabus|topics?|content|coverage|subtopics?)\b",
+        r"\bwhich\s+section\s+(?:has|have|contains?)\s+(?:the\s+)?(?:most|more|highest|largest|maximum|least|fewest)\b",
+        r"\b(?:rank|order|compare)\b.{0,30}\bsections?\b.{0,30}\b(?:topics?|syllabus|size|length)\b",
+        r"\bsection\s+(?:with|having)\s+(?:the\s+)?(?:most|more|highest|maximum|least|fewest)\s+(?:topics?|syllabus)\b",
+        r"\bhow\s+many\s+topics\s+(?:are\s+there\s+)?in\s+each\s+section\b",
+        r"\bwhich\s+section\s+contains?\s+(?:the\s+)?(?:most|fewest|least|more)\s+(?:topics?|syllabus)\b",
+        r"\btell\s+me\s+which\s+section\s+(?:has|have)\s+more\s+syllabus\s+or\s+topics\b",
+    ), ("section ranking", "topic counts", "syllabus coverage", "evidence")),
+    (QuestionIntent.TOPIC_EXTRACTION, (
+        r"\bhow\s+many\s+(?:distinct\s+)?topics\s+(?:are\s+(?:there\s+)?)?in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\b(?:list|extract|show|give)\s+(?:all\s+)?(?:the\s+)?topics\s+in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\btopics?\s+in\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bwhat\s+topics\s+does\s+section\s+([0-9IVXLCDM]+)\s+cover\b",
+    ), ("section topics", "topic items", "syllabus")),
+    (QuestionIntent.TOPIC_COVERAGE_ANALYSIS, (
+        r"\b(?:syllabus|curriculum|topic)\s+coverage\b",
+        r"\b(?:topic|syllabus)\s+distribution\b",
+        r"\bdistribution\s+of\s+(?:the\s+)?(?:topics?|syllabus)\b",
+        r"\bbreakdown\s+of\s+(?:the\s+)?(?:topics?|syllabus)\b",
+        r"\bwhat\s+topics\s+(?:are\s+covered|does\s+this\s+cover)\b",
+        r"\btopics?\s+covered\s+in\b",
+        r"\b(?:extract|list|show)\s+(?:all\s+)?(?:the\s+)?syllabus\s+topics\b",
+    ), ("syllabus coverage", "topic groups", "subtopics")),
+    (QuestionIntent.SECTION_COMPARISON, (
+        r"\bcompare\s+section\s+([0-9IVXLCDM]+)\s+and\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bdifferences?\s+between\s+section\s+([0-9IVXLCDM]+)\s+and\s+section\s+([0-9IVXLCDM]+)\b",
+    ), ("section comparison", "differences", "topics")),
+    (QuestionIntent.SECTION_SUMMARY, (
+        r"\bsummarize\s+section\s+([0-9IVXLCDM]+)\b",
+        r"\bsection\s+([0-9IVXLCDM]+)\s+summary\b",
+    ), ("section summary", "main topics", "evidence")),
+    (QuestionIntent.DOCUMENT_COMPARISON, (
+        r"\bcompare\s+(?:the\s+)?(?:methodolog(?:y|ies)|results?|findings?|approaches?)\s+of\s+(?:these|the)\s+(?:\w+\s+)?papers\b",
+        r"\bcompare\s+these\s+(?:\d+\s+)?papers\b",
+        r"\bcompare\s+paper\s+\w+\s+and\s+paper\s+\w+\b",
+        r"\bcompare\s+across\s+two\s+documents\b",
+    ), ("cross-paper comparison", "methods", "findings")),
+    (QuestionIntent.DOCUMENT_SUMMARY, (
+        r"^\s*(?:give\s+me\s+the\s+)?summary\s*\??$",
+        r"\bsummarize\s+this\s+(?:syllabus|paper|document|book)\b",
+    ), ("document summary", "overview", "findings")),
+    (QuestionIntent.PROCEDURAL_QUESTION, (
+        r"\b(?:steps|process|workflow|procedure)\s+(?:to|of|for|in)\b",
+        r"\bhow\s+to\b",
+        r"\bstep-by-step\b",
+        r"\bexplain\s+(?:the\s+)?steps\b",
+    ), ("ordered steps", "conditions", "sources")),
+    (QuestionIntent.CONCEPT_EXPLANATION, (
+        r"\bexplain\s+(?:the\s+)?(?:concept\s+of\s+)?([A-Za-z0-9\s-]{2,60})\b",
+    ), ("concept explanation", "principles", "evidence")),
+    (QuestionIntent.NUMERICAL_RESULT_LOOKUP, (
+        r"\b(?:reported|numerical)\s+results?\b",
+        r"\bfind\s+(?:the\s+)?(?:source'?s\s+)?reported\s+numerical\s+results\b",
+        r"\bwhat\s+are\s+the\s+numerical\s+results\b",
+    ), ("numerical results", "metrics", "values", "units")),
+    (QuestionIntent.RESEARCH_GAP_ANALYSIS, (
+        r"\bresearch\s+gaps?\b",
+        r"\bunexplored\s+areas?\b",
+        r"\bfuture\s+directions?\b",
+    ), ("research gaps", "open problems", "future work")),
+    (QuestionIntent.CONTRADICTION_ANALYSIS, (
+        r"\bcontradict(?:ion|ing|ory)?\b",
+        r"\bconflicting\s+(?:claims|results|findings|evidence)\b",
+    ), ("contradictions", "conflicts", "opposing findings")),
+    (QuestionIntent.BIBLIOGRAPHIC_LOOKUP, (
+        r"\bbibliograph(?:y|ic)\b",
+        r"\bcitations?\s+list\b",
+        r"\breferences?\s+list\b",
+    ), ("bibliography", "references", "venue", "year")),
     (QuestionIntent.CHART_SYNTHESIS, (
         r"(?:^|\s)/(?:pie|chart)\b",
         r"\b(?:pie\s+chart|distribution\s+chart|pie\s+diagram|breakdown\s+chart|proportions?\s+chart)\b",
@@ -105,6 +177,14 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bwritten\s+by\b",
         r"\bauthorship\b",
     ), ("authors", "authorship")),
+    (QuestionIntent.COMPARISON, (
+        r"(?:^|\s)/(?:compare|diff)\b",
+        r"\bcompare\b",
+        r"\bcompar(?:e|ison|ing)\b",
+        r"\bdifferences?\b",
+        r"\bversus\b",
+        r"\bvs\.?\b",
+    ), ("comparison", "similarities", "differences")),
     (QuestionIntent.LIMITATIONS_EXTRACTION, (
         r"\b(?:reported\s+)?limitations?\b",
         r"\bthreats?\s+to\s+validity\b",
@@ -135,14 +215,6 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bkey\s+findings\b",
         r"\bcore\s+findings\b",
     ), ("summary", "findings", "limitations")),
-    (QuestionIntent.COMPARISON, (
-        r"(?:^|\s)/(?:compare|diff)\b",
-        r"\bcompare\b",
-        r"\bcompar(?:e|ison|ing)\b",
-        r"\bdifferences?\b",
-        r"\bversus\b",
-        r"\bvs\.?\b",
-    ), ("comparison", "similarities", "differences")),
     (QuestionIntent.NUMERICAL_QUERY, (
         r"\bhow\s+many\b",
         r"\bhow\s+much\b",
@@ -166,8 +238,8 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bdefine\b",
         r"\bdefinition\s+of\b",
         r"\bwhat\s+is\s+meant\s+by\b",
-        r"^\s*what\s+is\s+(?:an?|the)\s+[\w\s-]{1,50}\??$",
-        r"\bwhat\s+(?:is|are)\s+(?:an?|the)\s+[\w-]+\s*\??$",
+        r"^\s*what\s+(?:is|are)\s+(?:(?:an?|the)\s+)?[\w\s-]{1,50}\??$",
+        r"\bwhat\s+(?:is|are)\s+(?:(?:an?|the)\s+)?[\w-]+\s*\??$",
     ), ("definition", "explanation", "key points", "sources")),
     (QuestionIntent.EXPLANATION, (
         r"\bexplain\b",
@@ -179,9 +251,10 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\bwhat\s+are\s+the\b",
     ), ("direct answer", "evidence", "explanation")),
     (QuestionIntent.PROCEDURAL_QUESTION, (
-        r"\b(?:steps|process|workflow|procedure)\s+to\b",
+        r"\b(?:steps|process|workflow|procedure)\s+(?:to|of|for|in)\b",
         r"\bhow\s+to\b",
         r"\bstep-by-step\b",
+        r"\bexplain\s+(?:the\s+)?steps\b",
     ), ("ordered steps", "conditions", "sources")),
     (QuestionIntent.EVIDENCE_LOOKUP, (
         r"\b(?:show|find|give|provide)\b.{0,24}\b(?:evidence|passages?|quotes?|citations?)\b",
@@ -191,6 +264,9 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"\blist\b",
         r"\bwhich\s+(?:ones|items|papers|algorithms|authors|datasets|methods)\b",
         r"\bname\s+(?:the|all)\b",
+        r"\b(?:different|various|multiple)\s+(?:strategies|techniques|paradigms|types|methods|classifications|categories|kinds|algorithms)\b",
+        r"\b(?:tell\s+me|what\s+are|enumerate|show|explain|give)\b.{0,30}\b(?:different|various|all|multiple)?\s*(?:strategies|techniques|paradigms|types|methods|classifications|categories|kinds)\b",
+        r"\bwhat\s+are\s+(?:the\s+)?(?:properties|characteristics|features|types|strategies|techniques)\b",
     ), ("items", "sources")),
     (QuestionIntent.FACT_LOOKUP, (
         r"\bwho\b",
@@ -280,10 +356,20 @@ class QuestionIntentClassifier:
                 answer_shape = list(shape)
                 break
 
+        concept_match = re.search(
+            r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s-]{2,50}?)(?:\s+(?:mean|is|are|defined)|\?|$)",
+            search_question, re.I
+        )
+        concept_phrase = concept_match.group(1).strip() if concept_match else None
+
         tokens = _tokens(search_question)
         important = list(OrderedDict.fromkeys(
             token for token in tokens if token not in STOPWORDS and len(token) > 1
         ))[:30]
+        if concept_phrase and len(_tokens(concept_phrase)) >= 2:
+            clean_phrase = " ".join(_tokens(concept_phrase))
+            if clean_phrase and clean_phrase not in important:
+                important.insert(0, clean_phrase)
 
         # For generic research queries without topic keywords (e.g. "Use a table"),
         # provide core academic anchor terms so retrieval finds substantive passages.
@@ -291,6 +377,40 @@ class QuestionIntentClassifier:
             anchor_terms = ["finding", "method", "result", "experiment", "model", "approach", "conclusion", "table"]
             important.extend([t for t in anchor_terms if t not in important])
             important = important[:15]
+
+        # Extract primary phrase for multi-word concepts
+        primary_phrase = ""
+        q_clean = normalized.strip().rstrip(".").strip()
+        # 1. Steps / procedure: e.g. "Explain the steps of Dijkstra's algorithm"
+        m = re.search(r"\b(?:steps|process|procedure|workflow)\s+(?:of|for|to|in)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+        if m and len(m.group(1).strip()) >= 2:
+            primary_phrase = m.group(1).strip()
+        # 2. Properties / characteristics / types / advantages: e.g. "List the properties of a B-tree"
+        if not primary_phrase:
+            m = re.search(r"\b(?:properties|characteristics|features|types|advantages|disadvantages|applications|uses)\s+(?:of|for|in)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+        # 3. Compare X and Y
+        if not primary_phrase:
+            m = re.search(r"\bcompare\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)\s+and\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\?|$)", q_clean, re.I)
+            if m:
+                primary_phrase = f"{m.group(1).strip()} and {m.group(2).strip()}"
+        # 4. Why is X required/needed/used: e.g. "Why is normalization required in DBMS?"
+        if not primary_phrase:
+            m = re.search(r"\bwhy\s+(?:is|are|do|does)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\s+(?:required|needed|used|important|necessary)|\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+        # 5. Definition / explanation
+        if not primary_phrase:
+            m = re.search(r"\b(?:what\s+(?:is|are|does|means?)|define|definition\s+of|meaning\s+of|explain(?:\s+the\s+concept\s+of|\s+how)?|describe)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s'-]{1,60}?)(?:\s+(?:mean|is|are|defined|works|operates|functions|in\s+detail)|\?|$)", q_clean, re.I)
+            if m and len(m.group(1).strip()) >= 2:
+                primary_phrase = m.group(1).strip()
+
+        # Ensure important_terms has the full phrase as first element (if multi-word)
+        if primary_phrase and len(primary_phrase.split()) >= 2:
+            clean_phrase = " ".join(_tokens(primary_phrase))
+            if clean_phrase and clean_phrase not in important:
+                important.insert(0, clean_phrase)
 
         self_terms = _expand_with(important, self.synonyms)
         filters: dict[str, object] = {}
@@ -316,6 +436,7 @@ class QuestionIntentClassifier:
             intent=intent,
             normalized_question=normalized,
             search_query=search_question,
+            primary_phrase=primary_phrase,
             entities=_entities(search_question),
             important_terms=important,
             expanded_terms=self_terms,
@@ -324,6 +445,126 @@ class QuestionIntentClassifier:
             expected_answer_structure=answer_shape or ["evidence summary", "source passages", "limitations"],
             intent_signals=signals,
         )
+
+    @staticmethod
+    def decompose_compound_question(question: str) -> list[str]:
+        raw = question.strip()
+        parts = [p.strip() for p in re.split(r"\?\s+", raw) if p.strip()]
+        if len(parts) > 1:
+            main_concept = ""
+            m = re.search(r"\b(?:what\s+is\s+(?:an?\s+)?|define\s+|explain\s+)([a-zA-Z0-9\-\s]+)", parts[0], re.I)
+            if m:
+                main_concept = m.group(1).strip()
+            subqs = [parts[0] + ("?" if not parts[0].endswith("?") else "")]
+            for p in parts[1:]:
+                p_clean = p + ("?" if not p.endswith("?") else "")
+                if main_concept:
+                    p_clean = re.sub(r"\b(it's|its|their|these)\b", f"{main_concept}'s", p_clean, flags=re.I)
+                subqs.append(p_clean)
+            return subqs
+
+        pattern = re.compile(
+            r"^(?P<q1>.+?)\s+(?:,\s*)?(?:and(?:\s+also)?|as\s+well\s+as)\s+(?P<q2>(?:tell\s+me\s+(?:about\s+)?|explain\s+|list\s+|describe\s+|what\s+are\s+|how\s+does\s+|show\s+|give\s+).+)$",
+            re.I
+        )
+        m = pattern.match(raw.rstrip("?"))
+        if m:
+            q1 = m.group("q1").strip()
+            q2 = m.group("q2").strip()
+            main_concept = ""
+            cm = re.search(r"\b(?:what\s+is\s+(?:an?\s+)?|define\s+|explain\s+)([a-zA-Z0-9\-\s]+)", q1, re.I)
+            if cm:
+                main_concept = cm.group(1).strip()
+            if main_concept:
+                q2_resolved = re.sub(r"\b(it's|its)\b", f"{main_concept}", q2, flags=re.I)
+                q2_resolved = re.sub(r"\b(their|these)\b", f"{main_concept}", q2_resolved, flags=re.I)
+            else:
+                q2_resolved = q2
+            return [q1, q2_resolved]
+        return [raw]
+
+    @staticmethod
+    def decompose_comparison_aspects(question: str) -> list[dict[str, Any]]:
+        raw = question.strip()
+        q_clean = re.sub(r"^(?:compare\s+(?:the\s+)?(?:selected\s+)?(?:documents?|sources?|papers?)\s+(?:regarding|on|about|for):?\s*|i\s+want\s+to\s+know\s+|tell\s+me\s+about\s+)", "", raw, flags=re.I).strip()
+        q_lower = q_clean.lower()
+
+        # 1. Algorithm domain: Types & Limitations
+        has_algo = bool(re.search(r"\balgorithms?\b", q_lower))
+        has_types = bool(re.search(r"\b(?:types?|kinds?|paradigms?|strategies|techniques?|classes|categories|approaches?|classifications?)\b", q_lower))
+        has_limits = bool(re.search(r"\b(?:limitations?|drawbacks?|weaknesses?|constraints?|complexit(?:y|ies)|trade-offs?|challenges?|bounds?|costs?)\b", q_lower))
+
+        if has_algo and (has_types or has_limits):
+            aspects = []
+            aspects.append({
+                "key": "paradigms",
+                "title": "Algorithm Types & Design Paradigms",
+                "query": "algorithm design strategies techniques paradigms divide-and-conquer greedy dynamic programming backtracking branch-and-bound randomized approximation",
+                "terms": ["divide and conquer", "greedy", "dynamic programming", "backtracking", "branch and bound", "randomized", "approximation", "design technique", "strategy"],
+            })
+            aspects.append({
+                "key": "limitations",
+                "title": "Reported Limitations & Complexity Constraints",
+                "query": "algorithm limitations computational complexity worst-case running time NP-complete NP-hard lower bound constraints trade-offs",
+                "terms": ["limitation", "worst-case", "complexity", "running time", "NP-complete", "lower bound", "constraint", "trade-off"],
+            })
+            aspects.append({
+                "key": "definition",
+                "title": "Core Definition & Computational Scope",
+                "query": "algorithm definition computational procedure finite instructions inputs outputs problem solving",
+                "terms": ["algorithm", "definition", "computational procedure", "instructions", "finite", "input", "output"],
+            })
+            return aspects
+
+        # 2. General multi-aspect questions with 'and' or 'vs' / 'versus'
+        split_match = re.split(r"\s+(?:and(?:\s+also)?|versus|vs\.?|as\s+well\s+as)\s+", q_clean, flags=re.I)
+        if len(split_match) == 2 and all(len(part.strip()) >= 3 for part in split_match):
+            part1, part2 = split_match[0].strip(), split_match[1].strip()
+            title1 = re.sub(r"^(?:the\s+|different\s+|all\s+)", "", part1, flags=re.I).title()
+            title2 = re.sub(r"^(?:their\s+|its\s+|the\s+)", "", part2, flags=re.I).title()
+            return [
+                {
+                    "key": "aspect_1",
+                    "title": title1,
+                    "query": f"{q_clean} {part1}",
+                    "terms": [t for t in _tokens(part1) if t not in STOPWORDS],
+                },
+                {
+                    "key": "aspect_2",
+                    "title": title2,
+                    "query": f"{q_clean} {part2}",
+                    "terms": [t for t in _tokens(part2) if t not in STOPWORDS],
+                },
+                {
+                    "key": "aspect_3",
+                    "title": "Core Concepts & Scope",
+                    "query": f"{q_clean} definition overview methodology",
+                    "terms": [t for t in _tokens(q_clean) if t not in STOPWORDS][:5],
+                },
+            ]
+
+        # 3. Standard fallback structured dimensions for academic comparisons
+        return [
+            {
+                "key": "concepts_objectives",
+                "title": "Core Concepts & Objectives",
+                "query": f"{q_clean} objective definition concept problem scope",
+                "terms": ["objective", "definition", "concept", "problem", "scope"],
+            },
+            {
+                "key": "methods_paradigms",
+                "title": "Key Methods & Techniques",
+                "query": f"{q_clean} method algorithm technique approach architecture",
+                "terms": ["method", "algorithm", "technique", "approach", "design"],
+            },
+            {
+                "key": "limitations_constraints",
+                "title": "Reported Limitations & Constraints",
+                "query": f"{q_clean} limitation constraint complexity challenge drawback",
+                "terms": ["limitation", "constraint", "complexity", "challenge", "drawback"],
+            },
+        ]
+
 
 
 def _expand_with(terms: Iterable[str], synonyms: dict[str, tuple[str, ...]]) -> list[str]:

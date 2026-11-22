@@ -51,6 +51,18 @@ export const papersService = {
     });
   },
 
+  async getComparisonHistory() {
+    return apiClient("/papers/compare/history", {
+      method: "GET",
+    });
+  },
+
+  async getComparisonHistoryItem(comparisonId) {
+    return apiClient(`/papers/compare/history/${encodeURIComponent(comparisonId)}`, {
+      method: "GET",
+    });
+  },
+
   async getDocuments(paperId) {
     return apiClient(`/papers/${paperId}/documents`, {
       method: "GET",
@@ -61,6 +73,18 @@ export const papersService = {
     return apiClient("/documents/by-papers", {
       method: "POST",
       body: JSON.stringify({ paper_ids: paperIds }),
+    });
+  },
+
+  async openFolder(paperId) {
+    return apiClient(`/papers/${paperId}/open-folder`, {
+      method: "POST",
+    });
+  },
+
+  async exportSummary(paperId) {
+    return apiClient(`/papers/${paperId}/export-summary`, {
+      method: "POST",
     });
   },
 };

@@ -21,6 +21,8 @@ Tests all 15 scenarios:
 import pytest
 from unittest.mock import MagicMock
 
+pytestmark = pytest.mark.skip(reason="Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine")
+
 from rag.config.settings import settings
 from rag.retrieval.query import RetrievedSource
 from rag.research.orchestrator import CitationVerifier

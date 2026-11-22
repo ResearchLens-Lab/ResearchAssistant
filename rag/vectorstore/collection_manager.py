@@ -4,8 +4,12 @@ ChromaDB collection management and lifecycle operations.
 
 import logging
 from typing import Optional, Dict, Any
-import chromadb
-from chromadb.api.models.Collection import Collection
+try:
+    import chromadb
+    from chromadb.api.models.Collection import Collection
+except ImportError:
+    chromadb = None
+    Collection = Any
 from rag.config.settings import settings
 from rag.vectorstore.chroma_client import ChromaClientFactory
 
@@ -17,7 +21,9 @@ class CollectionManager:
     Handles collection creation, retrieval, and deletion in ChromaDB.
     """
 
-    def __init__(self, client: Optional[chromadb.ClientAPI] = None):
+    def __init__(self, client: Optional[Any] = None):
+        if chromadb is None:
+            raise RuntimeError("ChromaDB is not installed in this model-free environment.")
         self.client = client or ChromaClientFactory.get_client()
 
     def get_or_create_collection(
