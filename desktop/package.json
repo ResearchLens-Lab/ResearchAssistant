@@ -2,7 +2,7 @@
   "name": "researchlens-desktop",
   "version": "0.1.0-alpha.1",
   "private": true,
-  "description": "Private local ResearchLens Windows desktop app",
+  "description": "ResearchLens local-first desktop research workspace.",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
