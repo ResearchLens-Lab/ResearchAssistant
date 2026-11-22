@@ -1,69 +1,69 @@
 # Contributing to ResearchLens
 
-Thank you for your interest in contributing to **ResearchLens**! We welcome improvements, bug fixes, and documentation updates that align with our core design goals.
+This document outlines the guidelines for contributing to ResearchLens.
 
 ---
 
-## 🧭 Core Architectural Philosophy
+## Architectural Principles
 
-Before contributing code, please keep in mind our non-negotiable principles:
+All contributions must preserve the following system properties:
 
-1. **Deterministic & Model-Free First**: The primary engine must run 100% offline on standard CPU hardware without requiring paid cloud AI APIs, external inference endpoints, or downloading neural weights.
-2. **Evidence-Grounded**: Every factual statement in generated answers must have an unambiguous, verbatim inline citation (`[S1]`, `[S2]`) pointing to an exact source page and section.
-3. **Strict Academic Abstention**: When evidence is missing, the system must report that the requested information was not found in the selected corpus rather than inferring or approximating.
-4. **SEC-001 Tenant Isolation**: Any query, index, or storage operation must strictly enforce `owner_id` scoping. No user or project data may be exposed across accounts.
+1. **Deterministic and Model-Free Default**: The primary research engine must function without requiring external cloud inference APIs, neural weights, or dedicated GPUs.
+2. **Evidence Grounding**: Factual answers must provide explicit citation tags (`[S1]`, `[S2]`) pointing to exact document page numbers and section headers.
+3. **Academic Abstention**: When information is absent from selected documents, the engine must state that the information was not found rather than inferring or approximating.
+4. **Tenant Isolation**: All database operations and queries must enforce `owner_id` scoping to prevent data exposure across local user accounts.
 
 ---
 
-## 🛠️ Development Setup
+## Development Setup
 
-### 1. Prerequisites
-- Python 3.12 (or 3.11)
-- Node.js 18+ or 20+
+### Prerequisites
+
+- Python 3.11 or 3.12
+- Node.js 18 or 20
 - Git
 
-### 2. Environment Preparation
+### Installation
+
 ```bash
-# Clone the repository
 git clone https://github.com/ResearchLens-Lab/ResearchAssistant.git
 cd ResearchAssistant
 
-# Set up Python virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+source .venv/bin/activate  # Windows: .\.venv\Scripts\Activate.ps1
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Run database migrations
 alembic -c backend/alembic.ini upgrade head
 ```
 
-### 3. Running the Test Suite
-All PRs must pass the test suite before merging:
-```bash
-# Run backend and RAG tests
-pytest backend/tests/ rag/tests/ -v
+### Running Tests
 
-# Run frontend tests
+All automated tests must pass before opening a pull request:
+
+```bash
+pytest backend/tests/ rag/tests/ -v
 npm test --prefix frontend
 ```
 
 ---
 
-## 🌿 Branching and Git Workflow
+## Branching Strategy
 
-ResearchLens uses a structured branching model:
+ResearchLens maintains two primary branches:
 
-- `main`: Permanent release branch. Contains tagged, verified production builds.
-- `develop`: Permanent integration branch. All feature and bugfix branches merge here via Pull Request.
-- `feature/<name>`: New functionality or architecture enhancements.
-- `fix/<name>`: Bug fixes and test corrections.
-- `docs/<name>`: Documentation additions and improvements.
-- `chore/<name>`: Maintenance, dependency updates, and refactoring.
+- `main`: Release baseline. Tagged production code only.
+- `develop`: Integration branch. All features and fixes target this branch.
 
-### Pull Request Checklist
-- Branch from `develop` and target `develop` for your PR.
-- Ensure all 500+ unit and integration tests pass cleanly.
-- Include unit tests covering any new logic or bug fixes.
-- Follow existing formatting and typing conventions.
+Work in branch types prefixed with their purpose:
+
+- `feature/<name>`: New capabilities or enhancements.
+- `fix/<name>`: Bug fixes and test repairs.
+- `docs/<name>`: Documentation updates.
+- `chore/<name>`: Build, dependency, or maintenance tasks.
+
+### Pull Request Requirements
+
+- Target `develop` for all functional pull requests.
+- Ensure all test suites pass without regressions.
+- Add test coverage for new functionality or bug fixes.
+- Avoid introducing hardcoded user profile paths.

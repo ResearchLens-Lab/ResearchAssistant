@@ -1,167 +1,178 @@
 # ResearchLens
 
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
-[![Electron 31](https://img.shields.io/badge/Electron-31.0-47848F.svg)](https://www.electronjs.org/)
-[![Tests Passing](https://img.shields.io/badge/tests-474%20passed%2C%200%20failed-brightgreen.svg)]()
-[![Offline Guarantee](https://img.shields.io/badge/offline-100%25%20local%20CPU-success.svg)]()
+ResearchLens is a desktop research workspace for organizing academic and technical documents, searching their content, comparing information across sources and reviewing evidence-backed answers.
 
-> **Deterministic, Model-Free, Offline-First Research Engine & Knowledge Management Platform**  
-> Developed under the **ResearchLens-Lab** organization.  
-> Lead Developer & Maintainer: **Gorav Gumber** | Contributions: **Harendra Godara**, **Himanshu Kumawat**
+The application runs locally on Windows, macOS, and Linux, providing document ingestion, lexical retrieval, side-by-side comparison tables, and provenance-grounded question answering.
 
 ---
 
-## 📌 Executive Summary
+## Technical Overview
 
-**ResearchLens** is an evidence-first, offline-first academic knowledge management system and research assistant. It was engineered to address a major weakness in modern academic workflows: reliance on non-deterministic, hallucinatory, cloud-dependent Large Language Models (LLMs) that require expensive recurring API fees, leak confidential pre-publication manuscripts, and invent ungrounded citations.
+The default ResearchLens research engine operates entirely on local CPU resources without requiring a cloud LLM API, neural embedding downloads, or dedicated GPU hardware.
 
-ResearchLens operates **100% locally and deterministically**. It requires **zero external cloud AI APIs, zero neural weights to download, and zero GPUs**. Running entirely on commodity CPU hardware, ResearchLens provides rigorous, page-accurate document question answering, multi-paper comparative analysis, structural summaries, and knowledge graph mapping with mathematical reproducibility.
+### Default Local Research Engine
 
----
-
-## 🌟 Key Capabilities
-
-### 1. Model-Free Deterministic Research Desk
-- **Exact Provenance**: Every claim made in an answer is backed by an explicit bracketed citation (e.g., `[S1]`, `[S2]`) directly linking to the exact PDF page, section header, and character span.
-- **Honest Academic Abstention**: If a queried term, author, or limitation is not explicitly documented in the user's selected library papers, ResearchLens clearly states what is missing rather than fabricating plausible answers.
-- **No Hallucinations**: Answers are assembled by a rule-based synthesis engine combined with BM25 lexical search and TF-IDF reciprocal-rank fusion over an embedded SQLite FTS5 store.
-
-### 2. Multi-Document Comparative Synthesis
-- **Structured Matrix Comparisons**: Compare methods, findings, datasets, and limitations across 2 or more research documents simultaneously.
-- **Three Verifiable Formats**: Switch seamlessly between **Comparison Table**, **Side-by-Side Analysis**, and **Detailed Narrative Report**.
-- **Conflict & Nuance Detection**: Automatically detects and surfaces conflicting numerical measurements or contradictory conclusions across papers.
-
-### 3. Structural Grounded Summarization
-- **Section-Aware Chunking**: Preserves academic document hierarchy (Abstract, Methodology, Analysis, Results, Discussion, Conclusion).
-- **Fast Local Ingestion**: Extracts text, page bounds, and structural headers directly into a high-performance SQLite FTS5 database in WAL mode with zero network calls.
-
-### 4. Offline Knowledge Graph
-- **Concept & Relationship Extraction**: Identifies domain concepts, taxonomy relations (`specializes`), and cross-references (`references`) across library documents using CPU-only syntactic analysis.
-- **Bi-directional Traversal**: Explore connections between research ideas and inspect underlying textual evidence.
-
-### 5. Packaged Windows Desktop Application
-- **Zero-Configuration Installer**: Production-ready NSIS installer (`ResearchLens-Setup-x64.exe`) supporting both current-user and machine-wide installations.
-- **Credential & Session Security**: Leverages Windows `safeStorage` (DPAPI) to securely persist sessions locally without plaintext tokens.
-- **Complete Privacy & Tenant Isolation (SEC-001)**: User data, indexes, and session states are strictly partitioned by authenticated owner IDs.
+- **Index and Storage**: Document text, section headings, and page boundaries are stored in an embedded SQLite database using the FTS5 full-text extension with WAL mode enabled.
+- **Retrieval Pipeline**: Combines SQLite FTS5 BM25 lexical ranking with local TF-IDF query expansion and reciprocal-rank fusion (RRF).
+- **Answer Composition**: Uses deterministic extractive answer composition to assemble responses directly from retrieved passages.
+- **Evidence Validation**: Verifies claims against source passages and generates inline citation markers (`[S1]`, `[S2]`) linked to explicit document filenames, page numbers, and section headers.
+- **Academic Abstention**: When queried facts or definitions are absent from selected documents, the engine reports that information was not found rather than inferring ungrounded text.
+- **Optional Integrations**: Configurable settings support optional local Ollama models or cloud providers when explicitly enabled by the user.
 
 ---
 
-## 🏗️ System Architecture
+## Desktop Application Screenshots
+
+### 1. Research Library and Grounded Summary
+The project library displays indexed sources, chunk counts, extraction status, and generated section-by-section summaries with citation anchors.
+
+![Research Library](docs/assets/screenshots/desktop/01_research_library.png)
+
+---
+
+### 2. Document Sources and Section Extraction
+Document ingestion parses PDF structure, extracting headings, page boundaries, and section text into the local lexical index.
+
+![Document Sources](docs/assets/screenshots/desktop/02_document_sources_and_summary.png)
+
+---
+
+### 3. Research Desk Question and Answering
+Users query indexed documents through the Research Desk. Answers present direct passages from selected documents with evidence status indicators.
+
+![Research Desk QA](docs/assets/screenshots/desktop/03_research_desk_qa.png)
+
+---
+
+### 4. Evidence and Citation Inspector
+Selecting any inline citation opens the Evidence Inspector, showing the exact page reference, section header, and highlighted source text.
+
+![Evidence Inspector](docs/assets/screenshots/desktop/04_evidence_citation_inspector.png)
+
+---
+
+### 5. Multi-Turn Exploration
+The Research Desk supports multi-turn query refinement across selected project documents while preserving citation linkages and evidence boundaries.
+
+![Multi-Turn Exploration](docs/assets/screenshots/desktop/05_research_desk_multi_turn.png)
+
+---
+
+### 6. Desktop Settings and Configuration
+Desktop settings manage storage directories, network preferences, and optional provider connections.
+
+![Desktop Settings](docs/assets/screenshots/desktop/06_desktop_settings.png)
+
+---
+
+## System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer ["Client Presentation Layer"]
-        UI["Next.js 14 SPA / Desktop Electron App"]
-        DPAPI["Windows DPAPI Secure Session Store"]
+    subgraph UI ["Desktop UI"]
+        DesktopApp["Electron Shell (main.cjs)"]
+        Renderer["Next.js 14 Frontend"]
     end
 
-    subgraph DesktopIPC ["Desktop IPC & Lifecycle"]
-        MainProcess["Electron main.cjs (Subprocess Supervisor)"]
-        PortResolver["Dynamic Loopback Port & Health Verifier"]
+    subgraph Backend ["Application Backend"]
+        FastAPI["FastAPI REST Service (Python 3.12)"]
+        AuthService["Authentication & Tenant Isolation"]
+        DocService["Document Ingestion Service"]
     end
 
-    subgraph BackendAPI ["FastAPI Application Backend (Python 3.12)"]
-        AuthRoute["Auth & Session Manager (SEC-001 Isolation)"]
-        DocRoute["Document & Project Management"]
-        ResearchRoute["Research Desk & Compare Gateway"]
-    end
-
-    subgraph DeterministicEngine ["Deterministic Research Engine (rag/)"]
-        Classifier["Intent & Query Analyzer (Rule-Based)"]
-        Retriever["Independent Retriever (SQLite FTS5 + TF-IDF RRF)"]
-        FactExtract["Fact & Passage Extractor"]
-        Validator["Evidence & Provenance Validator"]
+    subgraph Engine ["Deterministic Research Engine"]
+        Classifier["Query Intent Classifier"]
+        Retriever["Independent Retriever (BM25 + TF-IDF)"]
         Composer["Structured Answer Composer"]
+        Validator["Evidence Validator"]
     end
 
-    subgraph StorageLayer ["Persistence & Local Storage"]
-        FTS5DB[("researchlens_lexical.sqlite3 (FTS5 Lexical Index)")]
-        AppDB[("database.sqlite / app.db (Relational State)")]
-        DocStore[("Local Document Storage (PDFs / Text)")]
+    subgraph Data ["Local Storage"]
+        LexicalDB[("SQLite FTS5 Lexical Index")]
+        AppDB[("SQLite Application State")]
+        DocFiles[("Local Document Storage")]
     end
 
-    UI <--> MainProcess
-    MainProcess <--> PortResolver
-    MainProcess <--> BackendAPI
-    BackendAPI --> AuthRoute
-    BackendAPI --> DocRoute
-    BackendAPI --> ResearchRoute
+    DesktopApp <--> Renderer
+    DesktopApp <--> FastAPI
+    Renderer <--> FastAPI
 
-    ResearchRoute --> Classifier
+    FastAPI --> AuthService
+    FastAPI --> DocService
+    FastAPI --> Classifier
+
+    DocService --> LexicalDB
+    DocService --> DocFiles
+    AuthService --> AppDB
+
     Classifier --> Retriever
-    Retriever <--> FTS5DB
-    Retriever --> FactExtract
-    FactExtract --> Validator
+    Retriever <--> LexicalDB
+    Retriever --> Validator
     Validator --> Composer
-    Composer --> ResearchRoute
-
-    DocRoute <--> DocStore
-    DocRoute <--> AppDB
-    DocRoute --> Retriever
+    Composer --> FastAPI
 ```
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 ResearchAssistant/
-├── backend/                       # FastAPI application backend
+├── backend/                       # FastAPI backend service
 │   ├── app/
-│   │   ├── core/                  # Configuration, security, and logging
-│   │   ├── database/              # SQLite session management & migrations
+│   │   ├── core/                  # Configuration, security, dependencies
+│   │   ├── database/              # SQLite database session and models
 │   │   ├── integrations/          # RAGClient bridge and document indexing
-│   │   ├── models/                # SQLAlchemy models (User, Paper, Document, etc.)
 │   │   ├── routes/                # REST endpoints (/auth, /papers, /documents, /chat)
-│   │   └── services/              # Business logic and ingestion coordinators
-│   └── tests/                     # Security, tenant isolation, and API integration tests
-├── rag/                           # Deterministic research intelligence engine
-│   ├── chunking/                  # Page-accurate, section-aware document chunker
-│   ├── citations/                 # Academic citation formatting and locator mapping
-│   ├── independent/               # Core model-free engine (retriever, composer, validator)
-│   ├── ingestion/                 # PDF and text extraction loaders
-│   ├── intelligence/              # Concept graph extractor and syntactic intent rules
-│   ├── pipelines/                 # QueryPipeline orchestration
-│   ├── training/                  # Scikit-learn CPU-only training harness & evaluators
-│   └── tests/                     # 35+ pytest suites testing RAG grounding and retrieval
-├── frontend/                      # Next.js 14 web application & desktop renderer
+│   │   └── services/              # Document, project, and search services
+│   └── tests/                     # Backend security, isolation, and API tests
+├── rag/                           # Deterministic research engine
+│   ├── chunking/                  # Page-accurate, section-aware chunker
+│   ├── citations/                 # Citation formatting and locator mapping
+│   ├── independent/               # Retrieval, composition, and evidence validation
+│   ├── ingestion/                 # Document loaders and structure extractors
+│   ├── intelligence/              # Concept graph extractor and intent rules
+│   ├── pipelines/                 # High-level query and ingest pipelines
+│   ├── training/                  # Scikit-learn evaluation metrics and dataset tools
+│   └── tests/                     # RAG test suites
+├── frontend/                      # Next.js 14 web client and desktop renderer
 │   ├── src/
-│   │   ├── app/                   # App Router pages (/library, /chat, /compare, /login)
-│   │   ├── components/            # Evidence cards, citation pills, comparison matrix
-│   │   └── lib/                   # API client, progress calculation, date utilities
+│   │   ├── app/                   # Next.js App Router pages
+│   │   ├── components/            # UI components and workbenches
+│   │   └── lib/                   # API client and utility modules
 │   └── package.json
-├── desktop/                       # Electron desktop shell & NSIS packaging
-│   ├── main.cjs                   # Subprocess orchestration and DPAPI safeStorage IPC
-│   ├── preload.cjs                # Context isolation bridge
-│   ├── build/                     # NSIS scripts, icons, bitmaps, build manifest
-│   └── scripts/                   # Packaging and asset verification scripts
-├── docs/                          # Comprehensive technical and historical documentation
-│   ├── architecture/              # Codebase guides, security specs, and design docs
-│   ├── archive/historical-phases/ # 34 historical milestone and stabilization reports
-│   └── desktop/                   # Desktop application specifications and release reports
-├── scripts/                       # Local evaluation, migration, and maintenance utilities
-├── .github/                       # CI/CD workflows and issue/PR templates
-├── launch_test_desktop.ps1        # One-click isolated desktop test launcher
+├── desktop/                       # Electron desktop application
+│   ├── main.cjs                   # Main process supervisor and IPC handlers
+│   ├── preload.cjs                # Context bridge
+│   ├── build/                     # NSIS installer configuration and icons
+│   └── scripts/                   # Desktop packaging scripts
+├── docs/                          # Project technical documentation
+│   ├── architecture/              # Architecture guides and specifications
+│   ├── assets/screenshots/        # Application screenshots
+│   ├── backend/                   # Backend API overview
+│   ├── desktop/                   # Desktop runtime and security model
+│   └── rag/                       # RAG engine documentation
+├── scripts/                       # Maintenance and evaluation utilities
 ├── pytest.ini                     # Pytest configuration
-└── requirements.txt               # Backend and RAG dependencies
+└── requirements.txt               # Python dependencies
 ```
 
 ---
 
-## ⚡ Quick Start
+## Getting Started
 
 ### Prerequisites
-- **Python**: 3.12 (or 3.11)
-- **Node.js**: v18+ or v20+
-- **OS**: Windows 10/11 (fully supported desktop & installer), macOS, Linux
 
-### 1. Backend & RAG Setup
-```powershell
-# Create and activate Python virtual environment
+- Python 3.11 or 3.12
+- Node.js 18 or 20
+- npm 9+
+
+### Backend Setup
+
+```bash
+# Create and activate virtual environment
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+source .venv/bin/activate  # Windows: .\.venv\Scripts\Activate.ps1
 
 # Install dependencies
 pip install -r requirements.txt
@@ -173,75 +184,58 @@ alembic -c backend/alembic.ini upgrade head
 pytest backend/tests/ rag/tests/ -v
 ```
 
-### 2. Frontend Setup
-```powershell
+### Frontend Setup
+
+```bash
 cd frontend
 npm install
 npm test
 npm run dev
 ```
 
-### 3. Desktop Application Development & Launch
-```powershell
-# Option A: Run isolated local testing harness
-.\launch_test_desktop.ps1
+### Running the Desktop Application
 
-# Option B: Run desktop development directly
+```bash
+# Option 1: Development mode
 cd desktop
 npm install
 npm start
+
+# Option 2: Run isolated acceptance test environment
+.\launch_test_desktop.ps1
 ```
 
 ---
 
-## 🧪 Verification & Quality Benchmarks
+## Automated Verification
 
-ResearchLens enforces strict automated test verification:
+The test suite covers backend API routes, tenant isolation, lexical indexing, answer composition, and frontend components:
 
-| Test Suite | Total Tests | Passed | Failed | Status |
-|---|---|---|---|---|
-| **Backend API & SEC-001 Isolation** | 185 | 185 | 0 | ✅ Verified |
-| **Deterministic RAG & Evidence Grounding** | 334 | 289 | 0 (45 skipped) | ✅ Verified |
-| **Frontend Unit & Logic Tests** | 34 | 34 | 0 | ✅ Verified |
-| **Strict Offline Network Verification** | 1 | 1 | 0 | ✅ Verified (0 outbound calls) |
-| **Total Automated Coverage** | **553** | **508** | **0** | **100% Pass Rate** |
-
-To execute the full verification suite locally:
-```powershell
-.\.venv\Scripts\python.exe -m pytest -v
-npm test --prefix frontend
-```
+- **Backend and Engine Tests**: 474 passed, 0 failed, 45 skipped (`pytest backend/tests/ rag/tests/`)
+- **Frontend Tests**: 34 passed, 0 failed (`npm test --prefix frontend`)
+- **Strict Offline Network Verification**: 1 passed (`test_offline_strict.py` confirms 0 outbound requests)
 
 ---
 
-## 👥 Engineering Team & Attribution
+## Contributing and Security
 
-ResearchLens was developed under the **ResearchLens-Lab** organization by:
-
-- **Gorav Gumber** ([@goravgumber](https://github.com/goravgumber))  
-  *Project Lead & Architecture Maintainer*  
-  Deterministic RAG engine, SQLite FTS5 lexical retrieval, Windows Electron shell, NSIS installer, SEC-001 cross-user isolation architecture.
-- **Harendra Godara**  
-  *Knowledge Graph & Data Engineering Contributor*  
-  Concept extraction, offline relationship linking, structural entity mapping.
-- **Himanshu Kumawat**  
-  *Frontend Engineering Contributor*  
-  Next.js UI components, responsive layout, comparison view rendering.
+- [Contributing Guidelines](docs/contributing.md)
+- [Code of Conduct](docs/code-of-conduct.md)
+- [Security Policy](docs/security.md)
+- [Documentation Index](docs/README.md)
 
 ---
 
-## 🤝 Contributing & Community
+## Authors
 
-We welcome contributions from researchers and software engineers! Please review our community guidelines before submitting pull requests:
+Developed under the **ResearchLens-Lab** organization:
 
-- 📖 [Contributing Guidelines](docs/contributing.md)
-- 📜 [Code of Conduct](docs/code-of-conduct.md)
-- 🔒 [Security Policy & SEC-001 Overview](docs/security.md)
-- 📑 [Documentation Index](docs/README.md)
+- **Gorav Gumber** — Project lead, deterministic research engine, desktop shell, lexical indexing, tenant isolation.
+- **Harendra Godara** — Knowledge concept extraction and relationship analysis.
+- **Himanshu Kumawat** — Frontend user interface and responsive layout components.
 
 ---
 
-## ⚖️ Open-Source Licensing Notice
+## License
 
-> [!IMPORTANT]
-> **Licensing Status**: This repository is undergoing stabilization prior to public release. The project maintainers and contributors are reviewing final open-source license selection (e.g., **Apache 2.0** vs. **MIT**). Until a formal `LICENSE` file is committed by mutual agreement of all contributors, all rights remain reserved by the authors under the ResearchLens-Lab organization.
+This repository is being prepared for open-source release. Final license selection (such as Apache-2.0 or MIT) and author attribution will be finalized by the project contributors prior to public release. All rights remain reserved by the authors under the ResearchLens-Lab organization.

@@ -1,35 +1,41 @@
-# ResearchLens Documentation Index
+# ResearchLens Documentation
 
-Welcome to the **ResearchLens** technical documentation catalog.
-
----
-
-## 🏛️ Architecture & System Design
-
-- [Codebase Guide](architecture/codebase-guide.md): Comprehensive source code overview and module relationships.
-- [Local AI Architecture](architecture/local-ai-architecture.md): Overview of deterministic, model-free research synthesis.
-- [Source Verification Design](architecture/source-verification-design.md): Provenance tracking, page locators, and citation mapping.
-- [Security & SEC-001 Specification](security.md): Multi-user tenant isolation and credential encryption.
+This directory contains technical documentation for ResearchLens.
 
 ---
 
-## 🖥️ Desktop Application
+## Documentation Overview
 
-- [Desktop Application Plan](desktop/desktop-application-plan.md): Architectural roadmap and implementation plan.
-- [Field Acceptance Report](desktop/FIELD_ACCEPTANCE_REPORT.md): Verified test outcomes and runtime checks.
-- [Installer Implementation](desktop/SHOWCASE_BUILD_IMPLEMENTATION_REPORT.md): NSIS packaging and Windows configuration.
+### Architecture and Design
 
----
+- [Codebase Guide](architecture/codebase-guide.md): Directory layout, module boundaries, and service architecture.
+- [Local Research Architecture](architecture/local-ai-architecture.md): Design of the deterministic, model-free research engine.
+- [Source Verification Design](architecture/source-verification-design.md): Provenance tracking, page locator extraction, and citation mapping.
 
-## 👥 Community & Governance
+### Desktop Application
 
-- [Contributing Guidelines](contributing.md): Setup instructions, test guidelines, and PR workflow.
-- [Code of Conduct](code-of-conduct.md): Team standards and collaboration expectations.
+- [Backend Sidecar Architecture](desktop/BACKEND_SIDECAR_ARCHITECTURE.md): Local loopback process lifecycle and supervisor design.
+- [Database Portability and Migration](desktop/DATABASE_PORTABILITY_AND_MIGRATION.md): SQLite schema portability and multi-user database scoping.
+- [Installer and Updates](desktop/INSTALLER_AND_UPDATES.md): NSIS installer packaging, per-user and all-users installation options.
+- [Local Storage Design](desktop/LOCAL_STORAGE_DESIGN.md): Storage directory layout across operating systems.
+- [Security Threat Model](desktop/SECURITY_THREAT_MODEL.md): Local isolation, IPC boundaries, and credential encryption.
 
----
+### Backend
 
-## 📦 Historical Phase Reports & Audits
+- [Backend Architecture](backend/overview.md): FastAPI service layout, dependency injection, and database repositories.
 
-All 34 milestone, stabilization, and evaluation records from prior project phases are organized under `docs/archive/historical-phases/`:
+### Research Engine (RAG)
 
-- [Historical Phase Reports Archive](archive/historical-phases/)
+- [RAG Overview](rag/overview.md): System pipeline from PDF ingestion to evidence extraction.
+- [Engine Overview](rag/engine-overview.md): Component breakdown of the retrieval and generation engine.
+- [Ingestion and Normalization](rag/ingestion.md): Document loading, text extraction, and section detection.
+- [Section-Aware Chunking](rag/chunking.md): Boundary-preserving chunking strategy.
+- [Retrieval Pipeline](rag/retrieval.md): SQLite FTS5 BM25 search and local TF-IDF rank fusion.
+- [Citation Mapping](rag/citations.md): Verification and inline citation formatting.
+- [Evaluation Benchmarks](rag/evaluation.md): Grounding and relevance evaluation framework.
+
+### Community and Policies
+
+- [Contributing Guidelines](contributing.md): Setup instructions, code conventions, and pull request procedures.
+- [Code of Conduct](code-of-conduct.md): Contributor expectations and community standards.
+- [Security Policy](security.md): Vulnerability reporting procedures and multi-user isolation invariants.
