@@ -242,8 +242,11 @@ try {
     'rag/independent/ingest_pipeline.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'ingest_pipeline.py')),
   };
 
+  const desktopPkg = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'));
+  const appVersion = desktopPkg.version || '0.1.0-alpha.1';
+
   const report = {
-    applicationVersion: '0.1.0',
+    applicationVersion: appVersion,
     buildDate: new Date().toISOString(),
     targetArchitecture: 'x64 (Windows)',
     ragEngineMode: 'independent',
@@ -313,24 +316,36 @@ try {
       `-c.directories.output=${tempDistDir}`,
     ], desktop);
 
-    const builtExe = join(tempDistDir, 'ResearchLens-Setup-x64.exe');
-    if (!existsSync(builtExe)) {
-      throw new Error(`Expected installer was not found at ${builtExe}`);
+    const versionedInstallerName = `ResearchLens-Setup-${appVersion}-x64.exe`;
+    const builtExe = existsSync(join(tempDistDir, versionedInstallerName))
+      ? join(tempDistDir, versionedInstallerName)
+      : existsSync(join(tempDistDir, 'ResearchLens-Setup-x64.exe'))
+      ? join(tempDistDir, 'ResearchLens-Setup-x64.exe')
+      : null;
+    if (!builtExe) {
+      throw new Error(`Expected installer was not found in ${tempDistDir} (checked ${versionedInstallerName} and ResearchLens-Setup-x64.exe)`);
     }
 
     const releaseDir = join(repo, 'release', 'desktop');
     mkdirSync(releaseDir, { recursive: true });
-    const finalInstallerPath = join(releaseDir, 'ResearchLens-Setup-x64.exe');
+    const versionedInstallerPath = join(releaseDir, versionedInstallerName);
+    const genericInstallerPath = join(releaseDir, 'ResearchLens-Setup-x64.exe');
+    const finalInstallerPath = versionedInstallerPath;
     const prevInstallerPath = join(releaseDir, 'ResearchLens-Setup-x64.previous.exe');
-    if (existsSync(finalInstallerPath)) {
-      safeCopy(finalInstallerPath, prevInstallerPath);
+    if (existsSync(genericInstallerPath)) {
+      safeCopy(genericInstallerPath, prevInstallerPath);
       console.log(`      Previous installer backed up to: ${prevInstallerPath}`);
     }
-    safeCopy(builtExe, finalInstallerPath);
+    safeCopy(builtExe, versionedInstallerPath);
+    safeCopy(builtExe, genericInstallerPath);
 
-    const stats = statSync(finalInstallerPath);
-    const fileBytes = readFileSync(finalInstallerPath);
+    const stats = statSync(versionedInstallerPath);
+    const fileBytes = readFileSync(versionedInstallerPath);
     const sha256 = createHash('sha256').update(fileBytes).digest('hex');
+
+    // Write checksum file
+    const checksumPath = join(releaseDir, `${versionedInstallerName}.sha256`);
+    writeFileSync(checksumPath, `${sha256}  ${versionedInstallerName}\n`, 'utf8');
 
     console.log(`\n================================================================`);
     console.log(`  RESEARCHLENS DESKTOP INSTALLER GENERATED SUCCESSFULLY!`);

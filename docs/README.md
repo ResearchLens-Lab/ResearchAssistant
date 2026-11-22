@@ -34,6 +34,11 @@ This directory contains technical documentation for ResearchLens.
 - [Citation Mapping](rag/citations.md): Verification and inline citation formatting.
 - [Evaluation Benchmarks](rag/evaluation.md): Grounding and relevance evaluation framework.
 
+### Releases and Changelog
+
+- [Changelog](releases/CHANGELOG.md): Version history, changes, and release dates.
+- [v0.1.0-alpha.1 Release Notes](releases/v0.1.0-alpha.1.md): First public desktop release notes, features, and verification.
+
 ### Community and Policies
 
 - [Contributing Guidelines](contributing.md): Setup instructions, code conventions, and pull request procedures.
