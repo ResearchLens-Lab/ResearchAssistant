@@ -1,5 +1,13 @@
 # ResearchLens
 
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/badge/Release-v0.1.0--alpha.1-green.svg)](https://github.com/ResearchLens-Lab/ResearchAssistant/releases/tag/v0.1.0-alpha.1)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows_x64-lightgrey.svg)](https://github.com/ResearchLens-Lab/ResearchAssistant/releases/tag/v0.1.0-alpha.1)
+
+> **Download ResearchLens Desktop:**  
+> The standalone Windows desktop installer is available on the [GitHub Releases](https://github.com/ResearchLens-Lab/ResearchAssistant/releases/tag/v0.1.0-alpha.1) page:  
+> **[ResearchLens-Setup-0.1.0-alpha.1-x64.exe](https://github.com/ResearchLens-Lab/ResearchAssistant/releases/download/v0.1.0-alpha.1/ResearchLens-Setup-0.1.0-alpha.1-x64.exe)** &bull; [Release Notes](docs/releases/v0.1.0-alpha.1.md) &bull; [Changelog](docs/releases/CHANGELOG.md)
+
 ResearchLens is a desktop research workspace for organizing academic and technical documents, searching their content, comparing information across sources and reviewing evidence-backed answers.
 
 The application runs locally on Windows, macOS, and Linux, providing document ingestion, lexical retrieval, side-by-side comparison tables, and provenance-grounded question answering.
@@ -196,12 +204,15 @@ npm run dev
 ### Running the Desktop Application
 
 ```bash
-# Option 1: Development mode
+# Option 1: Standalone installer (recommended for end users)
+# Download ResearchLens-Setup-0.1.0-alpha.1-x64.exe from the GitHub Releases page and run the installer.
+
+# Option 2: Development mode
 cd desktop
 npm install
 npm start
 
-# Option 2: Run isolated acceptance test environment
+# Option 3: Run isolated acceptance test environment
 .\launch_test_desktop.ps1
 ```
 

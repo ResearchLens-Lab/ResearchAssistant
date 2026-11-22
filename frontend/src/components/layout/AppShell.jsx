@@ -35,7 +35,7 @@ function AppShellContent({ children }) {
   // Status bar state
   const [externalLookups, setExternalLookups] = useState(false);
   const [engineType, setEngineType] = useState(null);
-  const [appVersion, setAppVersion] = useState("v0.1.0");
+  const [appVersion, setAppVersion] = useState("v0.1.0-alpha.1");
 
   useEffect(() => {
     const updateDiagnostics = async () => {
