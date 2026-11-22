@@ -80,3 +80,17 @@ ResearchLens is a collaborative team-developed product created under the **Resea
 - **Abhay Kumar Singh** — Backend and Database Contributor.
 
 Community contributions are welcomed and coordinated via pull requests targeting the `develop` branch.
+
+---
+
+## Licensing of Contributions
+
+By submitting a pull request to ResearchLens, you agree that your contribution is provided under the terms of the **GNU Affero General Public License v3.0** (AGPL-3.0), as published in [LICENSE](../LICENSE).
+
+All contributors certify that:
+1. The contribution was created in whole or in part by them, and they have the right to submit it under the open-source license indicated in the file; or
+2. The contribution is based upon previous work that, to the best of their knowledge, is covered under an appropriate open-source license and they have the right under that license to submit that work with modifications; or
+3. The contribution was provided directly to them by some other person who certified (1) or (2) and they have not modified it.
+
+We recommend including a Developer Certificate of Origin (DCO) sign-off line in your commit messages:
+`Signed-off-by: Random J Developer <random@developer.example.org>`

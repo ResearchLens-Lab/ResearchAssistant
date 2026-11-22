@@ -241,4 +241,14 @@ The project welcomes external contributors through our [Contributing Guidelines]
 
 ## License
 
-This repository is being prepared for open-source release. Final license selection (such as Apache-2.0 or MIT) and author attribution will be finalized by the project contributors prior to public release. All rights remain reserved by the authors under the ResearchLens-Lab organization.
+ResearchLens is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0). See the [LICENSE](LICENSE) file for the full license text.
+
+Individual copyright is retained by the project authors:
+- Copyright (C) 2026 Gorav Gumber
+- Copyright (C) 2026 Himanshu Kumawat
+- Copyright (C) 2026 Harendra Godara
+- Copyright (C) 2026 Abhay Kumar Singh
+
+All contributions submitted to the project are licensed under the GNU Affero General Public License version 3.0 in accordance with our [Contributing Guidelines](docs/contributing.md).
+
+For third-party software, fonts, runtimes, and dependencies bundled with or utilized by ResearchLens, see [docs/legal/THIRD_PARTY_NOTICES.md](docs/legal/THIRD_PARTY_NOTICES.md).
