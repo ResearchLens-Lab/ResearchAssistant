@@ -226,13 +226,16 @@ The test suite covers backend API routes, tenant isolation, lexical indexing, an
 
 ---
 
-## Authors
+## Authors & Project Team
 
-Developed under the **ResearchLens-Lab** organization:
+ResearchLens is a collaborative team-developed research platform created under the **ResearchLens-Lab** organization, led by Gorav Gumber:
 
-- **Gorav Gumber** — Project lead, deterministic research engine, desktop shell, lexical indexing, tenant isolation.
-- **Harendra Godara** — Knowledge concept extraction and relationship analysis.
-- **Himanshu Kumawat** — Frontend user interface and responsive layout components.
+- **Gorav Gumber** — Project Lead, Technical Architect and RAG Lead.
+- **Himanshu Kumawat** — Frontend Lead.
+- **Harendra Godara** — Knowledge Graph Lead.
+- **Abhay Kumar Singh** — Backend and Database Contributor.
+
+The project welcomes external contributors through our [Contributing Guidelines](docs/contributing.md).
 
 ---
 

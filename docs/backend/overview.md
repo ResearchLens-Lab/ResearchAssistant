@@ -36,3 +36,9 @@ tests/          Pytest test suites
 The backend interacts with the research engine through `app/integrations/rag_gateway.py`. The gateway executes retrieval and generation pipelines synchronously off the main asynchronous event loop (`asyncio.to_thread`), applies timeouts, and isolates exceptions.
 
 Consistent document identifiers (`paper_id` and `document_id`) are maintained across the relational store, the lexical index, and the frontend client.
+
+---
+
+## Subsystem Contributors
+
+The backend service architecture and database layer were contributed by **Abhay Kumar Singh** (Backend and Database Contributor) with integration architecture led by **Gorav Gumber** (Project Lead, Technical Architect and RAG Lead).

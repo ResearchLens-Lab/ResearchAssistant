@@ -39,3 +39,16 @@ This directory contains technical documentation for ResearchLens.
 - [Contributing Guidelines](contributing.md): Setup instructions, code conventions, and pull request procedures.
 - [Code of Conduct](code-of-conduct.md): Contributor expectations and community standards.
 - [Security Policy](security.md): Vulnerability reporting procedures and multi-user isolation invariants.
+
+---
+
+## Project Team & Attribution
+
+ResearchLens is a collaborative team-developed product created under the **ResearchLens-Lab** organization, led by Gorav Gumber:
+
+- **Gorav Gumber** — Project Lead, Technical Architect and RAG Lead.
+- **Himanshu Kumawat** — Frontend Lead.
+- **Harendra Godara** — Knowledge Graph Lead.
+- **Abhay Kumar Singh** — Backend and Database Contributor.
+
+Technical module boundaries and integration contracts between team members are defined in the [Team Integration Boundaries Guide](architecture/integration-boundaries.md).

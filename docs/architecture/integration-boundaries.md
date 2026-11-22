@@ -8,8 +8,8 @@ This document defines the technical contracts and integration boundaries between
 
 | Team Member | Role | Primary Responsibility | Directory |
 |---|---|---|---|
-| **Gorav Gumber** | Project Lead + Technical Lead + RAG/AI Lead | Core RAG, Document Normalization, Chunking, Embeddings, ChromaDB, Retrieval, Context, Grounded LLM, Citations, Evaluation | `rag/`, `backend/app/integrations/rag_client.py`, `scripts/` |
-| **Abhay Kumar Singh** | Backend + Database Lead | FastAPI routes, PostgreSQL schemas, User Auth, Async Tasks, Paper CRUD | `backend/` |
+| **Gorav Gumber** | Project Lead, Technical Architect and RAG Lead | Core RAG, Document Normalization, Chunking, Lexical & Vector Indexing, Extractive Synthesis, Desktop Architecture | `rag/`, `desktop/`, `scripts/` |
+| **Abhay Kumar Singh** | Backend and Database Contributor | FastAPI routes, database schemas, User Auth, Async Tasks, Paper CRUD | `backend/` |
 | **Himanshu Kumawat** | Frontend Lead | Next.js UI, Paper Viewer, Chat Interface, Citation Drawer | `frontend/` |
 | **Harendra Godara** | Knowledge Graph Lead | Neo4j Graph DB, Citation Graph Reasoning, Entity Extraction | `knowledge-graph/` |
 

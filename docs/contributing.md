@@ -67,3 +67,16 @@ Work in branch types prefixed with their purpose:
 - Ensure all test suites pass without regressions.
 - Add test coverage for new functionality or bug fixes.
 - Avoid introducing hardcoded user profile paths.
+
+---
+
+## Project Governance & Team
+
+ResearchLens is a collaborative team-developed product created under the **ResearchLens-Lab** organization, led by Gorav Gumber:
+
+- **Gorav Gumber** — Project Lead, Technical Architect and RAG Lead.
+- **Himanshu Kumawat** — Frontend Lead.
+- **Harendra Godara** — Knowledge Graph Lead.
+- **Abhay Kumar Singh** — Backend and Database Contributor.
+
+Community contributions are welcomed and coordinated via pull requests targeting the `develop` branch.
