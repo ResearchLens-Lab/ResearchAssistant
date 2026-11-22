@@ -1,6 +1,6 @@
 {
   "name": "researchlens-desktop",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Private local ResearchLens Windows desktop app",
   "main": "main.cjs",
@@ -50,7 +50,7 @@
           ]
         }
       ],
-      "artifactName": "ResearchLens-Setup-x64.exe",
+      "artifactName": "ResearchLens-Setup-${version}-x64.exe",
       "signAndEditExecutable": false
     },
     "nsis": {

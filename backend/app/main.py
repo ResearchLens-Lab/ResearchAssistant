@@ -111,7 +111,7 @@ def create_app() -> FastAPI:
             "document upload, grounded chat, and the integration boundaries "
             "for RAG and research intelligence."
         ),
-        version="0.1.0",
+        version="0.1.0-alpha.1",
         lifespan=lifespan,
     )
 
