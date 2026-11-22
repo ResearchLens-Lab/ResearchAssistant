@@ -79,7 +79,7 @@ Desktop settings manage storage directories, network preferences, and optional p
 flowchart TD
     subgraph UI ["Desktop UI"]
         DesktopApp["Electron Shell (main.cjs)"]
-        Renderer["Next.js 14 Frontend"]
+        Renderer["Next.js 15 Frontend"]
     end
 
     subgraph Backend ["Application Backend"]
@@ -143,7 +143,7 @@ ResearchAssistant/
 │   ├── pipelines/                 # High-level query and ingest pipelines
 │   ├── training/                  # Scikit-learn evaluation metrics and dataset tools
 │   └── tests/                     # RAG test suites
-├── frontend/                      # Next.js 14 web client and desktop renderer
+├── frontend/                      # Next.js 15 web client and desktop renderer
 │   ├── src/
 │   │   ├── app/                   # Next.js App Router pages
 │   │   ├── components/            # UI components and workbenches
@@ -222,9 +222,10 @@ npm start
 
 The test suite covers backend API routes, tenant isolation, lexical indexing, answer composition, and frontend components:
 
-- **Backend and Engine Tests**: 474 passed, 0 failed, 45 skipped (`pytest backend/tests/ rag/tests/`)
+- **Backend and Engine Tests**: 473 passed, 0 failed, 46 skipped (`pytest backend/tests/ rag/tests/`)
 - **Frontend Tests**: 34 passed, 0 failed (`npm test --prefix frontend`)
-- **Strict Offline Network Verification**: 1 passed (`test_offline_strict.py` confirms 0 outbound requests)
+- **Strict Offline Network Verification**: 1 passed (`pytest backend/tests/test_offline_strict.py` confirms 0 outbound requests)
+- **Continuous Integration**: [Passing GitHub Actions CI](https://github.com/ResearchLens-Lab/ResearchAssistant/actions)
 
 ---
 
