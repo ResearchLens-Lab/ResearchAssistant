@@ -301,11 +301,15 @@ async def test_processing_document_cannot_be_retried_as_a_duplicate_job(client, 
     assert "already being processed" in response.json()["error"]["message"]
 
 
-async def test_stalled_processing_status_recovers_to_retryable_failure(client, auth_headers, db_engine):
+async def test_stalled_processing_status_recovers_to_retryable_failure(client, auth_headers, db_engine, monkeypatch):
     from datetime import datetime, timedelta
     from sqlalchemy import update
     from sqlalchemy.ext.asyncio import async_sessionmaker
     from backend.app.models.document import Document
+    from backend.app.core.config import get_settings
+
+    # Explicitly configure timeout in test so behavior is deterministic in CI without a local .env
+    monkeypatch.setattr(get_settings(), "rag_ingest_timeout_seconds", 600.0)
 
     paper = await create_paper(client, auth_headers)
     uploaded = await upload(client, auth_headers, paper["id"], filename="stalled.pdf")
