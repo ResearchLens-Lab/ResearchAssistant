@@ -36,8 +36,8 @@ def test_syntax_convention_noise_filtering():
 
 
 def test_compare_three_formats_consistency():
-    db_path = "C:/Users/gorav/Documents/ResearchLens Library/library.sqlite3"
-    if not os.path.isfile(db_path):
+    db_path = Path.home() / "Documents" / "ResearchLens Library" / "library.sqlite3"
+    if not db_path.is_file():
         pytest.skip("Local test library database not found")
 
     engine = IndependentResearchEngine()
@@ -71,8 +71,8 @@ def test_compare_three_formats_consistency():
 
 
 def test_research_desk_noise_avoidance():
-    db_path = "C:/Users/gorav/Documents/ResearchLens Library/library.sqlite3"
-    if not os.path.isfile(db_path):
+    db_path = Path.home() / "Documents" / "ResearchLens Library" / "library.sqlite3"
+    if not db_path.is_file():
         pytest.skip("Local test library database not found")
 
     engine = IndependentResearchEngine()

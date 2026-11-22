@@ -1,5 +1,5 @@
 {
-  "dataset": "C:\\Users\\gorav\\OneDrive\\Desktop\\college project\\ResearchAssistant\\rag\\training\\fixtures\\phase2_smoke.jsonl",
+  "dataset": "rag/training/fixtures/phase2_smoke.jsonl",
   "synthetic_only": true,
   "counts": {
     "train": 20,

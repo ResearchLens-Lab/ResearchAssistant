@@ -30,19 +30,19 @@ class ConceptGraphExtractor:
     # Patterns for definition extraction
     DEF_PATTERNS = [
         re.compile(
-            r"(?:(?:A|An|The)\s+)?\b([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\s+(?:is|are|refers to|means)\s+(?:a|an|the|defined as|any|used to|a particular)\s+([^.\n]{10,250}\.)",
+            r"(?:^[ \t]*(?:A|An|The)\s+)?\b([A-Za-z0-9\-]+(?:[ \t]+[a-zA-Z0-9\-]+){0,4})\s+(?:is|are|refers to|means)\s+(?:a|an|the|defined as|any|used to|a particular)\s+([^.\n]{10,250}\.)",
+            re.MULTILINE | re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^[ \t]*(?:A|An|The)\s+)?\b([A-Za-z0-9\-]+(?:[ \t]+[a-zA-Z0-9\-]+){0,4})\s+is\s+defined\s+as\s+([^.\n]{10,250}\.)",
+            re.MULTILINE | re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:Definition|Theorem|Lemma)\s+(\d+(?:\.\d+)*)[:.]\s*([A-Za-z0-9\-\s]{2,40}?)\b",
             re.MULTILINE,
         ),
         re.compile(
-            r"\b([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\s+is\s+defined\s+as\s+([^.\n]{10,250}\.)",
-            re.MULTILINE,
-        ),
-        re.compile(
-            r"\b(?:Definition|Theorem|Lemma)\s+(\d+(?:\.\d+)*)[:.]\s*([A-Z][a-zA-Z0-9\-\s]{2,40}?)\b",
-            re.MULTILINE,
-        ),
-        re.compile(
-            r"\*\*([A-Z][a-zA-Z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\*\*[:\-]\s*([^.\n]{10,250}\.)",
+            r"\*\*([A-Za-z0-9\-]+(?:\s+[a-zA-Z0-9\-]+){0,4})\*\*[:\-]\s*([^.\n]{10,250}\.)",
             re.MULTILINE,
         ),
     ]

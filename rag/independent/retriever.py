@@ -85,6 +85,8 @@ class IndependentRetriever:
             chroma_lex = Path(settings.chroma_persist_dir) / "researchlens_lexical.sqlite3"
             if desktop_lex.is_file() and str(settings.chroma_persist_dir) in (".", ".chroma"):
                 self.db_path = desktop_lex
+            elif str(settings.chroma_persist_dir) not in (".", ".chroma"):
+                self.db_path = chroma_lex
             else:
                 self.db_path = chroma_lex if chroma_lex.is_file() else desktop_lex
         self.max_candidates = max(20, min(max_candidates, 3000))

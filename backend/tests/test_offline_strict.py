@@ -34,17 +34,22 @@ async def test_zero_outbound_network_connections_strict(monkeypatch):
     monkeypatch.setenv("EXTERNAL_LOOKUPS_ENABLED", "false")
     get_settings.cache_clear()
 
+    import uuid
+    rand_suffix = uuid.uuid4().hex[:8]
+    test_email = f"offline_{rand_suffix}@example.com"
+    test_user = f"offline_{rand_suffix}"
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as client:
         # 1. Register / Login local user
         await client.post("/api/v1/auth/register", json={
-            "email": "offline_researcher@example.com",
+            "email": test_email,
             "password": "Password123!",
             "full_name": "Offline Researcher",
-            "username": "offline_user",
+            "username": test_user,
         })
         login_resp = await client.post("/api/v1/auth/login", json={
-            "identifier": "offline_researcher@example.com",
+            "identifier": test_email,
             "password": "Password123!",
         })
         token = login_resp.json()["access_token"]

@@ -92,12 +92,6 @@ INTENT_RULES: tuple[tuple[QuestionIntent, tuple[str, ...], tuple[str, ...]], ...
         r"^\s*(?:give\s+me\s+the\s+)?summary\s*\??$",
         r"\bsummarize\s+this\s+(?:syllabus|paper|document|book)\b",
     ), ("document summary", "overview", "findings")),
-    (QuestionIntent.DEFINITION, (
-        r"^\s*define\s+[A-Za-z0-9\s-]{2,60}\??$",
-        r"\bdefinition\s+of\s+[A-Za-z0-9\s-]{2,60}\??$",
-        r"\bwhat\s+is\s+meant\s+by\s+[A-Za-z0-9\s-]{2,60}\??$",
-        r"^\s*what\s+(?:is|are)\s+(?:(?:an?|the)\s+)?([A-Za-z0-9\s-]{2,60})\??$",
-    ), ("definition", "core concept", "meaning")),
     (QuestionIntent.PROCEDURAL_QUESTION, (
         r"\b(?:steps|process|workflow|procedure)\s+(?:to|of|for|in)\b",
         r"\bhow\s+to\b",

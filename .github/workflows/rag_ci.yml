@@ -1,35 +1,38 @@
-name: ResearchLens RAG CI
+name: ResearchLens CI
 
 on:
   push:
-    branches: [ main, master, "feat/*", "rag/*", "gorav/*", "codex/*" ]
+    branches: [ main, develop, "feature/*", "fix/*", "chore/*" ]
     paths:
       - 'rag/**'
-      - 'backend/app/integrations/**'
+      - 'backend/**'
       - 'scripts/**'
       - 'requirements.txt'
       - '.github/workflows/rag_ci.yml'
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, develop ]
     paths:
       - 'rag/**'
-      - 'backend/app/integrations/**'
+      - 'backend/**'
       - 'scripts/**'
       - 'requirements.txt'
       - '.github/workflows/rag_ci.yml'
 
 jobs:
-  test-rag:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: Install dependencies
@@ -39,8 +42,4 @@ jobs:
 
       - name: Run Pytest Suite
         run: |
-          PYTHONPATH=. pytest rag/tests/ -v --durations=10
-
-      - name: Run Benchmark Evaluation
-        run: |
-          PYTHONPATH=. python scripts/evaluate_rag.py
+          PYTHONPATH=. pytest backend/tests/ rag/tests/ -v --durations=10

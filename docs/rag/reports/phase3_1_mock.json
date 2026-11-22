@@ -1,7 +1,7 @@
 {
   "provider_mode": "deterministic mock",
   "top_k": 4,
-  "dataset_path": "C:/Users/gorav/OneDrive/Desktop/college project/ResearchAssistant/rag/evaluation/datasets/research_intelligence_questions.json",
+  "dataset_path": "rag/evaluation/datasets/research_intelligence_questions.json",
   "question_count": 54,
   "direct_single_pass": {
     "total_questions": 54,

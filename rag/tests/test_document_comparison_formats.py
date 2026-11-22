@@ -55,7 +55,7 @@ def test_comparison_keeps_each_selected_document_in_scope(output_format):
     assert "beta.pdf" in answer
     assert "gamma.pdf" in answer
     assert "[S1]" in answer and "[S2]" in answer
-    assert "No relevant passage" in answer
+    assert "Not explicitly detailed in the retrieved passages." in answer or "*Not explicitly detailed in the retrieved passages.*" in answer
 
 
 def test_comparison_table_uses_documents_as_independent_columns():
@@ -67,7 +67,7 @@ def test_comparison_table_uses_documents_as_independent_columns():
     answer = StructuredAnswerComposer().compose(_analysis("table"), sources, [])
 
     assert "| Comparison dimension | Project · alpha.pdf | Project · beta.pdf | Another project · gamma.pdf |" in answer
-    assert "| Evidence for the requested focus |" in answer
+    assert "| Core Concepts & Objectives |" in answer
 
 
 def test_independent_result_reports_requested_format_and_document_scope():

@@ -311,7 +311,7 @@
     "chromadb, fastembed, onnxruntime, and generative AI packages"
   ],
   "installer": {
-    "path": "C:\\Users\\gorav\\OneDrive\\Desktop\\college project\\ResearchAssistant\\release\\desktop\\ResearchLens-Setup-x64.exe",
+    "path": "release/desktop/ResearchLens-Setup-x64.exe",
     "sizeBytes": 333928348,
     "sizeMB": "318.46",
     "sha256": "bf43ad797ba072547d42544e5e7f0f8100d1944eb2e59e8ed29678fe445bb727"

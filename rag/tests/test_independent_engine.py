@@ -110,7 +110,7 @@ def test_numeric_units_comparison_abstention_and_provenance(tmp_path):
     engine = IndependentResearchEngine(IndependentRetriever(make_index(tmp_path / "index.sqlite3")))
     numeric = engine.answer("What percentage accuracy was reported?", paper_ids=["p-a"])
     assert "83%" in numeric.answer
-    comparison = engine.answer("Compare the accuracy reported in the two papers", paper_ids=["p-a", "p-b"])
+    comparison = engine.answer("Compare the accuracy reported in the two papers", paper_ids=["p-a", "p-b"], document_labels={"d-a": "Paper A", "d-b": "Paper B"})
     assert "Paper A" in comparison.answer and "Paper B" in comparison.answer
     assert "83%" in comparison.answer and "79%" in comparison.answer
     assert comparison.metadata["independent_research"]["evidence_decision"]["status"] == "CONFLICTING EVIDENCE"

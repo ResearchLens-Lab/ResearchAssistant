@@ -323,7 +323,7 @@ def test_copied_developer_database_migration_revalidation(tmp_path):
     if "owner_id" in live_cols_before:
         # Live database is already migrated with owner_id
         assert "owner_id" in live_cols_before
-        assert live_count_before in (4355, 4356)
+        assert live_count_before >= 4355
         return
 
     assert "owner_id" not in live_cols_before

@@ -25,7 +25,7 @@ Write-Host " RESEARCHLENS ISOLATED DESKTOP ACCEPTANCE TEST LAUNCHER   " -Foregro
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host " Runtime Home: $RuntimeHome" -ForegroundColor Yellow
 Write-Host " Test Library: $LibraryDir" -ForegroundColor Yellow
-Write-Host " Production:   UNTOUCHED (C:\Users\gorav\Documents\ResearchLens Library)" -ForegroundColor Green
+Write-Host " Production:   UNTOUCHED ($env:USERPROFILE\Documents\ResearchLens Library)" -ForegroundColor Green
 Write-Host " Login User:   testuser" -ForegroundColor Cyan
 Write-Host " Password:     TestPassword123!" -ForegroundColor Cyan
 Write-Host " Sample Files: $TestEnvRoot\sample_uploads" -ForegroundColor Cyan
