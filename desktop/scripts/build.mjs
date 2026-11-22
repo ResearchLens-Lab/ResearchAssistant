@@ -358,7 +358,7 @@ try {
     console.log(`================================================================\n`);
 
     report.installer = {
-      path: finalInstallerPath,
+      path: path.relative(repo, finalInstallerPath).replace(/\\/g, '/'),
       sizeBytes: stats.size,
       sizeMB: (stats.size / (1024 * 1024)).toFixed(2),
       sha256,
