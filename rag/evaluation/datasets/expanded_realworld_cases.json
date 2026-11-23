@@ -1,0 +1,114 @@
+[
+  {
+    "id": "EXP01_DEF_RAFT",
+    "question": "What is Raft?",
+    "papers": ["paper-raft"],
+    "expected_keywords": ["consensus", "algorithm", "replicated", "log"],
+    "category": "definition"
+  },
+  {
+    "id": "EXP02_PROC_RAFT_ELECTION",
+    "question": "What are the sequential steps of the leader election procedure in Raft?",
+    "papers": ["paper-raft"],
+    "expected_keywords": ["election", "candidate", "term", "RequestVote", "heartbeats"],
+    "category": "procedure"
+  },
+  {
+    "id": "EXP03_DEF_PBFT",
+    "question": "What is Practical Byzantine Fault Tolerance?",
+    "papers": ["paper-pbft"],
+    "expected_keywords": ["Byzantine", "state-machine", "replication", "algorithm"],
+    "category": "definition"
+  },
+  {
+    "id": "EXP04_PROC_PBFT_THREE_PHASE",
+    "question": "What are the sequential steps of the PBFT agreement protocol?",
+    "papers": ["paper-pbft"],
+    "expected_keywords": ["pre-prepare", "prepare", "commit", "phases"],
+    "category": "procedure"
+  },
+  {
+    "id": "EXP05_EXPL_FLASHATTENTION_IO",
+    "question": "How does FlashAttention reduce HBM memory traffic compared to standard attention?",
+    "papers": ["paper-flash"],
+    "expected_keywords": ["SRAM", "tiling", "intermediate", "softmax", "O(N)"],
+    "category": "explanation"
+  },
+  {
+    "id": "EXP06_COMP_FLASH_SPEEDUP",
+    "question": "What training speedups are reported for FlashAttention on BERT and GPT-2?",
+    "papers": ["paper-flash"],
+    "expected_keywords": ["2.4x", "3.1x", "BERT", "GPT-2"],
+    "category": "numerical_lookup"
+  },
+  {
+    "id": "EXP07_DEF_MAMBA",
+    "question": "What is Mamba?",
+    "papers": ["paper-mamba"],
+    "expected_keywords": ["sequence", "modeling", "architecture", "state space"],
+    "category": "definition"
+  },
+  {
+    "id": "EXP08_DANGLING_MAMBA_SCAN",
+    "question": "Why does Mamba implement a hardware-aware parallel scan?",
+    "papers": ["paper-mamba"],
+    "expected_keywords": ["parallel", "scan", "GPU", "SRAM", "O(N)"],
+    "category": "dangling_context"
+  },
+  {
+    "id": "EXP09_NUM_PBFT_THROUGHPUT",
+    "question": "What is the peak throughput and average latency reported for PBFT?",
+    "papers": ["paper-pbft"],
+    "expected_keywords": ["8,500", "operations", "1.4 ms"],
+    "category": "numerical_lookup"
+  },
+  {
+    "id": "EXP10_TABLE_CACHE_LATENCIES",
+    "question": "What is the access latency in clock cycles and nanoseconds for L1, L2, and L3 cache?",
+    "papers": ["paper-arch"],
+    "expected_keywords": ["4 clock cycles", "1.1 ns", "14 clock cycles", "3.8 ns", "45 clock cycles", "12.2 ns"],
+    "category": "complex_table"
+  },
+  {
+    "id": "EXP11_COMP_RAFT_PBFT",
+    "question": "Compare Raft and PBFT in terms of consensus mechanism and reported limitations.",
+    "papers": ["paper-raft", "paper-pbft"],
+    "expected_keywords": ["Raft", "PBFT", "limitations"],
+    "category": "comparison"
+  },
+  {
+    "id": "EXP12_CROSS_FLASH_LIMITS",
+    "question": "What are the reported limitations and computational overhead of FlashAttention?",
+    "papers": ["paper-flash"],
+    "expected_keywords": ["tile boundaries", "15% arithmetic compute overhead"],
+    "category": "limitations"
+  },
+  {
+    "id": "EXP13_NUM_DRAM_LATENCY",
+    "question": "What is the reported DRAM access latency in clock cycles?",
+    "papers": ["paper-arch"],
+    "expected_keywords": ["180 clock cycles", "48.6 ns"],
+    "category": "numerical_lookup"
+  },
+  {
+    "id": "EXP14_ABSTAIN_QUANTUM_SURFACE",
+    "question": "What is the quantum decoherence threshold for surface codes reported in Raft?",
+    "papers": ["paper-raft"],
+    "expected_abstain": true,
+    "category": "negative_control"
+  },
+  {
+    "id": "EXP15_ABSTAIN_MAMBA_POWER",
+    "question": "What is the FPGA power consumption in Watts reported for Mamba?",
+    "papers": ["paper-mamba"],
+    "expected_abstain": true,
+    "category": "negative_control"
+  },
+  {
+    "id": "EXP16_ABSTAIN_COLD_FUSION",
+    "question": "What cold fusion reaction temperature was achieved by FlashAttention?",
+    "papers": ["paper-flash"],
+    "expected_abstain": true,
+    "category": "negative_control"
+  }
+]
