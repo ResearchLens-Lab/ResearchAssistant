@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.2] - 2026-11-23
+
+### Added
+- **Deterministic Answer Generation V2**: Pure-Python TextRank graph ranking, sentence-level BM25 scoring, Maximal Marginal Relevance (MMR) redundancy filtering, and antecedent context restoration.
+- **Evidence Sufficiency Validation**: Strict numeric and claim consistency validation verifying cited metrics and units against source passages.
+- **Structured Procedural Extraction**: Automatic recognition and numbering of ordered technical steps and algorithms.
+- **Section-Aware Multi-Document Synthesis**: Side-by-side and tabular comparative synthesis grouped by source paper and section.
+- **Expanded Real-World Evaluation Benchmark**: 16-case benchmark covering microarchitectures, algorithmic comparisons, and negative control abstention.
+- **Desktop Runtime V2 Synchronization**: Synchronized `sentence_selector.py` into the standalone desktop runtime staging with build manifest integrity hashing.
+
+### Changed
+- Bumped product and package versions to `0.1.0-alpha.2` across desktop, frontend, backend, and RAG packages.
+- Enhanced answer composer formatting with clean markdown headers and consecutive citation renumbering.
+
+### Fixed
+- Prevented pronoun and demonstrative fragmentation by restoring antecedent sentences during extractive selection.
+- Eliminated redundant claims in multi-sentence summaries via MMR thresholding.
+
 ## [0.1.0-alpha.1] - 2026-11-23
 
 ### Added
