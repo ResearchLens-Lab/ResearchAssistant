@@ -91,6 +91,26 @@ class ExtractedFact(BaseModel):
     verification_status: str
 
 
+class CandidateSentence(BaseModel):
+    sentence_id: str
+    text: str
+    source_id: str
+    chunk_id: str
+    paper_id: str
+    document_id: str
+    page_start: int | None = None
+    page_end: int | None = None
+    section: str = ""
+    sentence_index: int = 0
+    score: float = 0.0
+    lexical_score: float = 0.0
+    textrank_score: float = 0.0
+    is_subject_position: bool = False
+    has_dangling_reference: bool = False
+    preceding_text: str | None = None
+    restored_text: str = ""
+
+
 class EvidenceDecision(BaseModel):
     status: str
     reasons: list[str] = Field(default_factory=list)

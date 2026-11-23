@@ -73,6 +73,9 @@ class EvidenceValidator:
                 "###", "|---", "| Comparison dimension", "| Source |",
                 "Both Cormen", "Both Horowitz", "Both documents", "Both sources",
                 "Specific strategies and limitations are grounded",
+                "The study conducts a", "The authors conduct a",
+                "- **Core Systematic Steps:**", "- **Core systematic steps:**",
+                "Sequential steps of the procedure",
             )):
                 continue
             if clean_l.startswith("|") and ("No matching detail in retrieved passages" in clean_l or "No relevant passage retrieved" in clean_l):
