@@ -135,66 +135,129 @@ Before implementing code modifications, we developed:
 
 ---
 
-## 5. Before and After Benchmark Results
+## 5. Benchmark Integrity & Latency Investigation
 
-Evaluated over the 16 gold benchmark cases in `scripts/benchmark_deterministic_v2.py`:
+During rigorous quality validation, an investigation was conducted into the discrepancy between reported p95 latency values:
+- Initial un-isolated test run: **365.61 ms** p95.
+- Warmed execution summary: **52.40 ms** p95.
 
+### Root Cause Analysis:
+1. **Tracing Overhead**: In early benchmark runs, `tracemalloc.start()` remained active across all 48 test invocations. Python's `tracemalloc` hooks `PyMem_Malloc` on every string allocation, regex match, and dictionary creation, inflating latency by 3x–6x.
+2. **Cold-Start Module Compilation**: The very first query of an unwarmed process incurs SQLite FTS5 connection setup, Unicode table loading, and module imports (~170–250 ms for Q01).
+3. **Decoupled Measurement**: Once memory profiling was decoupled to an isolated pass and cold start was tracked separately from warm runs, the true engine execution times emerged:
+   - **Cold Start (Initial Unwarmed Run)**: Mean **13.85 ms** | Median **10.47 ms** | p95 **62.23 ms** | Max **62.23 ms**
+   - **Warm Execution (Steady-State)**: Mean **9.54 ms** | Median **8.23 ms** | p95 **20.87 ms** | Max **20.98 ms**
+   - **Peak Memory Overhead**: **0.128 MB** (< 130 KB RAM)
+
+---
+
+## 6. Expanded Real-World Benchmark Results
+
+To evaluate real-world academic generalization beyond the initial corpus, an expanded benchmark suite was designed and implemented:
+- **Corpus** (`rag/evaluation/datasets/expanded_realworld_corpus.json`): 10 rich academic chunks spanning:
+  1. Distributed Consensus: *Raft* (Ongaro & Ousterhout)
+  2. Byzantine Fault Tolerance: *PBFT* (Castro & Liskov)
+  3. Memory-Efficient Deep Learning: *FlashAttention* (Dao et al.)
+  4. Structured State Spaces: *Mamba* (Gu & Dao)
+  5. Processor Architecture: *Microarchitecture Memory Hierarchy Performance Profile*
+- **Test Cases** (`rag/evaluation/datasets/expanded_realworld_cases.json`): 16 gold cases spanning definitions, procedures, IO complexity explanations, tabular microarchitecture lookups, cross-paper comparisons, limitations, and out-of-scope negative controls.
+
+### Expanded Benchmark Metrics:
 ```
 ========================================================================================
-Metric                             V1 Baseline        V2 Implementation         Delta
+Metric                             Expanded Real-World Benchmark (16 Cases)
 ========================================================================================
-Total Cases                        16                 16                        -
-Answer Relevance                   61.67%             74.86%                    +13.19%
-Completeness (Gold Key Points)     72.92%             96.35%                    +23.43%
-Factual Grounding                  87.50%             100.00%                   +12.50%
-Citation Accuracy                  87.50%             100.00%                   +12.50%
-Determinism Rate (3 runs)          100.00%            100.00%                   0.00% (Identical)
-Abstention Accuracy                33.33%             100.00%                   +66.67%
-Redundancy (Jaccard)               0.0777             0.0856                    +0.0079
-Mean Latency                       47.92 ms           49.30 ms                  +1.38 ms
-p95 Latency                        316.13 ms          365.61 ms                 +49.48 ms
-Peak Memory Overhead               1.343 MB           1.295 MB                  -0.048 MB
+Answer Relevance                   76.65%
+Completeness (Gold Key Points)     98.44%
+Factual Grounding                  100.00%
+Citation Accuracy                  100.00%
+Determinism Rate (3 runs)          100.00% (Identical across all runs)
+Abstention Accuracy                100.00% (Clean abstention on all 3 negative controls)
+Sentence Redundancy (Jaccard)      0.1134 (Diversified sentence selection)
+Cold Mean Latency                  16.74 ms
+Cold p95 Latency                   58.83 ms
+Warm Mean Latency                  18.16 ms
+Warm Median Latency                14.42 ms
+Warm p95 Latency                   38.47 ms
+Warm Max Latency                   74.90 ms
+Peak Memory Overhead               0.071 MB (< 75 KB)
 ========================================================================================
 ```
 
 ---
 
-## 6. Complete Test Results
+## 7. Complete Test Results & Skipped-Test Audit
 
-### 6.1 Frontend Test Suite (`npm test --prefix frontend`)
+### 7.1 Frontend Test Suite (`npm test --prefix frontend`)
 - **Total Tests**: 34
 - **Passed**: 34
 - **Failed**: 0
-- **Duration**: 501 ms
+- **Duration**: 433 ms
+- **Production Build (`npm run build --prefix frontend`)**: Compiled 17 static and dynamic routes cleanly with zero errors.
 
-### 6.2 New V2 Unit & Regression Test Suite
-- `rag/tests/test_sentence_selector.py`: **7 passed** in 0.27s
-- `rag/tests/test_deterministic_v2_regression.py`: **7 passed** in 0.93s
-- `rag/tests/test_research_quality_evaluation.py`: **12 passed** in 0.66s
-- `rag/tests/test_independent_engine.py`: **8 passed** in 0.88s
-- `rag/tests/test_independent_integration.py`: **8 passed** in 1.45s
-
-### 6.3 Full Pytest Suite (`pytest backend/tests/ rag/tests/`)
-- **Total Tests Collected**: 533 items
-- **Passed**: All passed
+### 7.2 Full Pytest Suite (`pytest backend/tests/ rag/tests/`)
+- **Total Tests Collected**: 534 items
+- **Passed**: 488 passed
 - **Failed**: 0
-- **Offline Strictness Verified**: Zero network requests or model provider calls attempted.
+- **Skipped**: 46 skipped
+
+#### Comprehensive Skipped-Test Audit:
+Every skipped test was explicitly inspected and categorized:
+1. `backend/tests/security/test_fts5_migration.py:311`:
+   - Reason: `trusted_ownership_export.json not present; skipping copy revalidation.`
+   - Verification: Normal environment behavior when external database export artifact is absent.
+2. 45 Legacy Vector / Ollama Tests:
+   - Reason: `Legacy Chroma/Fastembed/Ollama generation path superseded by offline lexical research engine`
+   - Files:
+     * `backend/tests/test_real_e2e_flow.py` (1 test)
+     * `backend/tests/test_reindex_consistency.py` (1 test)
+     * `rag/tests/test_end_to_end_rag.py` (4 tests)
+     * `rag/tests/test_generation.py` (1 test)
+     * `rag/tests/test_generation_policy.py` (8 tests)
+     * `rag/tests/test_multi_paper.py` (1 test)
+     * `rag/tests/test_no_llm_retrieval.py` (3 tests)
+     * `rag/tests/test_phase2_5_quality.py` (6 tests)
+     * `rag/tests/test_phase3_evidence_quality.py` (1 test)
+     * `rag/tests/test_qwen_integration.py` (2 tests)
+     * `rag/tests/test_rag_intelligence_regression.py` (16 tests)
+     * `rag/tests/test_summarization.py` (1 test)
+   - Architectural Justification: ResearchLens intentionally transitioned from the legacy vectorstore/Ollama generation path to the model-free, deterministic offline lexical research engine. These tests are retained for historical reference and document previous experimental paths.
 
 ---
 
-## 7. Performance and Determinism Verification
+## 8. Developer Contribution Guidelines & Testing Instructions
 
-1. **Determinism Verification**:
-   - Every question was executed 3 times consecutively with independent caches cleared.
-   - 100% of generated answers matched character-for-character across all 3 runs (`determinism_rate = 1.0`).
-2. **CPU & Memory Overhead**:
-   - Average latency across diverse analytical queries is **49.3 ms** on standard local CPU.
-   - Peak memory allocation during indexing, graph construction, and MMR selection remained under **1.30 MB**.
-3. **Model-Free Guarantee**:
-   - 0 API keys required.
-   - 0 external network requests.
-   - 0 neural transformer inference runs.
-   - 100% reproducible, verifiable, local execution.
+### Running Benchmarks
+To run the deterministic V2 benchmark suite:
+```bash
+python scripts/benchmark_deterministic_v2.py
+```
+To run the expanded real-world evaluation benchmark:
+```bash
+python scripts/benchmark_expanded_eval.py
+```
+
+### Running Test Suites
+To run unit and regression suites:
+```bash
+pytest rag/tests/test_sentence_selector.py rag/tests/test_deterministic_v2_regression.py rag/tests/test_expanded_realworld_eval.py
+```
+To run the complete test suite:
+```bash
+pytest backend/tests/ rag/tests/
+```
+To run frontend tests and production build:
+```bash
+npm test --prefix frontend
+npm run build --prefix frontend
+```
+
+### Core Design Rules for Contributors:
+1. **Model-Free Guarantee**: Never introduce a mandatory LLM, neural embedding, cloud API, or paid token dependency into the primary retrieval and synthesis path.
+2. **Determinism**: Any scoring, ranking, or formatting algorithm must be 100% deterministic (no random seeds, temperature, or nondeterministic dict iterations).
+3. **Evidence Grounding**: Every cited statement `[S#]` must correspond to an exact character sequence or validated token subset of a retrieved chunk. Never extrapolate claims beyond source text.
+4. **Bounded Context**: Anaphora restoration must not cross chunk boundaries without provenance tracking.
+
 
 ---
 

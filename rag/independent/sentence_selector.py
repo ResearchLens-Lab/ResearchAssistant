@@ -372,8 +372,20 @@ class SentenceSelector:
 
         source_score_map = {s.source_id: (s.score or 1.0) for s in sources}
 
-        # Compute TextRank centrality
-        textrank_map = self.compute_textrank(candidates) if self.enable_textrank else {}
+        # Compute TextRank centrality (capped at top candidates for sub-millisecond efficiency)
+        if self.enable_textrank and len(candidates) > 60:
+            # Pre-score lexically to select top 60 candidates for graph construction
+            pre_scored = []
+            for c in candidates:
+                src_score = source_score_map.get(c.source_id, 1.0)
+                score = self.score_candidate(c, analysis, source_score=src_score, textrank_score=0.5)
+                pre_scored.append((score, c))
+            pre_scored.sort(key=lambda x: -x[0])
+            textrank_candidates = [c for _, c in pre_scored[:60]]
+        else:
+            textrank_candidates = candidates
+
+        textrank_map = self.compute_textrank(textrank_candidates) if self.enable_textrank else {}
 
         # Filter and score candidates
         req_set = set(t.casefold() for t in required_terms) if required_terms else set()

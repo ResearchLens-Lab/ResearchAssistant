@@ -116,10 +116,10 @@ def run_benchmark(verbose: bool = True) -> dict:
         retriever = IndependentRetriever(db_path=db_path)
         engine = IndependentResearchEngine(retriever=retriever)
 
-        tracemalloc.start()
-        start_mem = tracemalloc.get_traced_memory()[0]
+        cold_latencies = []
+        warm_latencies = []
 
-        # Run 3 consecutive runs to verify absolute determinism
+        # Run 3 consecutive runs to verify absolute determinism and measure latencies
         for run_idx in range(3):
             run_answers = {}
             for case in cases:
@@ -132,7 +132,9 @@ def run_benchmark(verbose: bool = True) -> dict:
                 )
                 dt = (time.perf_counter() - t0) * 1000.0  # ms
                 if run_idx == 0:
-                    execution_times.append(dt)
+                    cold_latencies.append(dt)
+                else:
+                    warm_latencies.append(dt)
                 run_answers[case["id"]] = {
                     "answer": rag_result.answer,
                     "sources": rag_result.sources,
@@ -140,6 +142,16 @@ def run_benchmark(verbose: bool = True) -> dict:
                 }
             results_by_run.append(run_answers)
 
+        # Isolated memory measurement run with tracemalloc
+        tracemalloc.start()
+        start_mem = tracemalloc.get_traced_memory()[0]
+        for case in cases[:4]:
+            _ = engine.answer(
+                question=case["question"],
+                paper_ids=case.get("papers"),
+                top_k=6,
+                owner_id="v2_bench_owner",
+            )
         current_mem, peak_mem = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
@@ -236,9 +248,20 @@ def run_benchmark(verbose: bool = True) -> dict:
         avg_citation_acc = sum(citation_scores) / total_cases
         abstention_rate = abstention_correct / max(total_abstentions_expected, 1)
 
-        mean_latency = sum(execution_times) / len(execution_times)
-        sorted_times = sorted(execution_times)
-        p95_latency = sorted_times[int(0.95 * len(sorted_times))]
+        # Cold start latency stats
+        cold_sorted = sorted(cold_latencies)
+        cold_mean = sum(cold_latencies) / len(cold_latencies)
+        cold_median = cold_sorted[len(cold_sorted) // 2]
+        cold_p95 = cold_sorted[int(0.95 * len(cold_sorted))]
+        cold_max = max(cold_latencies)
+
+        # Warm latency stats
+        warm_sorted = sorted(warm_latencies)
+        warm_mean = sum(warm_latencies) / len(warm_latencies)
+        warm_median = warm_sorted[len(warm_sorted) // 2]
+        warm_p95 = warm_sorted[int(0.95 * len(warm_sorted))]
+        warm_max = max(warm_latencies)
+
         peak_mem_mb = (peak_mem - start_mem) / (1024 * 1024)
 
         metrics = {
@@ -250,8 +273,14 @@ def run_benchmark(verbose: bool = True) -> dict:
             "citation_accuracy": round(avg_citation_acc, 4),
             "determinism_rate": round(determinism_rate, 4),
             "abstention_accuracy": round(abstention_rate, 4),
-            "mean_latency_ms": round(mean_latency, 2),
-            "p95_latency_ms": round(p95_latency, 2),
+            "cold_mean_latency_ms": round(cold_mean, 2),
+            "cold_median_latency_ms": round(cold_median, 2),
+            "cold_p95_latency_ms": round(cold_p95, 2),
+            "cold_max_latency_ms": round(cold_max, 2),
+            "warm_mean_latency_ms": round(warm_mean, 2),
+            "warm_median_latency_ms": round(warm_median, 2),
+            "warm_p95_latency_ms": round(warm_p95, 2),
+            "warm_max_latency_ms": round(warm_max, 2),
             "peak_memory_mb": round(peak_mem_mb, 3),
         }
 

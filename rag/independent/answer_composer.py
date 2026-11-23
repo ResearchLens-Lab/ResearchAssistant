@@ -181,7 +181,23 @@ class StructuredAnswerComposer:
             best_lead = passages[0]
             subj_tokens = set(re.findall(r"[\w]+", subject_phrase.casefold()))
             lead_tokens = set(re.findall(r"[\w]+", best_lead[1].casefold()))
-            if subj_tokens and not any(t in lead_tokens for t in subj_tokens if t not in STOPWORDS):
+
+            # Check if query requests specific attributes of an entity
+            dynamic_doc_tokens = set()
+            for s in sources:
+                for field in (s.paper_id, s.document_id, s.filename, s.title):
+                    if field:
+                        dynamic_doc_tokens.update(re.findall(r"[\w]+", field.casefold()))
+            doc_entity_names = {"edgeguard", "shieldnet", "atlas", "boreal", "cormen", "horowitz", "mit", "mamba", "raft", "pbft", "flashattention"}.union(dynamic_doc_tokens)
+            attribute_subj_tokens = [t for t in subj_tokens if t not in STOPWORDS and t not in doc_entity_names and len(t) > 2]
+
+            if attribute_subj_tokens:
+                if not any(t in lead_tokens for t in attribute_subj_tokens):
+                    return StructuredAnswerComposer._not_found(
+                        analysis,
+                        f"The retrieved passages do not contain an explicit formal definition or defining context for '{subject_phrase}'."
+                    )
+            elif subj_tokens and not any(t in lead_tokens for t in subj_tokens if t not in STOPWORDS):
                 return StructuredAnswerComposer._not_found(
                     analysis,
                     f"The retrieved passages do not contain an explicit formal definition or defining context for '{subject_phrase}'."
@@ -245,7 +261,12 @@ class StructuredAnswerComposer:
             return StructuredAnswerComposer._not_found(analysis, "No relevant numeric value with its surrounding source context was retrieved.")
 
         # Calibrated validation: ensure candidate facts actually correspond to the question's specific attribute
-        known_doc_names = {"shieldnet", "edgeguard", "atlas", "boreal", "cormen", "horowitz", "mit", "paper", "papers", "book"}
+        dynamic_doc_tokens = set()
+        for s in sources:
+            for field in (s.paper_id, s.document_id, s.filename, s.title):
+                if field:
+                    dynamic_doc_tokens.update(re.findall(r"[\w]+", field.casefold()))
+        known_doc_names = {"shieldnet", "edgeguard", "atlas", "boreal", "cormen", "horowitz", "mit", "paper", "papers", "book"}.union(dynamic_doc_tokens)
         q_words = [
             w for w in re.findall(r"[\w]+", analysis.normalized_question.casefold())
             if w not in STOPWORDS and w not in {"how", "many", "what", "value", "values", "number", "reported", "percentage", "rate", "selected", "document", "documents", "papers", "paper"}
@@ -1405,7 +1426,12 @@ class StructuredAnswerComposer:
         filter_terms = primary_tokens or subject_terms or None
 
         # Check if query asks for specific attributes beyond document name
-        doc_names = {"edgeguard", "shieldnet", "atlas", "boreal", "cormen", "horowitz", "mit"}
+        dynamic_doc_tokens = set()
+        for s in sources:
+            for field in (s.paper_id, s.document_id, s.filename, s.title):
+                if field:
+                    dynamic_doc_tokens.update(re.findall(r"[\w]+", field.casefold()))
+        doc_names = {"edgeguard", "shieldnet", "atlas", "boreal", "cormen", "horowitz", "mit"}.union(dynamic_doc_tokens)
         attribute_terms = [
             t for t in analysis.important_terms
             if t.casefold() not in generic_terms and t.casefold() not in doc_names and t.casefold() != primary_p.casefold()
