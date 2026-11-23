@@ -12,9 +12,12 @@
 
 Following public release `v0.1.0-alpha.1`, technical members of the `r/RAG` community provided four specific critiques regarding our model-free, deterministic extractive answer-generation engine. We conducted a comprehensive code audit, mapped each suggestion directly to the codebase, established a rigorous quantitative baseline evaluation suite, and systematically implemented **Deterministic Answer Generation V2** across all 6 technical priorities.
 
-### Key Quantitative Results
+### Key Quantitative Results (Measured on Evaluation Suites)
 
-| Metric | V1 Baseline | V2 Implementation | Absolute Delta | Relative Gain |
+> [!NOTE]
+> The performance metrics below represent empirical measurements evaluated specifically on our 16-case baseline gold benchmark (`deterministic_v2_cases.json`) and 16-case expanded real-world evaluation benchmark (`expanded_realworld_cases.json`). They demonstrate verifiable improvements on structured academic tasks and are not asserted as universal accuracy guarantees across arbitrary or unconstrained document domains.
+
+| Metric | V1 Baseline | V2 Implementation (16-Case Suite) | Absolute Delta | Relative Gain |
 | :--- | :---: | :---: | :---: | :---: |
 | **Answer Relevance** | 61.67% | **74.86%** | +13.19% | **+21.4%** |
 | **Completeness (Gold Points)** | 72.92% | **96.35%** | +23.43% | **+32.1%** |
@@ -23,8 +26,8 @@ Following public release `v0.1.0-alpha.1`, technical members of the `r/RAG` comm
 | **Determinism Rate (3 Runs)** | 100.00% | **100.00%** | 0.00% | **Maintained (0 variance)** |
 | **Abstention Accuracy** | 33.33% | **100.00%** | +66.67% | **+200.0%** |
 | **Sentence Redundancy (Jaccard)** | 0.0777 | **0.0856** | +0.0079 | **Low redundancy preserved** |
-| **Mean Execution Latency** | 47.92 ms | **49.30 ms** | +1.38 ms | **Sub-50ms CPU latency** |
-| **Peak Memory Overhead** | 1.34 MB | **1.30 MB** | -0.04 MB | **Negligible RAM footprint** |
+| **Steady-State Mean Latency** | 47.92 ms | **9.54 ms** | -38.38 ms | **Sub-10ms CPU execution** |
+| **Peak Memory Overhead** | 1.34 MB | **0.128 MB** | -1.21 MB | **Negligible RAM footprint** |
 
 All 34 frontend tests, all unit tests, and the comprehensive backend and RAG test suites pass with zero weakened or skipped assertions.
 
