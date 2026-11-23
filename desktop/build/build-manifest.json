@@ -1,6 +1,6 @@
 {
-  "applicationVersion": "0.1.0-alpha.1",
-  "buildDate": "2026-11-22T22:19:18.204Z",
+  "applicationVersion": "0.1.0-alpha.2",
+  "buildDate": "2026-11-23T16:58:30.838Z",
   "targetArchitecture": "x64 (Windows)",
   "ragEngineMode": "independent",
   "pythonRuntime": "Python 3.12.15 (Windows x86_64, cpython, model-free)",
@@ -40,9 +40,10 @@
     "rag/independent/topic_analyzer.py": "6d0dd668bbc799fd39212db6c473e28224f82da3817f4493cb0f730516fec2f1",
     "rag/independent/intent_classifier.py": "41a17c59e2c926fe4310cc5e106d61ae8f054eedd5ab17ed1559275ff1e3203b",
     "rag/independent/retriever.py": "6415f8365c295ed894d4c56b0f773715da44b86bd068240cea0e2d6da45f2c1e",
-    "rag/independent/engine.py": "4bb319fa7ad1e8a680aa3a1739812ac789fa1958b8ed9f74d310482032fc07f4",
-    "rag/independent/answer_composer.py": "74d59e9d608b756937bdc0ce687488be920dff031bfc517bd00c9f5a7f925f5c",
-    "rag/independent/evidence_validator.py": "2683fbafc4c3f98e9cbff63293d955f876bd10704d168f245c8a0e8e34eaf779",
+    "rag/independent/engine.py": "e7fafc22a85942e653931a9330b0d23667b8bbf0d936d3eed14701f6ba482a8f",
+    "rag/independent/answer_composer.py": "013943dc44ef56fea15a3fc0d2de6ebfa5683c46571a278162f1cecab7d9d726",
+    "rag/independent/sentence_selector.py": "225218a0277502e8b84b2c5bbab682e5553eeed79c5acd2dabfa4dde9a864b4e",
+    "rag/independent/evidence_validator.py": "3b80dcf159d661f31bb72d6d52f9237432bfc44e5d592565a854f3bca6015db7",
     "rag/independent/index_writer.py": "0004021de31c0160fa20e17b53b5ec9066e7969b34369e79f04a431b9e0ab3e4",
     "rag/independent/ingest_pipeline.py": "ac1d6d0f7254724da6de86748a569d0499950c50242db9460f0c3c6b726f4af1"
   },
@@ -60,7 +61,7 @@
     "backend/app/integrations/rag_client.py": "8f1d8775d7c4f0e626a41bcbc5fdf540700c5ad4fbae7089dd28a111fe2d27de",
     "backend/app/integrations/rag_gateway.py": "4abf4c3c044b2cc696bdf167fc23354ac124bde223941efb54111b356b526732",
     "backend/app/integrations/__init__.py": "73dd1d94c1237676b1f7abe354c5cd9381bbf0196bc1bd14481c687bd55322a1",
-    "backend/app/main.py": "82929323e010cce97f7067bf85138c443d96cdace1e256eda75ce45e8625ceea",
+    "backend/app/main.py": "076faa403d61542b73ca782e522f11a048cf45a0c2e777b8499f1f78a321b9d6",
     "backend/app/middleware/error_handler.py": "667033d55581fee864d6811dbf5ebb9a1dde2f734ee35e8fcb5a35edd91101ea",
     "backend/app/middleware/rate_limit.py": "00cb1b8846452ffeb74816cf91abcc91de74e310b267d4d001fe79f783a03d4c",
     "backend/app/middleware/request_id.py": "5026e954fc8148f538ade0ff6d800a034b8d2d22063ebf651b60ee4b99bd1184",
@@ -178,6 +179,10 @@
     "rag/embeddings/model_registry.py": "0fdd3627afd7bbb5b7df9e743c9f4d5c3939b279aa72f97c53e058ae0f6624b5",
     "rag/embeddings/__init__.py": "ba4480b1a1111a9956256e80279206efd1246005a201631c16f2c855e56b02f9",
     "rag/evaluation/audit_index_integrity.py": "517b02401acac7cf27abe1d316f661354b071e62e8d7ca9b84a12a8cbf547a10",
+    "rag/evaluation/datasets/deterministic_v2_cases.json": "7b0fb92ea19cba30cd4ee3c8deaae9e8ba6e6687dcd0441c306b7d5497e434ca",
+    "rag/evaluation/datasets/deterministic_v2_corpus.json": "a2bf884e8137141d46c3a634a4198b43635c0b5e26dba60daf112dcd13b4897a",
+    "rag/evaluation/datasets/expanded_realworld_cases.json": "aeaa8ac7d5ca1fa315f85a8506f7b240baae305f2c75be68cad9e6ff773c6ab3",
+    "rag/evaluation/datasets/expanded_realworld_corpus.json": "b7f567df0a57276ca0971dbccf55e5c66c5d79cfc4fb8aa68ac2a0154ed4f290",
     "rag/evaluation/datasets/gold_algorithms_v1.json": "2908e92e11fde3fb12ed3f44fd6f0bf65226ab4238faf89c7f420583d12383d9",
     "rag/evaluation/datasets/research_intelligence_questions.json": "1cb1c1fe4f96a311928b0023611fb902d19430215c7dbf471bb0da9a69983605",
     "rag/evaluation/datasets/sample_questions.json": "c5947d09e5b763069d26cd7da80dc1624120cb615a9eed1907a6491e7dad46f4",
@@ -202,15 +207,16 @@
     "rag/generation/provider_errors.py": "88577f11d3abdfc77fd9dd1a78576da307f6185481971c60b92bac9b0ba94b73",
     "rag/generation/response_parser.py": "e897210cc291ceb8e90ed9cf3b24a6c20bf9c60890861a8359d2fcf421cf4e00",
     "rag/generation/__init__.py": "b85dcd8341ca29c0965f9404f1b301df99eaef4d28a450e713b4bd1289a15fb1",
-    "rag/independent/answer_composer.py": "74d59e9d608b756937bdc0ce687488be920dff031bfc517bd00c9f5a7f925f5c",
-    "rag/independent/engine.py": "4bb319fa7ad1e8a680aa3a1739812ac789fa1958b8ed9f74d310482032fc07f4",
-    "rag/independent/evidence_validator.py": "2683fbafc4c3f98e9cbff63293d955f876bd10704d168f245c8a0e8e34eaf779",
+    "rag/independent/answer_composer.py": "013943dc44ef56fea15a3fc0d2de6ebfa5683c46571a278162f1cecab7d9d726",
+    "rag/independent/engine.py": "e7fafc22a85942e653931a9330b0d23667b8bbf0d936d3eed14701f6ba482a8f",
+    "rag/independent/evidence_validator.py": "3b80dcf159d661f31bb72d6d52f9237432bfc44e5d592565a854f3bca6015db7",
     "rag/independent/fact_extractor.py": "67d2562a6f8e537693e1423d3b7bb01c9ec25185be3f425b8a90b13e52ad6302",
     "rag/independent/index_writer.py": "0004021de31c0160fa20e17b53b5ec9066e7969b34369e79f04a431b9e0ab3e4",
     "rag/independent/ingest_pipeline.py": "ac1d6d0f7254724da6de86748a569d0499950c50242db9460f0c3c6b726f4af1",
     "rag/independent/intent_classifier.py": "41a17c59e2c926fe4310cc5e106d61ae8f054eedd5ab17ed1559275ff1e3203b",
-    "rag/independent/models.py": "c9f165422411346677c7c425e27f0d402bd39cda187bc598c92d33ac189ad8f1",
+    "rag/independent/models.py": "311012ccb05cf8aca4e913723c005b07ac9a988eed3bbe255a34a6cc5abfcad7",
     "rag/independent/retriever.py": "6415f8365c295ed894d4c56b0f773715da44b86bd068240cea0e2d6da45f2c1e",
+    "rag/independent/sentence_selector.py": "225218a0277502e8b84b2c5bbab682e5553eeed79c5acd2dabfa4dde9a864b4e",
     "rag/independent/topic_analyzer.py": "6d0dd668bbc799fd39212db6c473e28224f82da3817f4493cb0f730516fec2f1",
     "rag/independent/__init__.py": "07b1e78b96f9cc7294d5c531ab0be31ffebb99bb25fecde6a372a33b04792235",
     "rag/ingestion/document_loader.py": "5a7b978bfd6816b8fb0e06a879a9d3f7ff645c22afc7eac285befee3bebdee52",
@@ -289,7 +295,7 @@
     "rag/vectorstore/collection_manager.py": "b8e64f1205cf9f814e760f9ca50bd0e51552ecb0f33ced7becfcf20bdfd69d21",
     "rag/vectorstore/vector_repository.py": "118830c214e11376268304daae6857a21b540b932dd0c8b5badf6df5d3f34be9",
     "rag/vectorstore/__init__.py": "4b66e2c4647b790e48c5c070019c08f637e054e252fad168cc11344bc7d3e28f",
-    "rag/__init__.py": "38c975fd287bb1c41dc6176a466d47dae92a4c6b343e28af95178a4789badbcd"
+    "rag/__init__.py": "27b03d034e3cfce3c35fee2362043f17ea10455eb6532e991e944b6e87ea20a9"
   },
   "desktopHashes": {
     "desktop/main.cjs": "a05a91178e2994be33ddba4972dc313259248d2c03005191ec31db15b065939b",
@@ -306,11 +312,5 @@
     "developer test suites and fixtures",
     "model caches",
     "chromadb, fastembed, onnxruntime, and generative AI packages"
-  ],
-  "installer": {
-    "path": "release/desktop/ResearchLens-Setup-0.1.0-alpha.1-x64.exe",
-    "sizeBytes": 333928023,
-    "sizeMB": "318.46",
-    "sha256": "f7fc030c99e3e0dde8760723115bed8bd78efdc409d345fd5e3834e23d75e796"
-  }
+  ]
 }
