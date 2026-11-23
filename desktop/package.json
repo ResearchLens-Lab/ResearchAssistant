@@ -1,6 +1,6 @@
 {
   "name": "researchlens-desktop",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "description": "ResearchLens local-first desktop research workspace.",
   "main": "main.cjs",

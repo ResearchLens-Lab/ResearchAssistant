@@ -237,6 +237,7 @@ try {
     'rag/independent/retriever.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'retriever.py')),
     'rag/independent/engine.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'engine.py')),
     'rag/independent/answer_composer.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'answer_composer.py')),
+    'rag/independent/sentence_selector.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'sentence_selector.py')),
     'rag/independent/evidence_validator.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'evidence_validator.py')),
     'rag/independent/index_writer.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'index_writer.py')),
     'rag/independent/ingest_pipeline.py': computeFileHash(join(runtime, 'source', 'rag', 'independent', 'ingest_pipeline.py')),
