@@ -1,0 +1,165 @@
+[
+  {
+    "id": "Q01_DEF_ALGORITHM",
+    "type": "definition",
+    "question": "What is an algorithm?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-def"],
+    "expected_page": 5,
+    "expected_keywords": ["computational procedure", "input", "output"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q02_DEF_BINARY_SEARCH",
+    "type": "definition",
+    "question": "What is binary search?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-search"],
+    "expected_page": 42,
+    "expected_keywords": ["search algorithm", "sorted", "middle element"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q03_PROC_MERGE_SORT",
+    "type": "procedure",
+    "question": "What are the sequential steps of the merge sort procedure?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-sort"],
+    "expected_page": 58,
+    "expected_keywords": ["divide", "conquer", "combine", "steps"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q04_PROC_SHIELDNET_METHOD",
+    "type": "procedure",
+    "question": "What are the phases of the ShieldNet evaluation methodology?",
+    "papers": ["paper-shield"],
+    "expected_chunks": ["c-shield-method"],
+    "expected_page": 3,
+    "expected_keywords": ["synthesis", "packet capture", "feature extraction", "detection evaluation"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q05_COMP_SHIELD_EDGE",
+    "type": "comparison",
+    "question": "Compare ShieldNet and EdgeGuard in terms of reported intrusion detection accuracy and latency.",
+    "papers": ["paper-shield", "paper-edge"],
+    "expected_chunks": ["c-shield-results", "c-edge-results"],
+    "expected_page": null,
+    "expected_keywords": ["94.6%", "89.4%", "14.2 ms", "4.2 ms"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q06_EXPLANATION_BINARY_SEARCH",
+    "type": "explanation",
+    "question": "How does binary search achieve logarithmic running time by eliminating search space?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-search"],
+    "expected_page": 42,
+    "expected_keywords": ["compares the target", "middle element", "discards half", "logarithmic running time"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q07_LIMITS_BINARY_SEARCH",
+    "type": "limitations",
+    "question": "What are the reported limitations of binary search?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-limits"],
+    "expected_page": 63,
+    "expected_keywords": ["random access", "pre-sorted", "O(n)"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q08_LIMITS_SHIELDNET",
+    "type": "limitations",
+    "question": "What are the limitations of ShieldNet?",
+    "papers": ["paper-shield"],
+    "expected_chunks": ["c-shield-limits"],
+    "expected_page": 11,
+    "expected_keywords": ["encrypted TLS", "CPU overhead", "hardware acceleration"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q09_CONTEXT_DANGLING_TERMINATION",
+    "type": "context_restoration",
+    "question": "How does binary search terminate?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-search"],
+    "expected_page": 42,
+    "expected_keywords": ["terminates", "target is found", "interval becomes empty"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q10_MULTI_PASSAGE_ALGO",
+    "type": "multi_passage",
+    "question": "Explain the algorithm definition and its reported operational limitations.",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-def", "c-algo-limits"],
+    "expected_page": null,
+    "expected_keywords": ["computational procedure", "input", "output", "limitation"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q11_NUMERICAL_EDGEGUARD",
+    "type": "numerical",
+    "question": "What accuracy and processing latency did EdgeGuard report?",
+    "papers": ["paper-edge"],
+    "expected_chunks": ["c-edge-results"],
+    "expected_page": 6,
+    "expected_keywords": ["89.4%", "4.2 ms"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q12_AUTHORS_ALGO",
+    "type": "authors",
+    "question": "Who are the authors of Introduction to Algorithms and Complexity?",
+    "papers": ["paper-algo"],
+    "expected_chunks": ["c-algo-title"],
+    "expected_page": 1,
+    "expected_keywords": ["Thomas H. Cormen", "Charles E. Leiserson", "Ronald L. Rivest", "Clifford Stein"],
+    "must_not_abstain": true
+  },
+  {
+    "id": "Q13_ABSTAIN_CHEMICAL",
+    "type": "abstention",
+    "question": "What is the chemical formula of penicillin in the selected papers?",
+    "papers": ["paper-algo", "paper-shield"],
+    "expected_chunks": [],
+    "expected_page": null,
+    "expected_keywords": [],
+    "must_not_abstain": false,
+    "expected_abstain": true
+  },
+  {
+    "id": "Q14_ABSTAIN_GPU_BANDWIDTH",
+    "type": "abstention",
+    "question": "What GPU memory bandwidth does EdgeGuard require for training?",
+    "papers": ["paper-edge"],
+    "expected_chunks": [],
+    "expected_page": null,
+    "expected_keywords": [],
+    "must_not_abstain": false,
+    "expected_abstain": true
+  },
+  {
+    "id": "Q15_ABSTAIN_QUANTUM",
+    "type": "abstention",
+    "question": "How many qubits does the ShieldNet quantum gate simulator employ?",
+    "papers": ["paper-shield"],
+    "expected_chunks": [],
+    "expected_page": null,
+    "expected_keywords": [],
+    "must_not_abstain": false,
+    "expected_abstain": true
+  },
+  {
+    "id": "Q16_COMP_LIMITS",
+    "type": "comparison",
+    "question": "Compare the primary constraints and limitations of ShieldNet and EdgeGuard.",
+    "papers": ["paper-shield", "paper-edge"],
+    "expected_chunks": ["c-shield-limits", "c-edge-limits"],
+    "expected_page": null,
+    "expected_keywords": ["TLS", "polymorphic payloads"],
+    "must_not_abstain": true
+  }
+]

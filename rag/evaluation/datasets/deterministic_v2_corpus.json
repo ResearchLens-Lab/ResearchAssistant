@@ -1,0 +1,122 @@
+[
+  {
+    "chunk_id": "c-algo-title",
+    "paper_id": "paper-algo",
+    "document_id": "doc-algo",
+    "page": 1,
+    "section": "Title Page",
+    "title": "Introduction to Algorithms and Complexity",
+    "filename": "algorithms_and_complexity.pdf",
+    "text": "Introduction to Algorithms and Complexity. Authors: Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein. Published by MIT Press in 2022. This comprehensive text covers foundational data structures and algorithm analysis."
+  },
+  {
+    "chunk_id": "c-algo-def",
+    "paper_id": "paper-algo",
+    "document_id": "doc-algo",
+    "page": 5,
+    "section": "1.1 Algorithms Informally",
+    "title": "Introduction to Algorithms and Complexity",
+    "filename": "algorithms_and_complexity.pdf",
+    "text": "Informally, an algorithm is any well-defined computational procedure that takes some value, or set of values, as input and produces some value, or set of values, as output. An algorithm is thus a sequence of computational steps that transform the input into the output. It can also be viewed as a tool for solving a well-specified computational problem."
+  },
+  {
+    "chunk_id": "c-algo-search",
+    "paper_id": "paper-algo",
+    "document_id": "doc-algo",
+    "page": 42,
+    "section": "2.3 Binary Search",
+    "title": "Introduction to Algorithms and Complexity",
+    "filename": "algorithms_and_complexity.pdf",
+    "text": "Binary search is an efficient search algorithm on ordered collections. It repeatedly compares the target with the middle element of a sorted array and discards half of the remaining interval. This procedure terminates when the target is found or the search interval becomes empty. It achieves logarithmic running time by eliminating half of the search space at each comparison."
+  },
+  {
+    "chunk_id": "c-algo-sort",
+    "paper_id": "paper-algo",
+    "document_id": "doc-algo",
+    "page": 58,
+    "section": "3.1 Merge Sort Procedure",
+    "title": "Introduction to Algorithms and Complexity",
+    "filename": "algorithms_and_complexity.pdf",
+    "text": "Merge sort closely follows the divide-and-conquer paradigm. The merge sort procedure consists of three sequential steps: first, divide the n-element sequence to be sorted into two subsequences of n/2 elements each; second, conquer by sorting the two subsequences recursively using merge sort; third, combine the sorted subsequences by merging them to produce the sorted answer. The base case occurs when the sequence has length one."
+  },
+  {
+    "chunk_id": "c-algo-limits",
+    "paper_id": "paper-algo",
+    "document_id": "doc-algo",
+    "page": 63,
+    "section": "3.4 Complexity and Limitations",
+    "title": "Introduction to Algorithms and Complexity",
+    "filename": "algorithms_and_complexity.pdf",
+    "text": "While binary search runs in O(log n) time, a key limitation is that it requires contiguous random access and strictly pre-sorted data. Furthermore, dynamic insertions require O(n) overhead to preserve sorted order. For merge sort, the primary limitation is auxiliary memory consumption, requiring Theta(n) additional storage space during the merge phase."
+  },
+  {
+    "chunk_id": "c-shield-title",
+    "paper_id": "paper-shield",
+    "document_id": "doc-shield",
+    "page": 1,
+    "section": "Title Page",
+    "title": "ShieldNet: Cloud Intrusion Detection and Defense",
+    "filename": "shieldnet_cloud_defense.pdf",
+    "text": "ShieldNet: Cloud Intrusion Detection and Defense Architecture. Authors: Marcus Vance, Elena Rostova, Samuel Chen. Published in IEEE Transactions on Cloud Computing, 2024. Abstract: We present an adaptive packet inspection framework for distributed cloud perimeters."
+  },
+  {
+    "chunk_id": "c-shield-method",
+    "paper_id": "paper-shield",
+    "document_id": "doc-shield",
+    "page": 3,
+    "section": "4. Methodology",
+    "title": "ShieldNet: Cloud Intrusion Detection and Defense",
+    "filename": "shieldnet_cloud_defense.pdf",
+    "text": "The evaluation methodology follows a systematic empirical benchmark protocol encompassing four phases: first, synthesis of realistic traffic streams combining benign HTTP flows with volumetric attack vectors; second, packet capture ingestion through high-speed ring buffers; third, feature extraction measuring packet arrival intervals and entropy scores; fourth, quantitative detection evaluation measuring latency and classification accuracy."
+  },
+  {
+    "chunk_id": "c-shield-results",
+    "paper_id": "paper-shield",
+    "document_id": "doc-shield",
+    "page": 7,
+    "section": "5. Evaluation Results",
+    "title": "ShieldNet: Cloud Intrusion Detection and Defense",
+    "filename": "shieldnet_cloud_defense.pdf",
+    "text": "In empirical benchmark tests, ShieldNet achieved an intrusion detection accuracy of 94.6% against distributed denial-of-service vectors with a false positive rate of 1.8%. The average processing latency was 14.2 ms per packet flow under peak cluster load using 32 inspection nodes."
+  },
+  {
+    "chunk_id": "c-shield-limits",
+    "paper_id": "paper-shield",
+    "document_id": "doc-shield",
+    "page": 11,
+    "section": "6. Limitations and Future Work",
+    "title": "ShieldNet: Cloud Intrusion Detection and Defense",
+    "filename": "shieldnet_cloud_defense.pdf",
+    "text": "A notable limitation of ShieldNet is its performance degradation on encrypted TLS 1.3 payloads without session inspection keys. In addition, deep inspection incurs high CPU overhead on commodity x86 hardware, requiring specialized hardware acceleration."
+  },
+  {
+    "chunk_id": "c-edge-title",
+    "paper_id": "paper-edge",
+    "document_id": "doc-edge",
+    "page": 1,
+    "section": "Title Page",
+    "title": "EdgeGuard: Lightweight Security for IoT Gateways",
+    "filename": "edgeguard_iot_gateways.pdf",
+    "text": "EdgeGuard: Lightweight Security for Resource-Constrained IoT Gateways. Authors: Devon Reed, Aisha Patel. Published in ACM Transactions on Internet of Things, 2024. Abstract: EdgeGuard introduces lightweight hash-based anomaly filtering for edge gateways."
+  },
+  {
+    "chunk_id": "c-edge-results",
+    "paper_id": "paper-edge",
+    "document_id": "doc-edge",
+    "page": 6,
+    "section": "4. Experimental Results",
+    "title": "EdgeGuard: Lightweight Security for IoT Gateways",
+    "filename": "edgeguard_iot_gateways.pdf",
+    "text": "EdgeGuard reported an intrusion detection accuracy of 89.4% on the IoT-23 benchmark with an average processing latency of 4.2 ms across 128 edge nodes. The lightweight hash tables required only 2.1 MB of RAM on embedded gateways."
+  },
+  {
+    "chunk_id": "c-edge-limits",
+    "paper_id": "paper-edge",
+    "document_id": "doc-edge",
+    "page": 9,
+    "section": "5. Constraints and Limitations",
+    "title": "EdgeGuard: Lightweight Security for IoT Gateways",
+    "filename": "edgeguard_iot_gateways.pdf",
+    "text": "The primary limitation of EdgeGuard is reduced accuracy on multi-stage polymorphic payloads where signature hashing is insufficient. Furthermore, the protocol does not support reassembly of fragmented UDP datagrams."
+  }
+]

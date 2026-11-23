@@ -174,9 +174,12 @@ class IndependentResearchEngine:
         cited_ids_order = list(dict.fromkeys(re.findall(r"\[(S\d+)\]", answer, re.I)))
         if cited_ids_order:
             id_map = {old_id.upper(): f"S{i + 1}" for i, old_id in enumerate(cited_ids_order)}
-            for old_id, new_id in id_map.items():
-                if old_id != new_id:
-                    answer = re.sub(rf"\[{old_id}\]", f"[{new_id}]", answer, flags=re.I)
+            answer = re.sub(
+                r"\[(S\d+)\]",
+                lambda m: f"[{id_map.get(m.group(1).upper(), m.group(1))}]",
+                answer,
+                flags=re.I,
+            )
             by_old_id = {s.source_id.upper(): s for s in sources}
             renamed_sources = []
             for old_id in cited_ids_order:
@@ -195,9 +198,12 @@ class IndependentResearchEngine:
             if projections:
                 renamed_proj = {}
                 for p_fmt, p_text in projections.items():
-                    for old_id, new_id in id_map.items():
-                        if old_id != new_id:
-                            p_text = re.sub(rf"\[{old_id}\]", f"[{new_id}]", p_text, flags=re.I)
+                    p_text = re.sub(
+                        r"\[(S\d+)\]",
+                        lambda m: f"[{id_map.get(m.group(1).upper(), m.group(1))}]",
+                        p_text,
+                        flags=re.I,
+                    )
                     renamed_proj[p_fmt] = p_text
                 analysis.document_filters["_comparison_projections"] = renamed_proj
 

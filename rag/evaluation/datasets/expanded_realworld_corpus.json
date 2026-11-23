@@ -1,0 +1,102 @@
+[
+  {
+    "chunk_id": "raft_c1",
+    "paper_id": "paper-raft",
+    "document_id": "doc-raft",
+    "title": "In Search of an Understandable Consensus Algorithm",
+    "filename": "raft_consensus.pdf",
+    "section": "Leader Election",
+    "page": 4,
+    "text": "Raft is a consensus algorithm for managing a replicated log. The algorithm begins by dividing time into arbitrary terms of numbered integers. First, each node initiates an election by transitioning to candidate state when an election timeout elapses without receiving heartbeats from the current leader. Second, the candidate increments its current term, votes for itself, and issues RequestVote RPCs in parallel to all other nodes in the cluster. Third, if the candidate receives affirmative votes from a majority of servers, it transitions to leader state and immediately sends AppendEntries heartbeats to establish its authority. This election mechanism guarantees that at most one leader can be elected in a given term."
+  },
+  {
+    "chunk_id": "raft_c2",
+    "paper_id": "paper-raft",
+    "document_id": "doc-raft",
+    "title": "In Search of an Understandable Consensus Algorithm",
+    "filename": "raft_consensus.pdf",
+    "section": "Log Replication and Safety",
+    "page": 6,
+    "text": "Log replication in Raft proceeds in lockstep under leader direction. A leader accepts client proposals, appends them to its local write-ahead log, and disseminates AppendEntries RPCs to followers. A log entry is committed once it has been successfully replicated on a strict majority of servers. However, Raft enforces a strict safety invariant: a follower rejects AppendEntries if its log does not contain an identical entry at the preceding log index and term. A notable limitation of Raft is reduced availability during persistent network partitions where neither partition contains a majority quorum. In addition, leader failover incurs transient commit latency spikes while new term logs reconcile."
+  },
+  {
+    "chunk_id": "pbft_c1",
+    "paper_id": "paper-pbft",
+    "document_id": "doc-pbft",
+    "title": "Practical Byzantine Fault Tolerance",
+    "filename": "pbft_castro.pdf",
+    "section": "The Byzantine Agreement Protocol",
+    "page": 3,
+    "text": "Practical Byzantine Fault Tolerance (PBFT) is a state-machine replication algorithm that tolerates Byzantine failures in asynchronous environments. The PBFT agreement protocol consists of three sequential phases: pre-prepare, prepare, and commit. First, in the pre-prepare phase, the primary replica assigns a sequence number and multicasts a pre-prepare message with the client request digest to all backup replicas. Second, in the prepare phase, each backup verifies the digest signature and multicasts a prepare message to all other replicas. Third, in the commit phase, once a replica collects 2f+1 non-faulty prepare certificates, it multicasts a commit message and executes the request upon collecting 2f+1 commit certificates. This three-phase protocol guarantees safety provided no more than f of the 3f+1 total replicas fail simultaneously."
+  },
+  {
+    "chunk_id": "pbft_c2",
+    "paper_id": "paper-pbft",
+    "document_id": "doc-pbft",
+    "title": "Practical Byzantine Fault Tolerance",
+    "filename": "pbft_castro.pdf",
+    "section": "Performance Evaluation",
+    "page": 9,
+    "text": "Our experimental evaluation on microbenchmarks reveals that PBFT delivers robust throughput and low latency under asynchronous networking. In standard replicated NFS evaluations, PBFT achieves peak throughput of 8,500 operations per second on commodity x86 servers with 100 Mbps Ethernet. The average commit latency was measured at 1.4 ms for read-write transactions and 0.24 ms for read-only queries. However, PBFT exhibits quadratic message complexity of O(R^2) where R is replica count, which degrades performance when the cluster expands beyond twenty nodes."
+  },
+  {
+    "chunk_id": "flash_c1",
+    "paper_id": "paper-flash",
+    "document_id": "doc-flash",
+    "title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "filename": "flash_attention.pdf",
+    "section": "Algorithm and IO-Aware Design",
+    "page": 2,
+    "text": "FlashAttention is an exact attention algorithm that computes standard multi-head self-attention without materializing the intermediate N x N attention matrix in High Bandwidth Memory (HBM). Standard attention incurs O(N^2) HBM memory traffic to store intermediate attention scores P = softmax(QK^T / sqrt(d)). In contrast, FlashAttention restructures computation using classical block tiling to load blocks of keys and queries into fast on-chip SRAM cache. First, the algorithm partitions inputs Q, K, and V into blocks that fit within on-chip SRAM. Second, it computes partial matrix products and scales them using online incremental softmax without writing the large intermediate matrix to HBM. Third, during the backward pass, attention scores are recomputed on-the-fly from stored block statistics rather than loaded from HBM. This IO-aware technique reduces HBM memory access complexity from O(N^2) to O(N) IOs."
+  },
+  {
+    "chunk_id": "flash_c2",
+    "paper_id": "paper-flash",
+    "document_id": "doc-flash",
+    "title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "filename": "flash_attention.pdf",
+    "section": "Empirical Benchmark Results",
+    "page": 7,
+    "text": "In empirical benchmarks on BERT and GPT-style models, FlashAttention demonstrates significant training speedups and memory reductions. FlashAttention achieves a 2.4x training speedup on BERT-large and a 3.1x end-to-end speedup on GPT-2 with sequence length 4096 on NVIDIA A100 GPUs. The peak memory footprint scales linearly as O(N) rather than quadratically O(N^2), enabling context window expansion up to 64K tokens without out-of-memory errors. A reported limitation of FlashAttention is reduced efficiency when block dimensions fail to align with hardware warp tensor core tile boundaries. Furthermore, recomputing attention during backward propagation incurs a modest 15% arithmetic compute overhead."
+  },
+  {
+    "chunk_id": "mamba_c1",
+    "paper_id": "paper-mamba",
+    "document_id": "doc-mamba",
+    "title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "filename": "mamba_ssm.pdf",
+    "section": "Selective State Space Architecture",
+    "page": 3,
+    "text": "Mamba is a structured sequence modeling architecture based on selective state space models (SSMs). Unlike standard continuous-time LTI state space models that freeze matrix parameters A, B, and C across time, Mamba introduces input-dependent selection parameters Delta, B, and C. This selective mechanism allows the model to filter out irrelevant noise and retain key contextual tokens indefinitely. To compute selective state updates efficiently without recurrent sequential bottlenecks, Mamba implements a hardware-aware parallel associative scan in GPU SRAM. This optimization ensures linear time complexity of O(N) during training and constant O(1) state updating per token during autoregressive inference."
+  },
+  {
+    "chunk_id": "mamba_c2",
+    "paper_id": "paper-mamba",
+    "document_id": "doc-mamba",
+    "title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "filename": "mamba_ssm.pdf",
+    "section": "Inference and Throughput",
+    "page": 8,
+    "text": "Empirical evaluation shows that Mamba matches Transformer quality across language modeling benchmarks while achieving 5x higher inference throughput for long sequences. On sequences of length 8K tokens, Mamba processes 1,850 tokens per second compared to 370 tokens per second for an equivalent parameter Transformer on an NVIDIA A100 GPU. However, Mamba exhibits limitations on associative recall tasks that require precise token-to-token lookup across extended distances compared to full dense attention mechanisms. Additionally, fine-tuning pretrained Mamba models on heterogeneous prompt distributions requires specialized learning rate warmup schedules."
+  },
+  {
+    "chunk_id": "arch_c1",
+    "paper_id": "paper-arch",
+    "document_id": "doc-arch",
+    "title": "Microarchitecture Memory Hierarchy Performance Profile",
+    "filename": "microarch_specs.pdf",
+    "section": "Memory Hierarchy Latency",
+    "page": 1,
+    "text": "Table 1 summarizes measured load-to-use memory access latency across the processor cache hierarchy for commodity x86-64 server processors running at 3.7 GHz clock frequency. The L1 data cache exhibits access latency of 4 clock cycles corresponding to 1.1 ns. The L2 unified cache exhibits access latency of 14 clock cycles corresponding to 3.8 ns. The shared L3 cache exhibits access latency of 45 clock cycles corresponding to 12.2 ns. Off-chip main memory DRAM exhibits access latency of 180 clock cycles corresponding to 48.6 ns. The cache line size is fixed at 64 bytes across all cache levels."
+  },
+  {
+    "chunk_id": "arch_c2",
+    "paper_id": "paper-arch",
+    "document_id": "doc-arch",
+    "title": "Microarchitecture Memory Hierarchy Performance Profile",
+    "filename": "microarch_specs.pdf",
+    "section": "Execution Units and Throughput",
+    "page": 3,
+    "text": "The execution core features a 14-stage out-of-order execution pipeline with 4 integer arithmetic logic units (ALUs), 2 load ports, and 2 store ports. Vector processing is powered by dual 512-bit AVX-512 FMA execution units capable of 64 single-precision floating-point operations per cycle. Maximum theoretical compute throughput reaches 236.8 GFLOP/s per physical core at baseline frequency."
+  }
+]
