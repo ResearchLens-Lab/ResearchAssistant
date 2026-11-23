@@ -8,8 +8,18 @@ import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-ARTIFACTS_DIR = Path(r"C:\Users\gorav\.gemini\antigravity\brain\d68d555e-7a4b-4b9f-a8a4-4483e0b184b9")
-EDGE_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+ARTIFACTS_DIR = Path(
+    os.environ.get(
+        "ARTIFACTS_DIR",
+        Path(__file__).resolve().parent.parent / "docs" / "screenshots",
+    )
+)
+EDGE_PATH = os.environ.get(
+    "EDGE_PATH",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+    if os.path.exists(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+    else None,
+)
 
 
 def capture_all():
