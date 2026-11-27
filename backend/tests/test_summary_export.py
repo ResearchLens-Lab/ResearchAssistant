@@ -57,7 +57,10 @@ def test_is_generated_summary_export_allows_genuine_user_files(tmp_path: Path):
 async def test_export_summary_atomic_write_and_content(tmp_path: Path, monkeypatch):
     # Mock personal research dir to isolated tmp_path
     from backend.app.core import config
-    monkeypatch.setattr("backend.app.services.paper_service.get_personal_research_dir", lambda title: tmp_path)
+    monkeypatch.setattr(
+        "backend.app.services.paper_service.get_personal_research_dir",
+        lambda *args, **kwargs: tmp_path,
+    )
 
     user = User(id="user-123", email="user@example.com")
     paper = Paper(

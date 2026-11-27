@@ -15,7 +15,13 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.exceptions import DocumentNotFoundError, PaperNotFoundError, RequestValidationAppError
+from backend.app.core.config import get_settings
+from backend.app.core.exceptions import (
+    DocumentNotFoundError,
+    ForbiddenError,
+    PaperNotFoundError,
+    RequestValidationAppError,
+)
 from backend.app.integrations.rag_gateway import RAGGateway
 from backend.app.models.paper import Paper, ComparisonRecord
 from backend.app.models.document import Document, DocumentStatus
@@ -24,17 +30,58 @@ from backend.app.repositories.document_repository import DocumentRepository
 from backend.app.repositories.paper_repository import PaperRepository
 from backend.app.schemas.paper import PaperCompareRequest, PaperCreate, PaperUpdate
 from backend.app.utils.pagination import PageParams, page_payload
+from backend.app.utils.validators import resolve_safe_path_in_dir
 
 logger = logging.getLogger("backend.papers")
 
 
-def get_personal_research_dir(paper_title: str = "") -> Path:
-    base = Path.home() / "Documents" / "Personal Research"
-    if paper_title:
-        clean_name = re.sub(r'[<>:"/\\|?*]', "_", paper_title).strip() or "Untitled Project"
-        folder = base / clean_name
-    else:
-        folder = base
+def _sanitize_folder_segment(value: str, fallback: str = "Untitled Project", max_len: int = 80) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*]', "_", (value or "").strip()).strip(". ")
+    return (cleaned or fallback)[:max_len]
+
+
+def _safe_id_token(value: str, fallback: str = "project") -> str:
+    token = re.sub(r"[^a-zA-Z0-9_-]", "_", (value or "").strip())
+    return token or fallback
+
+
+def build_project_folder_name(paper_title: str, paper_id: str, owner_id: str = "") -> str:
+    """Build an isolated relative folder path keyed by owner_id and paper.id."""
+    clean_title = _sanitize_folder_segment(paper_title, fallback="Untitled Project", max_len=80)
+    short_id = _safe_id_token(paper_id)[:8]
+    project_dir = f"{clean_title} ({short_id})"
+    if owner_id:
+        return f"{_safe_id_token(owner_id, fallback='user')}/{project_dir}"
+    return project_dir
+
+
+def get_personal_research_dir(
+    paper_title: str = "",
+    paper_id: str = "",
+    owner_id: str = "",
+    folder_name: Optional[str] = None,
+) -> Path:
+    base = (Path.home() / "Documents" / "Personal Research").resolve()
+    if not (paper_title or paper_id or folder_name):
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+
+    short_id = _safe_id_token(paper_id)[:8] if paper_id else ""
+    safe_owner = _safe_id_token(owner_id, fallback="user") if owner_id else ""
+    rel_path: Optional[str] = None
+    if folder_name and short_id and f"({short_id})" in folder_name:
+        if not safe_owner or folder_name.startswith(f"{safe_owner}/"):
+            rel_path = folder_name
+
+    if rel_path is None:
+        if paper_id:
+            rel_path = build_project_folder_name(paper_title, paper_id, owner_id)
+        else:
+            rel_path = _sanitize_folder_segment(paper_title)
+
+    folder = (base / rel_path).resolve()
+    if not folder.is_relative_to(base):
+        raise RequestValidationAppError("Invalid project folder path.")
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -45,8 +92,29 @@ class PaperService:
         self.papers = PaperRepository(db)
         self.rag = rag
 
+    def get_project_folder(self, paper: Paper) -> Path:
+        """Return the isolated local directory for `paper`, backfilling `folder_name` if needed."""
+        expected_rel = build_project_folder_name(paper.title, paper.id, paper.owner_id)
+        short_id = _safe_id_token(paper.id)[:8]
+        safe_owner = _safe_id_token(paper.owner_id, fallback="user")
+        folder = get_personal_research_dir(
+            paper.title,
+            paper_id=paper.id,
+            owner_id=paper.owner_id,
+            folder_name=paper.folder_name,
+        )
+        if (
+            not paper.folder_name
+            or f"({short_id})" not in paper.folder_name
+            or not paper.folder_name.startswith(f"{safe_owner}/")
+        ):
+            paper.folder_name = expected_rel
+        return folder
+
     async def create(self, user: User, payload: PaperCreate) -> Paper:
         paper = await self.papers.create(owner_id=user.id, data=payload.model_dump())
+        if not paper.folder_name:
+            paper.folder_name = build_project_folder_name(paper.title, paper.id, user.id)
         await self.db.commit()
         logger.info("paper created paper_id=%s user_id=%s", paper.id, user.id)
         return paper
@@ -61,22 +129,24 @@ class PaperService:
 
     async def open_folder(self, user: User, paper_id: str) -> dict[str, str]:
         paper = await self.get_owned(user, paper_id)
-        folder = get_personal_research_dir(paper.title)
+        folder = self.get_project_folder(paper)
+        await self.db.commit()
 
         result = await self.db.execute(select(Document).where(Document.paper_id == paper.id))
         docs = result.scalars().all()
         for doc in docs:
             if doc.storage_path and Path(doc.storage_path).is_file():
-                dest = folder / doc.filename
-                if not dest.exists():
-                    try:
+                try:
+                    dest = resolve_safe_path_in_dir(folder, doc.filename)
+                    if not dest.exists():
                         shutil.copy2(doc.storage_path, dest)
-                    except Exception as copy_err:
-                        logger.debug("Failed copying doc to project folder: %s", copy_err)
+                except Exception as copy_err:
+                    logger.debug("Failed copying doc to project folder: %s", copy_err)
 
-        from backend.app.services.document_service import DocumentService
-        doc_service = DocumentService(self.db, self.rag)
-        await doc_service.scan_and_ingest_local_folder(user, paper, folder)
+        if get_settings().is_local_folder_sync_allowed:
+            from backend.app.services.document_service import DocumentService
+            doc_service = DocumentService(self.db, self.rag)
+            await doc_service.scan_and_ingest_local_folder(user, paper, folder)
 
         try:
             if sys.platform == "win32":
@@ -88,18 +158,32 @@ class PaperService:
 
         return {"folder_path": str(folder), "status": "opened"}
 
+    async def sync_folder(self, user: User, paper_id: str) -> dict[str, Any]:
+        """Explicitly scan and ingest new files from the project's local folder (desktop mode only)."""
+        if not get_settings().is_local_folder_sync_allowed:
+            raise ForbiddenError("Local folder sync is only available in single-user desktop mode.")
+        paper = await self.get_owned(user, paper_id)
+        folder = self.get_project_folder(paper)
+        await self.db.commit()
+
+        from backend.app.services.document_service import DocumentService
+        added_count = await DocumentService(self.db, self.rag).scan_and_ingest_local_folder(
+            user, paper, folder
+        )
+        return {"folder_path": str(folder), "added_count": added_count, "status": "synced"}
+
     async def export_summary(self, user: User, paper_id: str) -> dict[str, Any]:
         paper = await self.get_owned(user, paper_id)
-        folder = get_personal_research_dir(paper.title)
+        folder = self.get_project_folder(paper)
 
         summary = paper.summary_json
         if not summary or not summary.get("answer"):
             summary = await self.summarize(user, paper_id)
 
-        clean_name = re.sub(r'[<>:"/\\|?*]', '_', paper.title).strip() or f"Project_{paper.id[:8]}"
+        clean_name = _sanitize_folder_segment(paper.title, fallback=f"Project_{paper.id[:8]}")
         filename = f"Grounded Summary - {clean_name}.md"
-        dest_path = folder / filename
-        tmp_path = folder / f".{filename}.tmp"
+        dest_path = resolve_safe_path_in_dir(folder, filename)
+        tmp_path = resolve_safe_path_in_dir(folder, f".{filename}.tmp")
 
         sources = summary.get("sources", [])
         answer = summary.get("answer", "")
