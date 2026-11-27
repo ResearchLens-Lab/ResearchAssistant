@@ -9,6 +9,22 @@ from backend.app.core.exceptions import RequestValidationAppError
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".tex", ".csv", ".xlsx", ".pptx", ".html", ".htm", ".json"}
 
 
+def resolve_safe_path_in_dir(
+    folder: Path, filename: Optional[str], fallback: str = "document.txt"
+) -> Path:
+    """Strip directory components from a user-supplied filename and verify
+    the resolved destination stays strictly inside `folder`."""
+    raw_name = (filename or "").replace("\\", "/")
+    clean_name = Path(raw_name).name.strip()
+    if not clean_name or clean_name in {".", ".."}:
+        clean_name = fallback
+    resolved_folder = folder.resolve()
+    dest = (resolved_folder / clean_name).resolve()
+    if not dest.is_relative_to(resolved_folder) or dest == resolved_folder:
+        raise RequestValidationAppError("Invalid filename.")
+    return dest
+
+
 def validate_document_file(filename: Optional[str], content_type: Optional[str], path: Path, size: int, max_size_bytes: int) -> None:
     """Validate a staged upload without loading its entire body into memory."""
     ext = os.path.splitext(filename or "")[1].lower()

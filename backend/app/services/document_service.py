@@ -2,6 +2,7 @@ import logging
 import asyncio
 import hashlib
 import json
+import shutil
 import zipfile
 import stat
 import tempfile
@@ -43,7 +44,11 @@ from backend.app.schemas.document import (
     DocumentBatchUploadResponse,
     DocumentUploadOutcome,
 )
-from backend.app.utils.validators import validate_document_file
+from backend.app.utils.validators import (
+    SUPPORTED_EXTENSIONS,
+    resolve_safe_path_in_dir,
+    validate_document_file,
+)
 from rag.config.settings import settings as rag_settings
 
 logger = logging.getLogger("backend.documents")
@@ -242,7 +247,7 @@ class DocumentService:
                 setattr(existing, "_upload_message", message)
                 return existing
 
-            filename = upload.filename or "document.txt"
+            filename = resolve_safe_path_in_dir(upload_dir, upload.filename).name
             db_touched = True
             document = await self.documents.create(
                 paper_id=paper.id,
@@ -260,9 +265,9 @@ class DocumentService:
             document.file_hash_sha256 = file_sha256
 
             try:
-                from backend.app.services.paper_service import get_personal_research_dir
-                proj_folder = get_personal_research_dir(paper.title)
-                shutil.copy2(storage_path, proj_folder / filename)
+                proj_folder = self.paper_service.get_project_folder(paper)
+                dest = resolve_safe_path_in_dir(proj_folder, filename)
+                shutil.copy2(storage_path, dest)
             except Exception as copy_err:
                 logger.debug("Failed saving project document copy: %s", copy_err)
 
@@ -849,7 +854,10 @@ class DocumentService:
         return document
 
     async def scan_and_ingest_local_folder(self, user: User, paper: Paper, folder: Path) -> int:
-        """Scan project folder in Documents/Personal Research/<ProjectName> for new files."""
+        """Scan an isolated project folder for new files (single-user desktop mode only)."""
+        settings = get_settings()
+        if not settings.is_local_folder_sync_allowed:
+            return 0
         if not folder.is_dir():
             return 0
         added_count = 0
@@ -860,14 +868,20 @@ class DocumentService:
                 continue
             if is_generated_summary_export(entry):
                 continue
-            if entry.name in exclusions:
+            safe_name = resolve_safe_path_in_dir(folder, entry.name).name
+            if safe_name in exclusions:
                 continue
-            if entry.suffix.lower() not in {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx", ".pptx"}:
+            if entry.suffix.lower() not in SUPPORTED_EXTENSIONS:
                 continue
             try:
-                file_bytes = entry.read_bytes()
-                file_size = len(file_bytes)
-                file_hash = hashlib.sha256(file_bytes).hexdigest()
+                file_size = entry.stat().st_size
+                if file_size <= 0 or file_size > settings.max_upload_size_bytes:
+                    logger.debug("Skipping local file %s: invalid size %d", safe_name, file_size)
+                    continue
+                validate_document_file(
+                    safe_name, None, entry, file_size, settings.max_upload_size_bytes
+                )
+                file_hash = compute_file_hash_streaming(entry)
                 if file_hash in exclusions:
                     continue
                 existing = await self.db.scalar(
@@ -875,7 +889,7 @@ class DocumentService:
                         Document.paper_id == paper.id,
                         or_(
                             Document.file_hash_sha256 == file_hash,
-                            Document.filename == entry.name,
+                            Document.filename == safe_name,
                         )
                     )
                 )
@@ -885,18 +899,17 @@ class DocumentService:
                         await self.db.commit()
                     continue
 
-                settings = get_settings()
                 upload_dir = settings.upload_path
                 upload_dir.mkdir(parents=True, exist_ok=True)
                 new_doc = await self.documents.create(
                     paper_id=paper.id,
-                    filename=entry.name,
+                    filename=safe_name,
                     storage_path="",
                     content_type="application/pdf" if entry.suffix.lower() == ".pdf" else "application/octet-stream",
                     file_size=file_size,
                 )
                 storage_path = upload_dir / f"{new_doc.id}{entry.suffix.lower()}"
-                storage_path.write_bytes(file_bytes)
+                shutil.copy2(entry, storage_path)
                 new_doc.storage_path = str(storage_path)
                 new_doc.file_hash_sha256 = file_hash
                 new_doc.operation_type = OperationType.INITIAL_UPLOAD.value
@@ -909,16 +922,13 @@ class DocumentService:
 
                 launch_background_ingest(new_doc.id, paper.id, paper.owner_id)
                 added_count += 1
-                logger.info("Auto-ingested dropped file: %s for project %s", entry.name, paper.title)
+                logger.info("Auto-ingested dropped file: %s for project %s", safe_name, paper.title)
             except Exception as scan_err:
                 logger.debug("Error scanning local file %s: %s", entry.name, scan_err)
         return added_count
 
     async def list_for_paper(self, user: User, paper_id: str) -> list[Document]:
-        paper = await self.paper_service.get_owned(user, paper_id)
-        from backend.app.services.paper_service import get_personal_research_dir
-        folder = get_personal_research_dir(paper.title)
-        await self.scan_and_ingest_local_folder(user, paper, folder)
+        await self.paper_service.get_owned(user, paper_id)
         documents = await self.documents.list_by_paper(paper_id)
         await self._mark_stalled_documents(documents)
         await self._attach_index_health(documents)
@@ -1041,10 +1051,9 @@ class DocumentService:
         )
         if not other_in_paper:
             try:
-                from backend.app.services.paper_service import get_personal_research_dir
                 paper = await self.paper_service.papers.get_by_id(document.paper_id)
                 if paper:
-                    folder = get_personal_research_dir(paper.title)
+                    folder = self.paper_service.get_project_folder(paper)
                     _add_project_exclusion(folder, document.filename, document.file_hash_sha256)
             except Exception as ex_err:
                 logger.debug("Could not record project exclusion: %s", ex_err)

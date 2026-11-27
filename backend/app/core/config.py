@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     desktop_runtime: bool = False
     desktop_request_key: str = ""
     desktop_ui_origin: str = ""
+    local_folder_sync_enabled: bool = False
 
     rag_service_url: str = ""
     rag_timeout_seconds: float = 240
@@ -106,6 +107,10 @@ class Settings(BaseSettings):
     @property
     def max_zip_expanded_size_bytes(self) -> int:
         return self.max_zip_expanded_size_mb * 1024 * 1024
+
+    @property
+    def is_local_folder_sync_allowed(self) -> bool:
+        return bool(self.desktop_runtime or self.local_folder_sync_enabled)
 
     @property
     def upload_path(self) -> Path:
