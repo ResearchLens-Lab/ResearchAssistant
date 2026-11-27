@@ -136,6 +136,16 @@ async def open_project_folder(
 
 
 @router.post(
+    "/{paper_id}/sync-folder",
+    summary="Sync new files from this project's local directory (single-user desktop mode only)",
+)
+async def sync_project_folder(
+    paper_id: str, current_user: CurrentUser, db: DBSession, rag: RAGGatewayDep
+):
+    return await PaperService(db, rag).sync_folder(current_user, paper_id)
+
+
+@router.post(
     "/{paper_id}/export-summary",
     summary="Export grounded summary and citations audit trail to project folder",
 )
