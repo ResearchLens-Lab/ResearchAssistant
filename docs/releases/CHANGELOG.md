@@ -1,9 +1,16 @@
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Security
+- Identified a project-folder isolation vulnerability where projects with identical titles could share a local storage directory, potentially allowing documents from one user's project to be imported into another user's project.
+- Thanks to **Baidik Mazumdar** for responsibly identifying and reporting this security issue in [#28](https://github.com/goravgumber/ResearchAssistant/issues/28).
 
 ## [0.1.0-alpha.2] - 2026-11-23
 
